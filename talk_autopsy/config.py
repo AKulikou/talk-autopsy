@@ -2,7 +2,8 @@
 Configuration: API key check, target language, models, prices and paths.
 
 Everything a run may vary comes from .env, so an experiment can compare variants
-of one code version without editing it.
+of one code version without editing it. A variable already set in the environment
+wins over .env, so CI and servers can pass settings without touching the file.
 
 The API key is checked when a Claude stage is about to run (require_api_key),
 not at import: cutting audio and speech recognition run without a key.
@@ -14,7 +15,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv()  # override=False: the real environment wins
 
 
 class ConfigurationError(RuntimeError):
