@@ -30,6 +30,10 @@ uv sync                                    # Python 3.13 venv in .venv + depende
 uv run pytest                              # unit tests: fake Claude client, generated audio, no network
 uv run ruff check .                        # lint (config in pyproject.toml, target Python 3.13)
 uv run talk-autopsy cut <source> --start 00:00 --end 10:00 --out <file>.wav   # 16 kHz mono WAV
+uv run talk-autopsy transcribe <file>.wav --out work/T2/raw.whisper-large-v3.json   # faster-whisper, CPU
+uv run talk-autopsy draft <transcript>.json --out data/test-set/T2.draft.txt      # for proofreading
+uv run talk-autopsy ref-from-draft data/test-set/T2.draft.txt --out data/test-set/T2.ref.txt
+uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
 uv run talk-autopsy run <source> --lang ru --steps stt,fix,translate,srt      # prints the plan (stages not implemented)
 ```
 
@@ -44,9 +48,12 @@ after any change. Use the uv-managed Python 3.13, not the system `python`.
 - `talk_autopsy/segments.py` — `Transcript` / `Segment` / `Word`: the one JSON format every stage reads and writes; `assert_same_ids`
 - `talk_autopsy/ingest.py` — `extract_audio` (ffmpeg, optional cut), `probe` (duration), `parse_timecode`; `download` (yt-dlp) is a stage 1 stub
 - `talk_autopsy/glossary.py` — `Glossary`: a Markdown table per video (`T<n>.glossary.md`), format in the module docstring
-- `talk_autopsy/stt/` — `base.py` `Transcriber` protocol; `faster_whisper.py` first engine (stage 1 stub)
+- `talk_autopsy/stt/` — `base.py` `Transcriber` protocol; `faster_whisper.py` first engine (large-v3, int8, CPU; reads the WAV itself, see its docstring)
+- `talk_autopsy/metrics.py` — pure metric functions: `tokenize` (the one normalization), WER, term accuracy, false-edit rate, reading speed; timing drift is an interface only
+- `talk_autopsy/evaluation.py` — reads hypothesis/reference/glossary files, `evaluate`, the benchmark row and its append
+- `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import for hand-checked transcripts
 - `talk_autopsy/correct.py`, `translate.py` (stage 2), `subtitles.py` (stage 3), `tts/edge.py` (stage 4) — stubs with input -> output in the docstring
-- `talk_autopsy/cli.py` — typer CLI (`cut`, `run`); argument parsing and printing only
+- `talk_autopsy/cli.py` — typer CLI (`cut`, `transcribe`, `draft`, `ref-from-draft`, `eval`, `run`); argument parsing and printing only
 - `talk_autopsy/core/` — shared with autopsy-template: `structured_call.py` (structured request, stop-reason checks, validation, one retry), `claude_client.py`, `batch_client.py` (Message Batches at half price), `token_summary.py` (cost)
 - `tests/` — `conftest.py` has the fake Claude client (`fake_claude`) and the generated sine WAV (`sine`)
 - `data/test-set/` — media and reference transcripts are local only; `README.md` and `*.glossary.md` are tracked
@@ -125,7 +132,9 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 
 ## Known issues
 
-- Nothing is measured yet; every stage after `cut` is a stub.
+- Nothing is measured yet: speech recognition and the metrics work, but no reference transcript exists until the owner proofreads the drafts. Correction, translation, subtitles and dubbing are stubs.
+- faster-whisper 1.2.1 cannot decode files with PyAV 19 (`metadata_errors`); the engine reads the WAV itself and passes samples.
+- faster-whisper's segment `avg_logprob` is per 30-second decoding window, so segment `confidence` is too; word probabilities are per word.
 - T3–T6 are not selected; T1's speaker is assumed native (to be confirmed).
 - Claude Haiku 5.5 costs more for prompts over 100,000 tokens; the cost estimate
   uses the lower tier.

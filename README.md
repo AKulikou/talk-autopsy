@@ -103,19 +103,32 @@ cp .env.example .env              # then set ANTHROPIC_API_KEY in .env
 uv run talk-autopsy cut talk.mp4 --start 00:00 --end 10:00 --out talk.wav
 ```
 
+Speech recognition and the metrics work on their own:
+
+```bash
+# faster-whisper large-v3 on the CPU (downloads about 3.1 GB on first use)
+uv run talk-autopsy transcribe talk.wav --out work/talk/raw.whisper-large-v3.json
+
+# WER, term accuracy and false-edit rate against a test-set reference
+uv run talk-autopsy eval T2 --hyp work/T2/raw.whisper-large-v3.json
+```
+
 `talk-autopsy run <source> --lang ru` parses its arguments and prints the plan; the
-stages behind it are not implemented yet.
+Claude stages behind it are not implemented yet.
 
 ## Project structure
 
 ```
 talk_autopsy/
-  cli.py                   command line: cut, run
+  cli.py                   command line: cut, transcribe, draft, ref-from-draft, eval, run
   config.py                API key check, target language, models, prices, paths
   segments.py              Transcript / Segment / Word: the format every stage uses
   ingest.py                audio extraction and cut (ffmpeg), duration (ffprobe)
   glossary.py              per-video glossary as a Markdown table
-  stt/                     speech recognition interface and engines
+  stt/                     speech recognition interface and engines (faster-whisper)
+  metrics.py               WER, term accuracy, false-edit rate, reading speed
+  evaluation.py            scoring a transcript file against the test set, benchmark rows
+  proofread.py             drafts for hand-checked reference transcripts
   correct.py               Claude correction (stage 2)
   translate.py             Claude translation (stage 2)
   subtitles.py             .srt output (stage 3)
@@ -146,8 +159,9 @@ Python 3.13 for every push.
 ## Status and roadmap
 
 Status: **stage 0, foundation. Nothing has been measured yet.** The repository,
-the data format, the audio cut and two of the six test fragments are in place;
-every stage after the cut is a stub.
+the data format, the audio cut, the metrics, the first speech recognition engine
+and two of the six test fragments are in place; the reference transcripts are
+being checked by hand. The Claude stages, subtitles and dubbing are stubs.
 
 | Stage | Content | Gate |
 |---|---|---|
