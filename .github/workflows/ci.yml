@@ -15,7 +15,8 @@ jobs:
       - uses: actions/checkout@v7
       # The audio tests generate and convert WAV files with ffmpeg.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - uses: astral-sh/setup-uv@v10
+      # Exact tag: setup-uv publishes only release tags, no floating major tag (v10).
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.13"
           enable-cache: true
