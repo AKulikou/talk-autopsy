@@ -55,25 +55,33 @@ an entry in [docs/experiments.md](docs/experiments.md).
 video URL or local file
       |
       v
-  ffmpeg: 16 kHz mono audio            work/<run>/audio.wav + meta.json
+  ffmpeg: 16 kHz mono audio            work/<run>/audio.wav (+ audio.flac, the copy
+      |                                that is uploaded) + meta.json
+      v
+  speech recognition, first pass       work/<run>/raw.json
+  (AssemblyAI; fallbacks: Gemini +
+  forced alignment, faster-whisper)
       |
       v
-  speech recognition (pluggable;       work/<run>/raw.json
-  first engine: faster-whisper
-  large-v3 on the CPU)
+  auto-glossary from the first pass    work/<run>/glossary.md
+  (Haiku), merged with your glossary
+      |
+      v
+  speech recognition, second pass      work/<run>/raw2.json
+  with the glossary as key terms
       |
       v
   Claude correction: terms, names,     work/<run>/fixed.json
-  accent-distorted words, using the
-  glossary and the video context
+  accent-distorted words, never
+  across segment boundaries
       |
       v
   Claude translation in blocks of      work/<run>/<lang>.json
-  5-10 minutes with overlap, one
-  glossary for the whole video
+  5 minutes with context, every
+  clause kept, one glossary per video
       |
       v
-  subtitles                            <name>.<lang>.srt, <name>.en.srt
+  subtitles, up to 3 lines             <name>.<lang>.srt/.ass, <name>.en.srt/.ass
       |
       v
   later: dubbed audio (edge-tts +      <name>.<lang>.dub.m4a
@@ -82,8 +90,9 @@ video URL or local file
 
 Every stage reads and writes the same JSON format: timed segments with ids that
 no stage changes, so any two files of a run can be compared segment by segment.
-Everything heavy runs locally. Only text (transcript segments and the glossary)
-goes to the Claude API; the video never leaves the machine.
+Only text (transcript segments, the glossary, the context you give) goes to the
+Claude API. The audio goes to the speech recognition service as compressed
+FLAC; the video never leaves the machine.
 
 ## Quick start
 
@@ -113,26 +122,31 @@ uv run talk-autopsy transcribe talk.wav --out work/talk/raw.whisper-large-v3.jso
 uv run talk-autopsy eval T2 --hyp work/T2/raw.whisper-large-v3.json
 ```
 
-The whole pipeline on a local video (Gemini needs `GEMINI_API_KEY`, forced
-alignment needs `uv sync --extra align`, the Claude steps need
-`ANTHROPIC_API_KEY`):
+The whole pipeline on a local video (needs `ASSEMBLYAI_API_KEY` and
+`ANTHROPIC_API_KEY`; `GEMINI_API_KEY` and `uv sync --extra align` only for the
+Gemini fallback):
 
 ```bash
-uv sync --extra align
-uv run talk-autopsy run talk.mp4 --lang ru --engine gemini+align --glossary talk.glossary.md
-# -> work/talk/talk.ru.srt and work/talk/talk.en.srt, with a cost report;
+uv run talk-autopsy run talk.mp4 --lang ru --context "Title: ..., description: ..."
+# -> work/talk/talk.ru.srt + .ass and work/talk/talk.en.srt + .ass, with a cost report;
+#    --glossary my.glossary.md adds your terms (they win over the auto-glossary);
 #    a rerun skips every step whose inputs did not change
 ```
+
+To watch with VLC: open the video, then Subtitle -> Add Subtitle File... and
+pick the `.ass` file (it fits three lines in a smaller font); the `.srt` works
+in any player.
 
 ## Project structure
 
 ```
 talk_autopsy/
-  cli.py                   command line: cut, transcribe, align, fix, translate, srt, eval, run, ...
+  cli.py                   command line: cut, transcribe, glossary-auto, fix, translate, srt, eval, run, ...
   config.py                API key check, target language, models, prices, paths
   segments.py              Transcript / Segment / Word: the format every stage uses
   ingest.py                audio extraction and cut (ffmpeg), duration (ffprobe)
   glossary.py              per-video glossary as a Markdown table
+  glossary_auto.py         auto-glossary from the first transcript (Haiku), coverage, merge
   stt/                     speech recognition engines: faster-whisper, AssemblyAI, Gemini, chunked Gemini
   metrics.py               WER, term accuracy, false-edit rate, reading speed
   evaluation.py            scoring a transcript file against the test set, benchmark rows
@@ -140,10 +154,10 @@ talk_autopsy/
   proofread.py             draft export and import (superseded by adjudicate)
   align.py                 forced alignment: measured word times for any transcript
   blocks.py                five-minute blocks, video context, cost estimates
-  correct.py               Claude correction (stage 2), prompts/correction-v1.md
-  translate.py             Claude translation (stage 2), prompts/translation-v1.md
-  subtitles.py             .srt output (built in stage 2 as a viewing tool)
-  pipeline.py              run: stt, align, fix, translate, srt with skip-if-unchanged
+  correct.py               Claude correction (stage 2), prompts/correction-v2.md (v1 kept)
+  translate.py             Claude translation (stage 2), prompts/translation-v2.md (v1 kept)
+  subtitles.py             .srt and .ass output, up to 3 lines, reading speed report
+  pipeline.py              run: stt, glossary, stt2, align, fix, translate, srt; fallbacks; skip-if-unchanged
   tts/                     dubbing (stage 4)
   core/                    shared Claude request code from the Autopsy template
 tests/                     unit tests with a fake Claude client
@@ -170,28 +184,65 @@ Python 3.13 for every push.
 
 ## Status and roadmap
 
-Status: **stage 2, Claude correction and translation.** Stage 1 is measured on
-T1 and T2 against references built by three-engine consensus
-([experiments](docs/experiments.md#stage-1-summary)):
+Status: **stage 2, Claude correction and translation.** Every number below is
+in [results/benchmark.csv](results/benchmark.csv) or the
+[experiment log](docs/experiments.md).
 
-| Speech recognition (no glossary) | WER T2 | Term accuracy T2 | WER T1 | Term accuracy T1 |
+**Stage 1 (speech recognition)**, measured on T1 (native speaker) and T2
+(strong accent) against references built by three-engine consensus
+([stage 1 summary](docs/experiments.md#stage-1-summary)); T1 rows re-scored
+after the `@claude` reference fix:
+
+| Speech recognition | WER T2 | Term accuracy T2 | WER T1 | Term accuracy T1 |
 |---|---|---|---|---|
-| faster-whisper large-v3 (local) | 6.19% | 61.7% | 11.20% | 55.1% |
-| AssemblyAI Universal-3.5 Pro | 6.97% | 80.4% | 1.41% | 95.8% |
-| Gemini `gemini-3.8-flash` | 2.34% | 93.5% | 1.41% | 99.2% |
+| faster-whisper large-v3 (local) | 6.19% | 61.7% | 11.20% | 54.2% |
+| AssemblyAI Universal-3.5 Pro | 6.97% | 80.4% | 1.41% | 94.2% |
+| Gemini `gemini-3.8-flash` | 2.34% | 93.5% | 1.41% | 97.5% |
 
 AssemblyAI and Gemini helped build the references, so their numbers are
-biased in their favour. Every engine is under the stage 1 limit (WER ≤ 15% on
-T2). By the owner's decision Gemini is the main engine (free tier), used with
-forced alignment for measured word times (`gemini+align`), with faster-whisper
-as the fallback ([decisions](docs/decisions.md)).
+biased in their favour. Every engine is under the stage 1 limit (WER <= 15% on
+T2). **Gate 1 -> 2 passed with AssemblyAI + key terms as the main engine**
+(owner's choice, [decisions](docs/decisions.md)); Gemini + forced alignment and
+faster-whisper are the fallbacks.
 
-Stage 2 is built and has its first runs: correction (`correction-v1`) takes term
-accuracy on T2 from 61.7% to 94.4% on faster-whisper input and from 93.5% to
-96.3% on Gemini input, with no false edits; translation (`translation-v1`)
-and the `.srt` writer produce Russian subtitles of a whole talk. The blind
-translation rating, the hold-out run and the external audit of the stage 2
-gate are still ahead. Dubbing is a stub.
+**Term accuracy with key terms: reference glossary against auto-glossary.** The
+first number used a glossary checked against the reference, which a new video
+does not have; the second is the realistic one, with a glossary Haiku drafted
+from the first transcript (B5):
+
+| | T2 | T1 |
+|---|---|---|
+| AssemblyAI, no key terms | 80.4% | 94.2% |
+| AssemblyAI + reference glossary as key terms (A3) | 99.1% | 100.0% |
+| AssemblyAI + **auto-glossary** as key terms (B5) | **96.3%** | **98.3%** |
+| ... + correction-v2 with the auto-glossary (B1 v2) | **96.3%** | **98.3%** |
+| auto-glossary coverage of the reference glossary (two runs) | 74.4% / 79.5% | 56.8% / 62.2% |
+
+The stage 2 term target is >= 85%. On this input correction-v2 adds nothing
+measurable (0 edits on T2); it did most of its work on faster-whisper input
+(T2 61.7% -> 94.4% with correction-v1, B1). False-edit rate 0 in every
+correction run.
+
+**Translation (C1).** The owner rated translation-v1 at a mean of 3.85 of 5
+(target 4.0) on 20 T2 segments; the three lowest scores all came from its
+compression rule. translation-v2 keeps every clause; a blind v1-against-v2
+rating of the same segments is waiting for the owner.
+
+**Whole videos** through `run` (AssemblyAI two passes, auto-glossary,
+correction-v2, translation-v2), [operational runs](docs/experiments.md#operational-runs):
+
+| | T2.source (talk, 27:52) | real-01 (interview, 38:30) |
+|---|---|---|
+| wall time | 4.6 min (9.8 min per hour of video) | 5.8 min (9.1 min per hour) |
+| AssemblyAI, list price | 0.47 USD per hour | 0.47 USD per hour |
+| Claude | 0.82 USD per hour | 0.67 USD per hour |
+| Russian cues above 17 / 25 characters per second | 76.8% / 22.5% | 50.9% / 13.7% |
+
+The plan's limit is 30 minutes per hour of video. Nothing is cut for reading
+speed (owner's decision): cues hold up to three lines and every `.srt` has an
+`.ass` twin with a smaller font. Still ahead for the stage 2 gate: the blind
+rating, the sealed hold-out T6 (cut blind, opened only after the prompts are
+frozen with a tag), and the external audit. Dubbing is a stub.
 
 | Stage | Content | Gate |
 |---|---|---|
