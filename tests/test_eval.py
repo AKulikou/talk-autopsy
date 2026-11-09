@@ -1,6 +1,7 @@
 """The eval command and the benchmark row: files in a temporary test-set directory."""
 
 import csv
+import re
 
 import pytest
 from typer.testing import CliRunner
@@ -9,6 +10,13 @@ from talk_autopsy import cli, config, evaluation
 from talk_autopsy.segments import Segment, Transcript, save_transcript
 
 runner = CliRunner()
+
+ANSI = re.compile(r"\[[0-9;]*m")
+
+
+def plain(output: str) -> str:
+    """CLI output without ANSI colours: on GitHub Actions Typer colours the usage errors."""
+    return ANSI.sub("", output)
 
 HEADER = ("date,fragment,stage,engine_or_prompt,wer,term_accuracy,false_edit_rate,"
           "timing_median_ms,cost_usd,minutes,notes")
@@ -96,7 +104,7 @@ def test_record_needs_engine_and_stage(test_set, tmp_path):
     hyp = tmp_path / "hyp.txt"
     hyp.write_text("x", encoding="utf-8")
     result = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(hyp), "--record", "--engine", "e"])
-    assert result.exit_code == 2 and "--stage" in result.output
+    assert result.exit_code == 2 and "--stage" in plain(result.output)
 
 
 def test_missing_reference_points_to_ref_from_draft(test_set, tmp_path):

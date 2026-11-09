@@ -4,6 +4,7 @@ segments, no model download, no audio decoding.
 """
 
 import math
+import re
 import sys
 import wave
 from types import ModuleType, SimpleNamespace
@@ -24,6 +25,13 @@ from talk_autopsy.stt.faster_whisper import (
 )
 
 runner = CliRunner()
+
+ANSI = re.compile(r"\[[0-9;]*m")
+
+
+def plain(output: str) -> str:
+    """CLI output without ANSI colours: on GitHub Actions Typer colours the usage errors."""
+    return ANSI.sub("", output)
 
 
 def _word(start, end, text, probability):
@@ -209,4 +217,4 @@ def test_transcribe_command_writes_the_json(fake_whisper, audio, tmp_path):
 def test_glossary_prompt_flag_needs_a_glossary_file(audio, tmp_path):
     result = runner.invoke(cli.app, ["transcribe", str(audio), "--out", str(tmp_path / "o.json"),
                                      "--glossary-prompt"])
-    assert result.exit_code == 2 and "--glossary" in result.output
+    assert result.exit_code == 2 and "--glossary" in plain(result.output)
