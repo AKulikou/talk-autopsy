@@ -113,26 +113,37 @@ uv run talk-autopsy transcribe talk.wav --out work/talk/raw.whisper-large-v3.jso
 uv run talk-autopsy eval T2 --hyp work/T2/raw.whisper-large-v3.json
 ```
 
-`talk-autopsy run <source> --lang ru` parses its arguments and prints the plan; the
-Claude stages behind it are not implemented yet.
+The whole pipeline on a local video (Gemini needs `GEMINI_API_KEY`, forced
+alignment needs `uv sync --extra align`, the Claude steps need
+`ANTHROPIC_API_KEY`):
+
+```bash
+uv sync --extra align
+uv run talk-autopsy run talk.mp4 --lang ru --engine gemini+align --glossary talk.glossary.md
+# -> work/talk/talk.ru.srt and work/talk/talk.en.srt, with a cost report;
+#    a rerun skips every step whose inputs did not change
+```
 
 ## Project structure
 
 ```
 talk_autopsy/
-  cli.py                   command line: cut, transcribe, adjudicate, resolve, eval, run, ...
+  cli.py                   command line: cut, transcribe, align, fix, translate, srt, eval, run, ...
   config.py                API key check, target language, models, prices, paths
   segments.py              Transcript / Segment / Word: the format every stage uses
   ingest.py                audio extraction and cut (ffmpeg), duration (ffprobe)
   glossary.py              per-video glossary as a Markdown table
-  stt/                     speech recognition interface and engines (faster-whisper)
+  stt/                     speech recognition engines: faster-whisper, AssemblyAI, Gemini, chunked Gemini
   metrics.py               WER, term accuracy, false-edit rate, reading speed
   evaluation.py            scoring a transcript file against the test set, benchmark rows
   adjudicate.py            reference transcripts by three-engine consensus
   proofread.py             draft export and import (superseded by adjudicate)
-  correct.py               Claude correction (stage 2)
-  translate.py             Claude translation (stage 2)
-  subtitles.py             .srt output (stage 3)
+  align.py                 forced alignment: measured word times for any transcript
+  blocks.py                five-minute blocks, video context, cost estimates
+  correct.py               Claude correction (stage 2), prompts/correction-v1.md
+  translate.py             Claude translation (stage 2), prompts/translation-v1.md
+  subtitles.py             .srt output (built in stage 2 as a viewing tool)
+  pipeline.py              run: stt, align, fix, translate, srt with skip-if-unchanged
   tts/                     dubbing (stage 4)
   core/                    shared Claude request code from the Autopsy template
 tests/                     unit tests with a fake Claude client
@@ -159,11 +170,28 @@ Python 3.13 for every push.
 
 ## Status and roadmap
 
-Status: **stage 0, foundation. Nothing has been measured yet.** The repository,
-the data format, the audio cut, the metrics, the first speech recognition engine
-and two of the six test fragments are in place; the reference transcripts are
-being built by consensus of three engines (faster-whisper, AssemblyAI, Gemini),
-with the owner deciding only the spans where they disagree. The Claude stages, subtitles and dubbing are stubs.
+Status: **stage 2, Claude correction and translation.** Stage 1 is measured on
+T1 and T2 against references built by three-engine consensus
+([experiments](docs/experiments.md#stage-1-summary)):
+
+| Speech recognition (no glossary) | WER T2 | Term accuracy T2 | WER T1 | Term accuracy T1 |
+|---|---|---|---|---|
+| faster-whisper large-v3 (local) | 6.19% | 61.7% | 11.20% | 55.1% |
+| AssemblyAI Universal-3.5 Pro | 6.97% | 80.4% | 1.41% | 95.8% |
+| Gemini `gemini-3.8-flash` | 2.34% | 93.5% | 1.41% | 99.2% |
+
+AssemblyAI and Gemini helped build the references, so their numbers are
+biased in their favour. Every engine is under the stage 1 limit (WER ≤ 15% on
+T2). By the owner's decision Gemini is the main engine (free tier), used with
+forced alignment for measured word times (`gemini+align`), with faster-whisper
+as the fallback ([decisions](docs/decisions.md)).
+
+Stage 2 is built and has its first runs: correction (`correction-v1`) takes term
+accuracy on T2 from 61.7% to 94.4% on faster-whisper input and from 93.5% to
+96.3% on Gemini input, with no false edits; translation (`translation-v1`)
+and the `.srt` writer produce Russian subtitles of a whole talk. The blind
+translation rating, the hold-out run and the external audit of the stage 2
+gate are still ahead. Dubbing is a stub.
 
 | Stage | Content | Gate |
 |---|---|---|
