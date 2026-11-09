@@ -6,8 +6,8 @@ experiment to the next. T6 is a sealed hold-out.
 
 | ID | Type | Speech | Duration | Topic | Glossary terms |
 |---|---|---|---|---|---|
-| T1 | conference talk with live demo | native speaker (to be confirmed) | 9:27 | AI coding agents | TBD |
-| T2 | conference talk, slides | strong regional accent | 10:00 (cut from 27:52) | AI coding agents, terminal tooling | TBD |
+| T1 | conference talk with live demo | native speaker (to be confirmed) | 9:27 | AI coding agents | 37 (draft) |
+| T2 | conference talk, slides | strong regional accent | 10:00 (cut from 27:52) | AI coding agents, terminal tooling | 37 (draft) |
 | T3 | conference talk | other non-native accent | TBD | TBD | TBD |
 | T4 | screen demo / tutorial | fast speech, code identifiers, shell commands | TBD | TBD | TBD |
 | T5 | university lecture | slow pace, long sentences | TBD | TBD | TBD |
