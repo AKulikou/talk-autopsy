@@ -195,6 +195,34 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
 
+### Subtitles: up to 3 lines and `.ass` (operational, not scored)
+
+Owner decision of 2026-11-09 (decisions): no meaning is cut for reading
+speed. `subtitles.py` now lays cues out in up to 3 lines of up to 48
+characters (fewest lines that fit, balanced; 1–7 s on screen; split at
+sentence, then clause ends, never inside a glossary term; a cue that does not
+fit becomes two cues inside the segment's time span) and writes a sibling
+`.ass` for every `.srt` (1920x1080, Arial 42, white with a dark outline,
+bottom centre, 60 px bottom margin, one style). Reading speed is reported per
+file as the shares of cues above 17 and above 25 characters per second.
+First use, the T2 fragment from the realistic pipeline (AssemblyAI + auto key
+terms, correction-v2, translation-v2), `work/T2/T2.v2.ru.srt` / `.ass` and
+`T2.v2.en.srt` / `.ass`:
+
+| | Russian (translation-v2) | English (correction-v2) |
+|---|---|---|
+| cues | 166 | 172 |
+| above 17 cps | 74.7% | 83.7% |
+| above 25 cps | 25.3% | 26.7% |
+| max cps | 66.1 | 82.6 |
+| shorter than 1 s / longer than 7 s | 9 / 0 | 11 / 0 |
+
+For comparison, translation-v1 (compressed) on the Gemini segmentation had
+53% of its Russian cues above 17 cps. The fastest cues are short sentences
+whose segment is short and whose next cue starts at once, so the cue cannot
+linger; cues never cross a segment boundary. Writing both files takes about
+2 s per fragment.
+
 ### C1 (blind): translation-v1 against translation-v2 — file waiting for the owner
 
 - **Hypothesis:** translation-v2 (no meaning compression) scores higher with

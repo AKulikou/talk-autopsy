@@ -278,7 +278,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
             out = work / f"{settings.video_id}.{suffix}.srt"
             result = subtitles.write_srt(load_transcript(transcript_path), out, glossary)
             written.append(out.name)
-            emit("srt", "srt", f"{out.name}: {result.cues} cues, max {result.reading.max_cps:.1f} cps")
+            emit("srt", "srt", f"{out.name} + .ass: {result.line()}")
         if not written:
             raise PipelineError("step srt found no transcript to write; run stt first")
         step_done("srt", work / written[0], False, 0.0, t0)

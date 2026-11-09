@@ -347,18 +347,14 @@ def srt_command(
     out: Annotated[Path, typer.Option("--out", "-o", help="SRT file to write.")],
     glossary: Annotated[Path | None, typer.Option(help="Glossary: no cue break inside a term.")] = None,
 ) -> None:
-    """Subtitles: cues of at most 2 x 42 characters, 1-7 s on screen, split at sentence and clause ends."""
+    """Subtitles: .srt and a sibling .ass; cues of up to 3 x 48 characters, 1-7 s, split at clause ends."""
     try:
         source = load_transcript(transcript)
         terms = load_glossary(glossary) if glossary is not None else None
         result = subtitles.write_srt(source, out, terms)
     except (FileNotFoundError, ValueError, GlossaryError) as e:
         _fail(str(e))
-    r = result.reading
-    typer.echo(f"Wrote {out}: {result.cues} cues; reading speed max {r.max_cps:.1f} cps, "
-               f"{r.share_above * 100:.1f}% above {r.threshold:.0f} cps; shorter than "
-               f"{subtitles.MIN_SECONDS:.0f} s: {result.shorter_than_min}, longer than "
-               f"{subtitles.MAX_SECONDS:.0f} s: {result.longer_than_max}")
+    typer.echo(f"Wrote {out} and {out.with_suffix('.ass').name}: {result.line()}")
 
 
 @app.command(name="align")
