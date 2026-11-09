@@ -77,6 +77,42 @@ clip carries 5 s of padding; neighbouring clips overlap.
   (the engine has dropped such segments since 4f378a5); they normalize to
   nothing and do not enter the alignment.
 
+### Who decided each reference
+
+The two references were not decided the same way, and that changes what their
+numbers can carry.
+
+- **T2** (strong accent, `T2.ref.txt`, 2052 words): 114 spans. 19 were decided
+  by the owner listening to the clip (2 of them marked "not sure" and resolved
+  by majority or grammar); 20 by the product-name rule (`Quadcode` /
+  `QuadCode` -> `Claude Code`, the product on the slides); about 30 by the
+  reference conventions and the glossary (slash commands, digits, `macOS`,
+  `WebFetch`, `LLM`, compound spelling); the rest by engine majority. The owner
+  noticed that a variant read before listening biases what one hears; one span
+  was re-listened blind and changed (`them` -> `Vim`).
+- **T1** (native speaker, `T1.ref.txt`, 1205 words): 73 spans, **no human
+  listening**. The assistant (a Claude model) decided them from rules, context
+  and majority: 39 product and model names, 26 by majority, 8 by meaning or
+  convention. A 20-word Whisper hallucination at 02:01 was removed (absent from
+  both cloud transcripts); `Excalibur` -> `Excalidraw` twice.
+
+Consequence: T1's reference was adjudicated by a Claude model, so in stage 2
+(Claude correction) T1 is secondary evidence: a Claude correction may agree
+with it for the same reasons the adjudicator did. T2 (human-checked where it
+mattered) and the sealed T6 carry the weight.
+
+Share of disputed spans whose decided text matched each engine's variant
+(`T<n>.ref.protocol.json`, `spans_by_engine`; a span can match more than one
+engine, so the shares do not add up to 100%). This is the fairer comparison
+for AssemblyAI and Gemini, whose WER is biased in their favour:
+
+| | T2 (114 spans, human-checked) | T1 (73 spans, assistant-decided) |
+|---|---|---|
+| Gemini | 71 (62%) | 65 (89%) |
+| faster-whisper | 52 (46%) | 6 (8%) |
+| AssemblyAI | 30 (26%) | 60 (82%) |
+| typed (no engine had it) | 29 (25%) | 1 (1%) |
+
 ## Summary
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |

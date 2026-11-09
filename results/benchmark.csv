@@ -1,1 +1,7 @@
 date,fragment,stage,engine_or_prompt,wer,term_accuracy,false_edit_rate,timing_median_ms,cost_usd,minutes,notes
+2026-11-09,T2,stt,faster-whisper-large-v3,0.0619,0.6286,,,0.0000,22.2,draft glossary
+2026-11-09,T2,stt,assemblyai,0.0697,0.8000,,,0.0350,0.7,draft glossary
+2026-11-09,T2,stt,gemini,0.0234,0.9429,,,0.0000,7.4,draft glossary
+2026-11-09,T1,stt,faster-whisper-large-v3,0.1120,0.5508,,,0.0000,21.9,draft glossary
+2026-11-09,T1,stt,assemblyai,0.0141,0.9576,,,0.0331,0.6,draft glossary
+2026-11-09,T1,stt,gemini,0.0141,0.9915,,,0.0000,10.0,draft glossary
