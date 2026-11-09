@@ -1,6 +1,6 @@
 """
-Command line: `cut`, `transcribe`, `draft`, `ref-from-draft`, `eval` (work now)
-and `run` (prints the plan).
+Command line: `cut`, `transcribe` (faster-whisper or a cloud engine), `draft`,
+`ref-from-draft`, `eval` (work now) and `run` (prints the plan).
 
 Only argument parsing and printing live here; the stages are plain functions in
 the package, so a web UI can call them the same way later.
@@ -18,6 +18,8 @@ from talk_autopsy import config, evaluation, ingest, proofread
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
 from talk_autopsy.segments import load_transcript, save_transcript
+from talk_autopsy.stt import assemblyai
+from talk_autopsy.stt.assemblyai import AssemblyAITranscriber
 from talk_autopsy.stt.faster_whisper import FasterWhisperTranscriber
 
 app = typer.Typer(
@@ -93,16 +95,42 @@ def _log_to_stderr() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per Hugging Face request otherwise
 
 
+ENGINES = ("faster-whisper", "assemblyai")
+
+
+def make_engine(engine: str, model: str | None, glossary_prompt: bool):
+    """The Transcriber for an --engine name; `model` overrides the engine's default model."""
+    if engine == "faster-whisper":
+        return FasterWhisperTranscriber(model_size=model or "large-v3", glossary_prompt=glossary_prompt)
+    if engine == "assemblyai":
+        return AssemblyAITranscriber(model=model or assemblyai.MODEL, glossary_prompt=glossary_prompt)
+    raise AssertionError(engine)  # _check_engine admits only ENGINES
+
+
+def _check_engine(engine: str) -> str:
+    name = engine.strip().lower()
+    if name not in ENGINES:
+        raise typer.BadParameter(f"unknown engine {engine!r}; known: {', '.join(ENGINES)}",
+                                 param_hint="--engine")
+    return name
+
+
 @app.command()
 def transcribe(
     audio: Annotated[Path, typer.Argument(help="16 kHz mono WAV (from `talk-autopsy cut`).")],
     out: Annotated[Path, typer.Option("--out", "-o", help="Transcript JSON to write.")],
-    model: Annotated[str, typer.Option(help="faster-whisper model size.")] = "large-v3",
+    engine: Annotated[str, typer.Option(help=f"Speech recognition engine: {' | '.join(ENGINES)}.")]
+    = "faster-whisper",
+    model: Annotated[str | None, typer.Option(
+        help="Model of the engine. Default: large-v3 (faster-whisper), "
+             "universal-3-5-pro (assemblyai).")] = None,
     glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the fragment.")] = None,
     glossary_prompt: Annotated[bool, typer.Option(
-        "--glossary-prompt", help="Pass the glossary terms to Whisper as its initial prompt.")] = False,
+        "--glossary-prompt",
+        help="Pass the glossary terms to the engine (Whisper prompt, AssemblyAI keyterms).")] = False,
 ) -> None:
-    """Speech recognition of AUDIO with faster-whisper on the CPU (int8, beam 5, VAD, word timings)."""
+    """Speech recognition of AUDIO: faster-whisper on the CPU, or a cloud engine (the audio is uploaded)."""
+    engine = _check_engine(engine)
     if glossary_prompt and glossary is None:
         raise typer.BadParameter("--glossary-prompt needs --glossary", param_hint="--glossary-prompt")
     if not audio.is_file():
@@ -112,17 +140,21 @@ def transcribe(
     except (FileNotFoundError, GlossaryError) as e:
         _fail(str(e))
     _log_to_stderr()
-    engine = FasterWhisperTranscriber(model_size=model, glossary_prompt=glossary_prompt)
+    transcriber = make_engine(engine, model, glossary_prompt)
     try:
-        transcript = engine.transcribe(audio, terms)
-    except (FileNotFoundError, ValueError) as e:
+        transcript = transcriber.transcribe(audio, terms)
+    except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError) as e:
         _fail(str(e))
     if glossary is not None:
         transcript.meta["glossary"] = glossary.name
     save_transcript(transcript, out)
     meta = transcript.meta
-    typer.echo(f"Wrote {out}: {len(transcript.segments)} segments, {meta['audio_seconds']:.0f} s of audio "
-               f"in {meta['wall_seconds']:.0f} s (realtime factor {meta['realtime_factor']})")
+    audio_seconds = meta.get("audio_seconds")
+    cost = meta.get("cost_usd")
+    typer.echo(f"Wrote {out}: {len(transcript.segments)} segments, "
+               f"{audio_seconds:.0f} s of audio in {meta['wall_seconds']:.0f} s "
+               f"(realtime factor {meta.get('realtime_factor')}; "
+               f"cost {'n/a' if cost is None else f'{cost:.4f} USD'})")
 
 
 ForceOption = Annotated[bool, typer.Option("--force", help="Overwrite OUT if it exists.")]
