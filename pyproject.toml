@@ -1,0 +1,54 @@
+[project]
+name = "talk-autopsy"
+version = "0.0.1"
+description = "English technical talks to subtitles in a target language, with every stage measured on a fixed test set"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Aliaksei Kulikou" }]
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=2.6.0",
+    "edge-tts>=7.3.1",
+    "faster-whisper>=1.2.1",
+    "jiwer>=4.0.0",
+    "pydantic>=2.14.3",
+    "python-dotenv>=1.2.4",
+    "typer>=0.28.0",
+    "yt-dlp>=2026.10.26",
+]
+
+[project.scripts]
+talk-autopsy = "talk_autopsy.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 110
+extend-exclude = [".venv", "venv"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle: errors and warnings
+    "F",       # pyflakes: unused imports and variables, undefined names
+    "I",       # import order
+    "UP",      # modern syntax for the target version
+    "B",       # bugbear: likely bugs (mutable defaults, calls in defaults, ...)
+    "RUF100",  # noqa comments that suppress nothing
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
+]

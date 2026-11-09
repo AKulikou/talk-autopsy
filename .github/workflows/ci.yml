@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest moves to a new release on its own
+    env:
+      # config.py fails fast without a key; the tests replace Claude with a fake
+      # client, so this placeholder never reaches the API.
+      ANTHROPIC_API_KEY: sk-ant-ci-placeholder
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run pytest
