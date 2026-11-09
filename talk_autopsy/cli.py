@@ -6,7 +6,9 @@ Only argument parsing and printing live here; the stages are plain functions in
 the package, so a web UI can call them the same way later.
 """
 
+import logging
 import re
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -14,7 +16,9 @@ import typer
 
 from talk_autopsy import config, evaluation, ingest
 from talk_autopsy.config import ConfigurationError
-from talk_autopsy.glossary import GlossaryError, parse_glossary
+from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
+from talk_autopsy.segments import save_transcript
+from talk_autopsy.stt.faster_whisper import FasterWhisperTranscriber
 
 app = typer.Typer(
     help="English technical talks to subtitles in a target language.",
@@ -80,6 +84,45 @@ def cut(
     except (FileNotFoundError, ValueError, RuntimeError) as e:
         _fail(str(e))
     typer.echo(f"Wrote {out} ({seconds:.1f} s, {ingest.SAMPLE_RATE} Hz mono)")
+
+
+def _log_to_stderr() -> None:
+    """Progress of long stages (model download, transcription) goes to stderr with timestamps."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S",
+                        stream=sys.stderr, force=True)
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per Hugging Face request otherwise
+
+
+@app.command()
+def transcribe(
+    audio: Annotated[Path, typer.Argument(help="16 kHz mono WAV (from `talk-autopsy cut`).")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="Transcript JSON to write.")],
+    model: Annotated[str, typer.Option(help="faster-whisper model size.")] = "large-v3",
+    glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the fragment.")] = None,
+    glossary_prompt: Annotated[bool, typer.Option(
+        "--glossary-prompt", help="Pass the glossary terms to Whisper as its initial prompt.")] = False,
+) -> None:
+    """Speech recognition of AUDIO with faster-whisper on the CPU (int8, beam 5, VAD, word timings)."""
+    if glossary_prompt and glossary is None:
+        raise typer.BadParameter("--glossary-prompt needs --glossary", param_hint="--glossary-prompt")
+    if not audio.is_file():
+        _fail(f"No such file: {audio}")
+    try:
+        terms = load_glossary(glossary) if glossary is not None else None
+    except (FileNotFoundError, GlossaryError) as e:
+        _fail(str(e))
+    _log_to_stderr()
+    engine = FasterWhisperTranscriber(model_size=model, glossary_prompt=glossary_prompt)
+    try:
+        transcript = engine.transcribe(audio, terms)
+    except (FileNotFoundError, ValueError) as e:
+        _fail(str(e))
+    if glossary is not None:
+        transcript.meta["glossary"] = glossary.name
+    save_transcript(transcript, out)
+    meta = transcript.meta
+    typer.echo(f"Wrote {out}: {len(transcript.segments)} segments, {meta['audio_seconds']:.0f} s of audio "
+               f"in {meta['wall_seconds']:.0f} s (realtime factor {meta['realtime_factor']})")
 
 
 @app.command()

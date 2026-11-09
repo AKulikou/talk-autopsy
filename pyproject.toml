@@ -12,6 +12,7 @@ dependencies = [
     "edge-tts>=7.3.1",
     "faster-whisper>=1.2.1",
     "jiwer>=4.0.0",
+    "numpy>=2.5.4",
     "pydantic>=2.14.3",
     "python-dotenv>=1.2.4",
     "typer>=0.28.0",
