@@ -6,6 +6,26 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-09 — Gemini as the main engine (owner direction, pending the gate)
+
+The owner chose Gemini as the main speech recognition engine, on the free tier
+only, with faster-whisper as the fallback. Stage 1 numbers
+([experiments.md](experiments.md), Stage 1 summary): Gemini `gemini-3.8-flash`
+has the lowest WER on both fragments (T2 2.34%, T1 1.41%) and reaches the
+stage 2 term-accuracy target without a glossary (T2 93.5%, T1 99.2%), against
+faster-whisper's 6.19% / 61.7% on T2. Gemini's timestamps are model estimates,
+so it is used with forced alignment (`gemini+align`, A5 (setup)), chunked for
+long audio with a per-chunk cache and a model fallback list. faster-whisper
+stays as the per-chunk fallback and as the local engine for audio that must
+not leave the machine.
+
+What it rules out: paid Gemini tiers (a quota or billing error stops a run
+instead of switching to a paid model), and treating AssemblyAI as the main
+engine despite its keyterms result (it costs money per hour and was not the
+owner's choice). What remains open: the formal decision at the stage 1 gate;
+how often the free tier's 503 "high demand" answers force the fallback on a
+real run (the full-talk smoke test in A5 (setup) is the first data point).
+
 ## 2026-11-09 — reference transcripts by three-engine consensus, not proofreading
 
 The owner is not a native English speaker, so a reference proofread by ear from

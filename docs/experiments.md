@@ -113,6 +113,48 @@ for AssemblyAI and Gemini, whose WER is biased in their favour:
 | AssemblyAI | 30 (26%) | 60 (82%) |
 | typed (no engine had it) | 29 (25%) | 1 (1%) |
 
+## Stage 1 summary
+
+Speech recognition on T1 (native speaker, 9:27) and T2 (strong accent, 10:00),
+scored 2026-11-09 against the resolved references with the reviewed glossaries
+(`results/benchmark.csv`, rows without a `superseded` note). Ten of ten
+test-set runs used.
+
+| Engine variant | T1 WER | T1 terms | T2 WER | T2 terms | Speed (10 min of audio) | Cost per hour of audio | Audio goes to |
+|---|---|---|---|---|---|---|---|
+| faster-whisper large-v3, 4 threads (A1) | 11.20% | 55.1% | 6.19% | 61.7% | about 22 min (0.44–0.46x real time) | 0 | local |
+| faster-whisper + glossary prompt, 8 threads (A2) | 4.32% | 96.6% | 6.43% | 51.4% | 17 min (0.57x) on T1; 53 min (0.19x) on T2 | 0 | local |
+| AssemblyAI Universal-3.5 Pro (A3 (setup)) | 1.41% | 95.8% | 6.97% | 80.4% | 35–39 s (about 15x) | $0.21 list | AssemblyAI |
+| AssemblyAI + glossary keyterms (A3) | 0.33% | 100.0% | 4.43% | 99.1% | 25–27 s (about 23x) | $0.26 list | AssemblyAI |
+| Gemini `gemini-3.8-flash`, one call (A4 (setup)) | 1.41% | 99.2% | 2.34% | 93.5% | 7.4–10 min incl. 503 retries | 0 on the free tier ($0.18–0.23 at paid prices) | Google |
+| Gemini + forced alignment (A5 (setup)) | same text as Gemini | | same text as Gemini | | + about 1 min alignment (about 10x) | as Gemini | Google, then local |
+
+1. **Gate (WER ≤ 15% on T2).** Every variant is under it on T2: the highest is
+   AssemblyAI without keyterms at 6.97%, Gemini is lowest at 2.34%. The gate
+   does not separate the engines; their differences show in term accuracy and
+   in the biases below.
+2. **Term accuracy against the stage 2 target (≥ 85%).** Without any glossary,
+   Gemini already reaches 93.5% on T2 and 99.2% on T1; faster-whisper
+   reaches 61.7% / 55.1% and AssemblyAI 80.4% / 95.8%. With the glossary given
+   to the engine, AssemblyAI reaches 99.1% / 100% and faster-whisper 51.4% /
+   96.6%. The project plan's stop rule is not in the repository, so it is not
+   applied here; the facts it needs are these: on Gemini input the stage 2
+   target is already met before any correction on both fragments, and on
+   faster-whisper input it is not met on T2 by any measured variant.
+3. **Biases of these numbers.** (a) AssemblyAI and Gemini helped build both
+   references, so their WER is biased low (methodology section; their share
+   of the T2 span decisions was Gemini 71, faster-whisper 52, AssemblyAI 30,
+   typed 29 of 114). (b) T1's reference was decided by a Claude model without
+   listening. (c) The glossaries were reviewed against the references, so
+   every term is known to occur; the keyterms and prompt variants had that
+   knowledge, which an unseen video would not give them. (d) Two fragments,
+   one speaker each. (e) Gemini's wall times include waits for 503 retries
+   and depend on the day's load; the free tier's cost is 0 but not
+   guaranteed. (f) The alignment row's timing quality is measured against
+   faster-whisper's word times, a proxy.
+
+Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whisper as fallback, free tier only; formal decision at the gate.
+
 ## Summary
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
