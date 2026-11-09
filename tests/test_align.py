@@ -173,6 +173,57 @@ def test_align_command_writes_the_json(silence, tmp_path, monkeypatch):
     assert "0 unplaced" in result.output
 
 
+# --- gemini+align ------------------------------------------------------------------
+
+
+class FakeInner:
+    name = "fake gemini"
+
+    def __init__(self, *args, **kwargs):
+        self.kwargs = kwargs
+
+    def transcribe(self, audio, glossary):
+        return Transcript(segments=[Segment(id=1, start=0.0, end=0.2, text="Hello")], language="en",
+                          source="gemini fake", meta={"engine": "gemini-chunked", "audio_seconds": 3.0,
+                                                      "wall_seconds": 5.0, "timestamps": "model-estimated"})
+
+
+def test_aligned_transcriber_retimes_and_reports_progress(silence):
+    events = []
+    engine = align_module.AlignedTranscriber(FakeInner(), "gemini+align",
+                                             emitter_factory=lambda: StubEmitter(spoken([(40, "hello")])),
+                                             progress=events.append)
+    result = engine.transcribe(silence(3.0), None)
+    assert result.segments[0].start == pytest.approx(0.8)
+    assert result.meta["engine"] == "gemini+align" and result.meta["transcription_engine"] == "gemini-chunked"
+    assert result.meta["timestamps"] == "aligned" and result.meta["transcription_wall_seconds"] == 5.0
+    assert [e.event for e in events] == ["align-start", "align-done"]
+
+
+def test_aligner_is_not_built_when_transcription_fails(silence):
+    class Failing(FakeInner):
+        def transcribe(self, audio, glossary):
+            raise RuntimeError("Gemini failed")
+
+    def no_model():
+        raise AssertionError("the acoustic model must not load")
+
+    with pytest.raises(RuntimeError, match="Gemini failed"):
+        align_module.AlignedTranscriber(Failing(), "gemini+align", emitter_factory=no_model).transcribe(
+            silence(1.0), None)
+
+
+def test_transcribe_command_with_gemini_align(silence, tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "ChunkedGeminiTranscriber", FakeInner)
+    monkeypatch.setattr(align_module, "Wav2Vec2Emitter", lambda: StubEmitter(spoken([(40, "hello")])))
+    out = tmp_path / "T9" / "raw.gemini+align.json"
+    result = runner.invoke(cli.app, ["transcribe", str(silence(3.0)), "--engine", "gemini+align",
+                                     "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    assert load_transcript(out).meta["timestamps"] == "aligned"
+    assert "align-done" in result.output
+
+
 def test_start_differences_on_agreed_words():
     def timed(words):
         segment_words = [align_module.Word(start=s, end=s + 0.2, text=w) for w, s in words]

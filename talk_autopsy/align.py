@@ -448,6 +448,50 @@ class Wav2Vec2Emitter:
         return np.concatenate(pieces).astype(np.float32)
 
 
+# --- an engine with measured word times ----------------------------------------------
+
+
+class AlignedTranscriber:
+    """
+    A transcriber whose times are estimates (Gemini), followed by forced
+    alignment: the result is an ordinary Transcript with measured word times.
+    `emitter_factory` builds the acoustic model only when alignment starts, so
+    a transcription failure never loads it. Progress events as in stt/chunked.py.
+    """
+
+    def __init__(self, inner, engine_name: str, emitter_factory=None, progress=None):
+        self.inner = inner
+        self.engine_name = engine_name
+        self.emitter_factory = emitter_factory or (lambda: Wav2Vec2Emitter())
+        self.progress = progress or (lambda event: None)
+        self.name = f"{inner.name} + forced alignment"
+
+    def transcribe(self, audio_path: Path, glossary) -> Transcript:
+        from talk_autopsy.stt.chunked import ProgressEvent
+
+        started = time.perf_counter()
+        raw = self.inner.transcribe(audio_path, glossary)
+        seconds = float(raw.meta.get("audio_seconds") or 0.0)
+
+        def emit(event: str, detail: str) -> None:
+            self.progress(ProgressEvent("align", event, 0, 1, 0.0 if event == "align-start" else seconds,
+                                        seconds, round(time.perf_counter() - started, 1), "aligner", detail))
+
+        emit("align-start", f"{len(raw.segments)} segments")
+        result = align(raw, audio_path, self.emitter_factory())
+        a = result.meta["alignment"]
+        emit("align-done", f"{a['unplaced_words']} of {a['words']} words unplaced")
+        wall = time.perf_counter() - started
+        result.meta.update({
+            "engine": self.engine_name,
+            "transcription_engine": raw.meta.get("engine"),
+            "transcription_wall_seconds": raw.meta.get("wall_seconds"),
+            "wall_seconds": round(wall, 1),
+            "realtime_factor": round(seconds / wall, 3) if wall > 0 and seconds else None,
+        })
+        return result
+
+
 # --- agreement with another transcript's word times -------------------------------------
 
 

@@ -24,6 +24,7 @@ from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
 from talk_autopsy.segments import load_transcript, save_transcript
 from talk_autopsy.stt import assemblyai
 from talk_autopsy.stt.assemblyai import AssemblyAITranscriber
+from talk_autopsy.stt.chunked import ChunkedGeminiTranscriber
 from talk_autopsy.stt.faster_whisper import FasterWhisperTranscriber
 from talk_autopsy.stt.gemini import GeminiTranscriber
 
@@ -100,11 +101,20 @@ def _log_to_stderr() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per Hugging Face request otherwise
 
 
-ENGINES = ("faster-whisper", "assemblyai", "gemini")
+ENGINES = ("faster-whisper", "assemblyai", "gemini", "gemini+align")
 
 
-def make_engine(engine: str, model: str | None, glossary_prompt: bool, threads: int = 0):
-    """The Transcriber for an --engine name; `model` overrides the engine's default model."""
+def _print_progress(event) -> None:
+    typer.echo(event.line(), err=True)
+
+
+def make_engine(engine: str, model: str | None, glossary_prompt: bool, threads: int = 0,
+                cache_dir: Path | None = None):
+    """
+    The Transcriber for an --engine name; `model` overrides the engine's default model
+    (for gemini+align: the first of the model list). `cache_dir` holds the chunk cache
+    of gemini+align.
+    """
     if engine == "faster-whisper":
         return FasterWhisperTranscriber(model_size=model or "large-v3", glossary_prompt=glossary_prompt,
                                         cpu_threads=threads)
@@ -112,6 +122,11 @@ def make_engine(engine: str, model: str | None, glossary_prompt: bool, threads: 
         return AssemblyAITranscriber(model=model or assemblyai.MODEL, glossary_prompt=glossary_prompt)
     if engine == "gemini":
         return GeminiTranscriber(model=model, glossary_prompt=glossary_prompt)
+    if engine == "gemini+align":
+        models = [model, *[m for m in config.GEMINI_MODELS if m != model]] if model else None
+        inner = ChunkedGeminiTranscriber(models=models, glossary_prompt=glossary_prompt, cache_dir=cache_dir,
+                                         progress=_print_progress)
+        return align_module.AlignedTranscriber(inner, "gemini+align", progress=_print_progress)
     raise AssertionError(engine)  # _check_engine admits only ENGINES
 
 
@@ -131,7 +146,8 @@ def transcribe(
     = "faster-whisper",
     model: Annotated[str | None, typer.Option(
         help="Model of the engine. Default: large-v3 (faster-whisper), "
-             "universal-3-5-pro (assemblyai), GEMINI_MODEL (gemini).")] = None,
+             "universal-3-5-pro (assemblyai), GEMINI_MODEL (gemini), the first of GEMINI_MODELS "
+             "(gemini+align).")] = None,
     glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the fragment.")] = None,
     glossary_prompt: Annotated[bool, typer.Option(
         "--glossary-prompt",
@@ -153,7 +169,7 @@ def transcribe(
     except (FileNotFoundError, GlossaryError) as e:
         _fail(str(e))
     _log_to_stderr()
-    transcriber = make_engine(engine, model, glossary_prompt, threads)
+    transcriber = make_engine(engine, model, glossary_prompt, threads, cache_dir=out.parent / "chunks")
     try:
         transcript = transcriber.transcribe(audio, terms)
     except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError) as e:
