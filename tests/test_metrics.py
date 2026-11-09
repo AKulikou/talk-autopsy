@@ -121,6 +121,15 @@ def test_ordinary_words_match_any_case_identifiers_only_exact_case():
     assert rows["GitHub"].identifier and not rows["npm"].identifier
 
 
+def test_a_term_inside_a_longer_term_is_not_counted_twice():
+    ref = "Ask Claude. Claude Code runs GitHub Actions on GitHub."
+    hyp = "Ask Claude. Cloud Code runs GitHub Actions on GitHub."
+    terms = ["Claude", "GitHub", "Claude Code", "GitHub Actions"]  # glossary order is kept in the rows
+    rows = {row.term: (row.expected, row.found) for row in term_accuracy(ref, hyp, terms).rows}
+    assert rows == {"Claude": (1, 1), "GitHub": (1, 1), "Claude Code": (1, 0), "GitHub Actions": (1, 1)}
+    assert [row.term for row in term_accuracy(ref, hyp, terms).rows] == terms
+
+
 def test_terms_are_whole_tokens_not_substrings():
     result = term_accuracy("we use npm here", "we use pnpm here", ["npm"])
     assert result.rows[0].found == 0

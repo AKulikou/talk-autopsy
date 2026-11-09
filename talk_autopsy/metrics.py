@@ -174,16 +174,33 @@ def _token_matches(term_token: str, token: str) -> bool:
     return token == term_token if is_identifier(term_token) else token.casefold() == term_token.casefold()
 
 
-def _count(term_tokens: list[str], tokens: list[str]) -> int:
-    """Non-overlapping occurrences of the token sequence `term_tokens` in `tokens`."""
+def _claim(term_tokens: list[str], tokens: list[str], claimed: list[bool]) -> int:
+    """
+    Count non-overlapping occurrences of `term_tokens` in `tokens` that use no
+    position claimed by another term, and claim the positions they use.
+    """
     count, i, n = 0, 0, len(term_tokens)
     while i + n <= len(tokens):
-        if all(_token_matches(t, x) for t, x in zip(term_tokens, tokens[i:i + n], strict=True)):
+        window = range(i, i + n)
+        if not any(claimed[j] for j in window) and all(
+            _token_matches(t, tokens[j]) for t, j in zip(term_tokens, window, strict=True)
+        ):
+            for j in window:
+                claimed[j] = True
             count += 1
             i += n
         else:
             i += 1
     return count
+
+
+def _count_terms(term_tokens: list[list[str]], tokens: list[str]) -> list[int]:
+    """Occurrences of each term, longest terms first, so a term inside a longer one is not counted twice."""
+    claimed = [False] * len(tokens)
+    counts = [0] * len(term_tokens)
+    for index in sorted(range(len(term_tokens)), key=lambda k: -len(term_tokens[k])):
+        counts[index] = _claim(term_tokens[index], tokens, claimed)
+    return counts
 
 
 def term_accuracy(reference: str, hypothesis: str, terms: Iterable[str]) -> TermAccuracyResult:
@@ -197,6 +214,11 @@ def term_accuracy(reference: str, hypothesis: str, terms: Iterable[str]) -> Term
     case-insensitively otherwise, so `GitHub` must be spelled `GitHub` while
     `subagent` may be `Subagent`.
 
+    Terms that overlap are counted once: longer terms (in tokens) claim their
+    tokens first, and a shorter term counts only where no longer term matched.
+    With `Claude` and `Claude Code` in the glossary, "Claude Code" counts for
+    `Claude Code` only, and a lone "Claude" for `Claude`.
+
     Per term: `expected` = occurrences in the reference; `found` =
     min(expected, occurrences in the hypothesis). The count is position-free:
     it does not check that the hypothesis has the term at the same place, only
@@ -204,19 +226,20 @@ def term_accuracy(reference: str, hypothesis: str, terms: Iterable[str]) -> Term
     sum(expected) over the terms with expected > 0; terms absent from the
     reference are listed in `absent` and excluded.
     """
-    ref_tokens = tokenize(reference, lowercase=False)
-    hyp_tokens = tokenize(hypothesis, lowercase=False)
-    rows, absent = [], []
-    for term in terms:
-        term_tokens = tokenize(term, lowercase=False)
-        if not term_tokens:
+    terms = list(terms)
+    term_tokens = [tokenize(term, lowercase=False) for term in terms]
+    for term, tokens in zip(terms, term_tokens, strict=True):
+        if not tokens:
             raise ValueError(f"glossary term {term!r} has no words after normalization")
-        expected = _count(term_tokens, ref_tokens)
+    in_reference = _count_terms(term_tokens, tokenize(reference, lowercase=False))
+    in_hypothesis = _count_terms(term_tokens, tokenize(hypothesis, lowercase=False))
+    rows, absent = [], []
+    counts = zip(terms, term_tokens, in_reference, in_hypothesis, strict=True)
+    for term, tokens, expected, hyp_count in counts:
         if expected == 0:
             absent.append(term)
             continue
-        found = min(expected, _count(term_tokens, hyp_tokens))
-        rows.append(TermRow(term, any(is_identifier(t) for t in term_tokens), expected, found))
+        rows.append(TermRow(term, any(is_identifier(t) for t in tokens), expected, min(expected, hyp_count)))
     total = sum(row.expected for row in rows)
     accuracy = sum(row.found for row in rows) / total if total else None
     return TermAccuracyResult(rows=rows, absent=absent, accuracy=accuracy)
