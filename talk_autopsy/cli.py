@@ -1,7 +1,7 @@
 """
-Command line: `cut`, `transcribe` (faster-whisper or a cloud engine), `draft`,
-`ref-from-draft`, `adjudicate`, `resolve`, `eval` (work now) and `run` (prints
-the plan).
+Command line: `cut`, `transcribe` (faster-whisper or a cloud engine), `align`,
+`draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval` (work now) and `run`
+(prints the plan).
 
 Only argument parsing and printing live here; the stages are plain functions in
 the package, so a web UI can call them the same way later.
@@ -17,6 +17,7 @@ from typing import Annotated
 import typer
 
 from talk_autopsy import adjudicate as consensus_module
+from talk_autopsy import align as align_module
 from talk_autopsy import config, evaluation, ingest, proofread
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
@@ -170,6 +171,29 @@ def transcribe(
 
 
 ForceOption = Annotated[bool, typer.Option("--force", help="Overwrite OUT if it exists.")]
+
+
+@app.command(name="align")
+def align_command(
+    transcript: Annotated[Path, typer.Argument(help="Transcript JSON (any engine; times may be estimates).")],
+    audio: Annotated[Path, typer.Argument(help="The 16 kHz mono WAV the transcript was made from.")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="Aligned transcript JSON to write.")],
+) -> None:
+    """Forced alignment: re-time every word of TRANSCRIPT on AUDIO (needs `uv sync --extra align`)."""
+    if not audio.is_file():
+        _fail(f"No such file: {audio}")
+    _log_to_stderr()
+    try:
+        source = load_transcript(transcript)
+        result = align_module.align(source, audio, align_module.Wav2Vec2Emitter())
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        _fail(str(e))
+    save_transcript(result, out)
+    a = result.meta["alignment"]
+    typer.echo(f"Wrote {out}: {a['words']} words in {len(result.segments)} segments, "
+               f"{a['unplaced_words']} unplaced, {a['audio_seconds']:.0f} s of audio "
+               f"in {a['wall_seconds']:.0f} s "
+               f"(realtime factor {a['realtime_factor']})")
 
 
 def _write_new(out: Path, text: str, force: bool) -> None:

@@ -117,11 +117,77 @@ for AssemblyAI and Gemini, whose WER is biased in their favour:
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| A5 (setup) | 2026-11-09 | none: forced alignment of the Gemini transcripts, before Gemini can drive subtitles | wav2vec2 base 960h (torchaudio 2.11.1, CPU) + numpy Viterbi; existing Gemini transcripts of T2, T1 | 0 unplaced words; 8.6x / 10.3x real time; start times vs faster-whisper: median 130 / 230 ms, p95 410 / 660 ms | Gemini text gets measured word times; aligner starts words later than Whisper by a steady offset | `gemini+align` engine built on it; smoke test on a full talk below |
 | A2 | 2026-11-09 | glossary as Whisper `initial_prompt` raises term accuracy by >= 20 points | faster-whisper large-v3 + `--glossary-prompt`, 8 CPU threads; T2, T1 | T2 term accuracy 61.7% -> 51.4%, WER 6.19% -> 6.43%; T1 55.1% -> 96.6%, 11.20% -> 4.32%; realtime factor 0.19 (T2) / 0.57 (T1) | holds on T1, fails on T2 (the accented fragment, the one that matters) | not adopted as a fix for accented speech; Whisper stays the fallback engine |
 | A3 | 2026-11-09 | glossary as AssemblyAI keyterms raises term accuracy | Universal-3.5 Pro + keyterms (reviewed glossaries); T2, T1 | T2 term accuracy 80.4% -> 99.1%, WER 6.97% -> 4.43%; T1 95.8% -> 100%, 1.41% -> 0.33%; 0.084 USD | holds on these numbers; size inflated by a glossary built from the reference and by reference bias | recorded; re-test with a reference-free glossary on T3–T5 |
 | A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### A5 (setup): forced alignment of Gemini transcripts
+
+- **Hypothesis:** none yet; this is the setup the owner's direction requires.
+  Gemini's timestamps are model estimates (A4 (setup): 8 T2 segments end past
+  the audio), so Gemini text can drive subtitles only after its words are
+  placed on the audio by a forced aligner.
+- **Choice of aligner (checked 2026-11-09):** torchaudio's `forced_align` and
+  its MMS pipeline are deprecated since torchaudio 2.8 (the docs say "removed in
+  2.9"; torchaudio's last release is 2.11.1 while torch is at 2.15, so its op
+  library is built for an older torch); the MMS forced-alignment weights used by
+  torchaudio's `MMS_FA` and by `ctc-forced-aligner` are CC-BY-NC 4.0, and
+  `ctc-forced-aligner`'s last release (1.0.2, Feb 2025) states no Python 3.13
+  support; WhisperX pulls a large dependency tree. Chosen: torchaudio's
+  `WAV2VEC2_ASR_BASE_960H` (wav2vec 2.0 base fine-tuned on LibriSpeech 960 h,
+  English characters, Apache-2.0, 360 MB; the model WhisperX uses for English)
+  for the per-frame character probabilities only, with the Viterbi search
+  written in numpy in `talk_autopsy/align.py`, so nothing depends on the
+  deprecated op. torch 2.11.0+cpu and torchaudio 2.11.1+cpu (CPU wheels, about
+  110 MB download) are the optional `align` extra; download total about
+  0.5 GB including the model, under the 1.5 GB limit. Tests never load them.
+- **Method:** the audio is run through the model in 30 s pieces (20 ms
+  frames). Segments are grouped into blocks of about 900 characters (about a
+  minute); each block is searched in an audio window that starts at the end of
+  the previous block's last word and is 1.5x the block's estimated length plus
+  20 s, with a "garbage" state before and after the text (scored as each
+  frame's best label), so the block finds its place and the input's time
+  estimates are used only for block length, never for position. Digits are
+  spelled out, `&` `@` `%` `+` become words, other symbols are dropped; a word
+  with nothing left keeps interpolated times and is listed as unplaced.
+- **Run:** 2026-11-09, on the existing `work/T<n>/raw.gemini.json` (A4 (setup),
+  not a new speech-recognition run), 8 CPU threads, nothing else running.
+  Outputs `work/T<n>/aligned.gemini.json`, numbers in `work/A5-setup.json`.
+- **Numbers:**
+
+  | | T2 | T1 |
+  |---|---|---|
+  | audio | 600.0 s | 566.9 s |
+  | wall time (model already loaded) | 69.9 s | 55.1 s |
+  | of which acoustic model | 66.7 s | 53.6 s |
+  | realtime factor | 8.6x | 10.3x |
+  | blocks / failed / low probability | 12 / 0 / 0 | 8 / 0 / 0 |
+  | words / unplaced | 2067 / 0 (0.0%) | 1206 / 0 (0.0%) |
+  | words matched with faster-whisper (same token in the same place) | 1940 | 1083 |
+  | start-time difference to faster-whisper, median | 130 ms | 230 ms |
+  | 95th percentile | 410 ms | 660 ms |
+  | within 100 ms / 250 ms | 25.1% / 82.7% | 7.5% / 58.7% |
+  | signed median (aligner minus Whisper) | +130 ms | +230 ms |
+  | differences over 1 s | 10 | 7 |
+
+  The first model download and load took 96 s.
+- **Conclusion:** every word of both Gemini transcripts gets a measured time,
+  about ten times faster than real time on this laptop. The comparison is
+  with faster-whisper's own word times, which are **a proxy, not a
+  hand-labelled reference**: the two disagree by a steady offset (the aligner
+  puts word starts 130–230 ms later; the signed and the absolute medians are
+  equal), not by scatter, and which one is closer to the true onset is not
+  measured. Whisper's word timestamps come from cross-attention and are known
+  to run early; a CTC aligner marks the frame where a character becomes the
+  most probable label, which can run late. The few differences over a second
+  are short words ("and", "so", "the") where the two transcripts' word
+  sequences match at a neighbouring occurrence.
+- **Decision:** the aligner is used for the `gemini+align` engine. Timing drift
+  against hand-labelled onsets (metrics `timing_drift`) remains for stage 3;
+  Backlog.
 
 ### A2: faster-whisper with the glossary as initial prompt (and 8 CPU threads)
 
@@ -330,6 +396,10 @@ Ideas that come up during a stage and wait for a later one.
   window. For flagging doubtful segments for correction, use word probabilities
   (for example the minimum or mean per segment) instead.
 
+- Timing reference for A5 / D-hypotheses (2026-11-09): label word onsets by
+  hand for a few minutes of T1 and T2 so the aligner's +130–230 ms offset
+  against Whisper can be attributed to one of them; then decide whether to
+  shift aligned times by a constant.
 - Glossary leak in A2 and A3 (2026-11-09): both runs pass a glossary that was
   reviewed against the reference, so every term is known to occur. On T3–T5,
   measure the prompt or keyterms with a glossary drafted from a first

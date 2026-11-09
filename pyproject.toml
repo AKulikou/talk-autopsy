@@ -21,6 +21,15 @@ dependencies = [
     "yt-dlp>=2026.10.26",
 ]
 
+[project.optional-dependencies]
+# Forced alignment (talk_autopsy/align.py): `uv sync --extra align`. CPU wheels only; torch is
+# pinned to the torchaudio line it is built for (torchaudio stopped at 2.11; a newer torch
+# would load against an op library built for another version). Not installed in CI.
+align = [
+    "torch==2.11.*",
+    "torchaudio==2.11.*",
+]
+
 [project.scripts]
 talk-autopsy = "talk_autopsy.cli:app"
 
@@ -55,3 +64,12 @@ dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.4",
 ]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
