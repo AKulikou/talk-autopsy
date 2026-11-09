@@ -312,10 +312,15 @@ def translate_command(
     glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the video.")] = None,
     context: Annotated[Path | None, typer.Option(help="meta.json with title, description, chapters.")] = None,
     model: Annotated[str | None, typer.Option(help="Claude model. Default: TRANSLATION_MODEL.")] = None,
+    prompt: Annotated[str, typer.Option(help=f"Prompt version: {' | '.join(translate.VERSIONS)}.")]
+    = translate.PROMPT_VERSION,
     max_cost: Annotated[float, typer.Option(help="Stop if the estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
 ) -> None:
-    """Claude translation of TRANSCRIPT into --lang (translation-v1)."""
+    """Claude translation of TRANSCRIPT into --lang."""
+    if prompt not in translate.VERSIONS:
+        raise typer.BadParameter(f"unknown prompt {prompt!r}; known: {', '.join(translate.VERSIONS)}",
+                                 param_hint="--prompt")
     try:
         config.require_api_key()
         target_lang = config.check_lang(lang if lang is not None else config.TARGET_LANG)
@@ -323,10 +328,10 @@ def translate_command(
         _fail(str(e))
     source, terms, ctx = _stage_inputs(transcript, glossary, context)
     model = model or config.TRANSLATION_MODEL
-    _confirm_cost(translate.estimate(source, terms, target_lang, ctx, model), max_cost)
+    _confirm_cost(translate.estimate(source, terms, target_lang, ctx, model, version=prompt), max_cost)
     _log_to_stderr()
     try:
-        result = translate.translate(source, terms, target_lang, model=model, context=ctx,
+        result = translate.translate(source, terms, target_lang, model=model, context=ctx, version=prompt,
                                      progress=lambda n, total: typer.echo(f"  block {n}/{total}", err=True))
     except (RuntimeError, ValueError, ConfigurationError) as e:
         _fail(str(e))

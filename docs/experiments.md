@@ -195,6 +195,53 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
 
+### C1 (blind): translation-v1 against translation-v2 — file waiting for the owner
+
+- **Hypothesis:** translation-v2 (no meaning compression) scores higher with
+  the owner than translation-v1 and reaches the stage 2 target (mean >= 4.0)
+  in a blind comparison.
+- **What changed from v1** (`talk_autopsy/prompts/translation-v2.md`; owner's
+  decision after C1): every content clause is translated, only disfluencies
+  (fillers, repetitions, false starts) are dropped; idioms, set phrases and job
+  titles by meaning, never as calques; technical terms that developers say in
+  English stay in English (the owner rated these 5); kept glossary terms always
+  stay; the rules that rewarded shortness ("short sentences", "compress where
+  the target text would be much longer") are gone; the segment rules and the
+  validator are unchanged. A glossary note "suggested ..." is a suggestion: the
+  pipeline now passes an auto-glossary's drafted translations that way
+  (`glossary_auto.merge`), since the validator rejects a block that does not
+  use an agreed translation and a model's draft is not agreed.
+- **Runs:** 2026-11-09, `translate --prompt translation-v2`,
+  `claude-sonnet-5-5`, `ru`:
+  1. on the same English and glossary as the rated v1 run
+     (`work/T2/fixed.gemini+align.correction-v1.json`,
+     `data/test-set/T2.glossary.md`) -> `work/T2/T2.ru.v2.json`: 109 segments,
+     0 failed blocks, 0.064 USD (estimate 0.109). The C1 segment ids belong to
+     this transcript; the AssemblyAI transcript of the realistic pipeline has
+     149 different segments, so the blind comparison uses this input, and the
+     two translations differ only in the prompt.
+  2. on the realistic pipeline's English
+     (`work/T2/fixed.assemblyai+autoterms.correction-v2.json`, auto-glossary
+     with suggested translations `work/T2/run.glossary.md`) ->
+     `work/T2/ru.assemblyai+autoterms.correction-v2.translation-v2.json`: 149
+     segments, 0 failed blocks, 0.072 USD (estimate 0.110). This one feeds the
+     subtitles, not the rating.
+- **Facts before the rating:** on run 1, v2's Russian is 17% longer than v1's
+  (9,637 against 8,229 characters; the English corrected text has 10,707);
+  11 of 109 segments are identical. The three segments rated 2 now keep the
+  clauses v1 dropped (segment 18 keeps "at the same time" as "за один раз").
+  The job title in segment 2 is still the calque "[removed]" in
+  both versions, despite the new rule (Backlog).
+- **Blind file:** `work/T2/C1-blind.md`, the same 20 segments as
+  `C1-rating.md`; for each the English and two Russian translations X and Y,
+  v1 and v2 assigned at random per segment (seed and assignment only in
+  `work/T2/C1-blind.key.json`, which the file tells the owner not to open
+  before scoring). Caveat: the owner has already read and scored the v1
+  translations of these 20 segments, so a remembered wording can unblind a
+  segment; segments where X and Y are identical score the same by
+  construction.
+- **Numbers, conclusion, decision:** after the owner's scores.
+
 ### B1 (v2): correction-v2 on the realistic input
 
 - **Hypothesis:** with the input a real video gets — AssemblyAI with the
@@ -838,6 +885,11 @@ Ideas that come up during a stage and wait for a later one.
 - ~~T1 reference spells the GitHub mention "@Claude"~~ Closed 2026-11-09:
   spans 0052 and 0055 set to `@claude` on the owner's instruction, T1
   re-scored (see "T1 re-scored after the `@claude` fix").
+
+- translation-v2 still calques the job title "[removed]"
+  ("[removed]", T2 segment 2) although the prompt asks for job
+  titles by meaning (C1 blind run, 2026-11-09). Revisit after the owner's
+  blind scores; a third translation prompt version is within the limit of 5.
 
 - Server-side refusal fallback on the Claude calls (the docs recommend it for
   Sonnet 5.5 and Opus 5.5); decide when the correction stage is written.

@@ -1,12 +1,13 @@
 """
-Claude translation of the corrected transcript (prompt version `translation-v1`).
+Claude translation of the corrected transcript (prompt versions `translation-v1`,
+`translation-v2`; v2 is the default since 2026-11-09: no meaning compression).
 
     fixed.json + glossary + target_lang -> <target_lang>.json
 
 The transcript goes in blocks of about five minutes (blocks.py) with the
 previous block's last segments as read-only context; one glossary serves the
 whole video, so a term reads the same in every block. `target_lang` is always
-an argument: no language is assumed. The prompt is `prompts/translation-v1.md`.
+an argument: no language is assumed. The prompt is `prompts/<version>.md`.
 
 Output per block: `{segments: [{id, text}]}`, validated by `validate_block`: the
 same ids, no empty segment, no segment left in English (unless every word of it
@@ -41,7 +42,8 @@ from talk_autopsy.segments import Segment, Transcript, assert_same_ids
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "translation-v1"
+PROMPT_VERSION = "translation-v2"
+VERSIONS = ("translation-v1", "translation-v2")
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 ENGLISH_OVERLAP = 0.8  # a segment whose words are this much the source's own words is untranslated
 OUTPUT_FACTOR = 3.0  # estimate: output tokens per source token (other script, thinking)

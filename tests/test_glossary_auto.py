@@ -100,8 +100,11 @@ def test_merge_user_glossary_wins():
     user = Glossary(entries=[GlossaryEntry(term="Codebase", keep=True, notes="say it in English")])
     merged = glossary_auto.merge(auto, user)
     assert [e.term for e in merged.entries] == ["Codebase", "tmux"]
-    assert merged.entries[0].keep
-    assert glossary_auto.merge(auto, None).entries == auto.entries
+    assert merged.entries[0].keep and merged.entries[0].notes == "say it in English"
+    alone = glossary_auto.merge(auto, None)
+    assert [e.term for e in alone.entries] == ["codebase", "tmux"]
+    # a drafted translation is a suggestion for the translator, not an agreed translation
+    assert alone.entries[0].translations == {} and alone.entries[0].notes == "suggested ru: кодовая база"
 
 
 def test_read_context(tmp_path):

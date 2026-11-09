@@ -263,14 +263,28 @@ def coverage(auto: Glossary, reference: Glossary) -> Coverage:
 # --- merge with a user glossary -------------------------------------------------------
 
 
+def as_suggestions(entry: GlossaryEntry) -> GlossaryEntry:
+    """
+    An auto entry whose translations move into its notes as "suggested <lang>:
+    ...". The translation stage enforces agreed translations (a block that
+    does not use one is rejected); a model's draft is not agreed, so it goes to
+    the translator as a suggestion instead.
+    """
+    if not entry.translations:
+        return entry
+    hints = [f"suggested {lang}: {text}" for lang, text in sorted(entry.translations.items())]
+    notes = "; ".join(p for p in (entry.notes, *hints) if p)
+    return GlossaryEntry(term=entry.term, keep=entry.keep, translations={}, notes=notes)
+
+
 def merge(auto: Glossary, user: Glossary | None) -> Glossary:
     """
-    The user's entries first and unchanged (they win on a conflict, matched by
-    `Glossary.find`, case-insensitive), then the auto entries the user glossary
-    does not have.
+    The glossary of a run: the user's entries first and unchanged (they win on a
+    conflict, matched by `Glossary.find`, case-insensitive; their translations
+    are agreed), then the auto entries the user glossary does not have, with
+    their translations turned into suggestions (`as_suggestions`).
     """
-    if user is None or not user.entries:
-        return Glossary(entries=list(auto.entries))
-    entries = list(user.entries)
-    entries += [a for a in auto.entries if user.find(a.term) is None]
-    return Glossary(entries=entries)
+    user_entries = list(user.entries) if user is not None else []
+    known = Glossary(entries=user_entries)
+    return Glossary(entries=user_entries + [as_suggestions(a) for a in auto.entries
+                                            if known.find(a.term) is None])
