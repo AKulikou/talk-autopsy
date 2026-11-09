@@ -67,9 +67,10 @@ TARGET_LANG = os.getenv("TARGET_LANG", "").strip() or DEFAULT_TARGET_LANG
 # --- Models ----------------------------------------------------------------
 
 # Model IDs checked against https://platform.claude.com/docs/en/about-claude/models/overview
-# on 2026-11-09. .env overrides each one.
-DEFAULT_CORRECTION_MODEL = "claude-opus-5-5"
-DEFAULT_TRANSLATION_MODEL = "claude-opus-5-5"
+# on 2026-11-09. .env overrides each one. Sonnet 5.5 is the project default;
+# Opus 5.5 is reserved for experiment B3 (set it through .env for that run only).
+DEFAULT_CORRECTION_MODEL = "claude-sonnet-5-5"
+DEFAULT_TRANSLATION_MODEL = "claude-sonnet-5-5"
 DEFAULT_HELPER_MODEL = "claude-haiku-5-5"
 
 CORRECTION_MODEL = os.getenv("CORRECTION_MODEL", "").strip() or DEFAULT_CORRECTION_MODEL

@@ -31,4 +31,4 @@ No experiments yet.
 Ideas that come up during a stage and wait for a later one.
 
 - Server-side refusal fallback on the Claude calls (the docs recommend it for
-  Opus 5.5); decide when the correction stage is written.
+  Sonnet 5.5 and Opus 5.5); decide when the correction stage is written.
