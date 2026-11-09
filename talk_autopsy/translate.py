@@ -10,10 +10,17 @@ an argument: no language is assumed. The prompt is `prompts/translation-v1.md`.
 
 Output per block: `{segments: [{id, text}]}`, validated by `validate_block`: the
 same ids, no empty segment, no segment left in English (unless every word of it
-is a kept glossary term), kept terms still present, agreed glossary
-translations used where the term occurs. A rejected answer is retried once,
-then the block fails: its segments keep their English text and the block is
-listed in `meta.translation.failed_blocks`.
+is a kept glossary term), agreed glossary translations used where the term
+occurs. A rejected answer is retried once, then the block fails: its segments
+keep their English text and the block is listed in
+`meta.translation.failed_blocks`.
+
+A kept term (`keep: yes`) missing from a segment's translation is recorded in
+`meta.translation.warnings`, not rejected: compressing a subtitle may drop a
+repeated name ("Claude Code" -> "он"), which the prompt asks for. Translation
+term accuracy is measured from the output, so the warnings are evidence, not a
+gate. (Changed 2026-11-09 after the first T2 run rejected a block for exactly
+this; docs/experiments.md, 3.6.)
 
 Returns the same segment ids and times; word timings are dropped (they belong to
 the English words).
@@ -88,6 +95,18 @@ def _stem_present(translation: str, target: str) -> bool:
     return True
 
 
+def kept_terms_missing(segments: list[Segment], glossary: Glossary, answer: TranslationAnswer) -> list[str]:
+    """Warnings: kept glossary terms that occur in a source segment but not in its translation."""
+    warnings = []
+    for source, out in zip(segments, answer.segments, strict=False):
+        for entry in glossary.entries:
+            if not entry.keep or not metrics.term_accuracy(source.text, source.text, [entry.term]).rows:
+                continue
+            if entry.term.casefold() not in out.text.casefold():
+                warnings.append(f"segment {out.id}: kept term {entry.term!r} is missing")
+    return warnings
+
+
 def validate_block(segments: list[Segment], glossary: Glossary, target_lang: str,
                    answer: TranslationAnswer) -> list[str]:
     """Problems with a translation answer for `segments`; empty if it can be used."""
@@ -106,8 +125,6 @@ def validate_block(segments: list[Segment], glossary: Glossary, target_lang: str
             occurs = metrics.term_accuracy(source.text, source.text, [entry.term]).rows
             if not occurs:
                 continue
-            if entry.keep and entry.term.casefold() not in out.text.casefold():
-                problems.append(f"segment {out.id}: kept term {entry.term!r} is missing")
             agreed = entry.translations.get(target_lang)
             if not entry.keep and agreed and not _stem_present(agreed, out.text):
                 problems.append(f"segment {out.id}: glossary translation {agreed!r} of {entry.term!r} "
@@ -156,6 +173,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     client = claude_client.get_client()
     texts: dict[int, str] = {}
     failed: list[dict] = []
+    warnings: list[str] = []
     usage = Usage()
     started = time.perf_counter()
     parts = blocks.make_blocks(transcript)
@@ -175,6 +193,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
         else:
             blocks.merge_usage(usage, response.usage)
             texts.update({s.id: s.text for s in response.result.segments})
+            warnings.extend(kept_terms_missing(block.segments, glossary, response.result))
         if progress is not None:
             progress(block.number, len(parts))
 
@@ -187,6 +206,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
         "target_lang": target_lang,
         "blocks": len(parts),
         "failed_blocks": failed,
+        "warnings": warnings,
         "usage": usage.as_dict(),
         "cost_usd": blocks.usage_cost(model, usage),
         "input_source": transcript.source,

@@ -25,7 +25,6 @@ def test_left_in_english():
 
 
 @pytest.mark.parametrize("source, out, message", [
-    ("Run Claude Code.", "Запустите его.", "kept term 'Claude Code' is missing"),
     ("Start a subagent.", "Запустите агента.", "glossary translation"),
     ("Start a subagent.", "Start a subagent.", "left in English"),
     ("Hello.", "", "empty"),
@@ -71,3 +70,16 @@ def test_estimate_is_positive():
     t = Transcript(segments=[seg(1, "One two three.")], language="en", source="fixed")
     e = translate.estimate(t, GLOSSARY, "ru", model="claude-sonnet-5-5")
     assert e.blocks == 1 and e.usd > 0
+
+
+def test_a_dropped_kept_term_is_a_warning_not_a_rejection(fake_claude):
+    def handle(kwargs):
+        return response(TranslationAnswer(segments=[SegmentText(id=1, text="Запустите его.")]))
+    fake_claude(handle)
+    t = Transcript(segments=[seg(1, "Run Claude Code.")], language="en", source="fixed")
+    answer = TranslationAnswer(segments=[SegmentText(id=1, text="Запустите его.")])
+    assert validate_block([seg(1, "Run Claude Code.")], GLOSSARY, "ru", answer) == []
+    result = translate.translate(t, GLOSSARY, "ru")
+    assert result.segments[0].text == "Запустите его."
+    assert result.meta["translation"]["warnings"] == ["segment 1: kept term 'Claude Code' is missing"]
+    assert result.meta["translation"]["failed_blocks"] == []
