@@ -1,0 +1,195 @@
+"""Metrics on synthetic texts with known answers; no audio, no network."""
+
+import pytest
+
+from talk_autopsy import metrics
+from talk_autopsy.metrics import (
+    false_edit_rate,
+    is_identifier,
+    reading_speed,
+    term_accuracy,
+    tokenize,
+    word_error_rate,
+)
+
+# --- tokenize --------------------------------------------------------------
+
+
+def test_punctuation_is_stripped_from_word_edges_and_case_lowered():
+    assert tokenize("Hello, World! It's   fine.\nReally?") == ["hello", "world", "it's", "fine", "really"]
+
+
+@pytest.mark.parametrize("text, token", [
+    ("run kubectl, then", "kubectl"),
+    ("the (useEffect) hook", "useEffect"),
+    ("install @anthropic-ai/claude-code.", "@anthropic-ai/claude-code"),
+    ("edit ~/.claude/settings.json,", "~/.claude/settings.json"),
+    ("type /clear now", "/clear"),
+    ("copy .env.example", ".env.example"),
+    ("GPT-5.", "GPT-5"),
+    ("written in C++.", "C++"),
+    ("about 50%,", "50%"),
+    ('"src/"', "src/"),
+])
+def test_identifiers_survive_as_one_token(text, token):
+    assert token in tokenize(text, lowercase=False)
+
+
+def test_shell_command_keeps_its_flag():
+    assert tokenize("npm install -g @anthropic-ai/claude-code") == [
+        "npm", "install", "-g", "@anthropic-ai/claude-code"
+    ]
+    assert tokenize("uv run --steps stt") == ["uv", "run", "--steps", "stt"]
+
+
+def test_dashes_ellipses_and_markers_are_not_words():
+    text = "so - this ... works — really… [inaudible] ...and [Laughter]"
+    assert tokenize(text) == ["so", "this", "works", "really", "and"]
+
+
+def test_typographic_apostrophe_matches_ascii():
+    assert tokenize("don’t") == tokenize("don't") == ["don't"]
+
+
+def test_nothing_is_expanded():
+    assert tokenize("10 ten open-source open source") == ["10", "ten", "open-source", "open", "source"]
+
+
+def test_lowercase_off_keeps_case():
+    assert tokenize("Claude Code uses useEffect", lowercase=False) == ["Claude", "Code", "uses", "useEffect"]
+
+
+# --- WER -------------------------------------------------------------------
+
+
+def test_wer_counts_each_kind_of_error():
+    # reference 10 words; hypothesis: 1 insertion (so), 1 substitution (fox->box), 1 deletion (lazy)
+    ref = "The quick brown fox jumps over the lazy old dog."
+    hyp = "so the quick brown box jumps over the old dog"
+    result = word_error_rate(ref, hyp)
+    assert result.reference_words == 10
+    assert (result.substitutions, result.deletions, result.insertions) == (1, 1, 1)
+    assert result.hits == 8
+    assert result.wer == pytest.approx(0.3)
+
+
+def test_wer_ignores_case_and_punctuation():
+    assert word_error_rate("Run kubectl, then npm.", "run Kubectl then NPM").wer == 0
+
+
+def test_wer_counts_a_broken_identifier():
+    result = word_error_rate("call useEffect here", "call use effect here")
+    assert (result.substitutions, result.insertions) == (1, 1)
+    assert result.wer == pytest.approx(2 / 3)
+
+
+def test_wer_needs_reference_words():
+    with pytest.raises(ValueError, match="no words"):
+        word_error_rate(" [inaudible] ... ", "anything")
+
+
+# --- term accuracy ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("token, expected", [
+    ("useEffect", True), ("GitHub", True), ("API", True), ("GPT-5", True), ("k8s", True),
+    ("claude-code", True), ("-g", True), (".env", True), ("@scope", True), ("src/app", True),
+    ("npm", False), ("Claude", False), ("subagent", False), ("Kubernetes", False),
+])
+def test_identifier_rule(token, expected):
+    assert is_identifier(token) is expected
+
+
+def test_term_appearing_twice_and_found_once():
+    ref = "Open Claude Code. Later, Claude Code runs the subagent."
+    hyp = "Open Claude Code. Later, cloud code runs the sub agent."
+    result = term_accuracy(ref, hyp, ["Claude Code", "subagent"])
+    rows = {row.term: row for row in result.rows}
+    assert (rows["Claude Code"].expected, rows["Claude Code"].found) == (2, 1)
+    assert (rows["subagent"].expected, rows["subagent"].found) == (1, 0)
+    assert result.accuracy == pytest.approx(1 / 3)
+    assert (result.found, result.expected) == (1, 3)
+
+
+def test_ordinary_words_match_any_case_identifiers_only_exact_case():
+    ref = "Use npm and GitHub with useEffect."
+    hyp = "use NPM and Github with useeffect"
+    rows = {row.term: row for row in term_accuracy(ref, hyp, ["npm", "GitHub", "useEffect"]).rows}
+    assert rows["npm"].found == 1  # ordinary word: case-insensitive
+    assert rows["GitHub"].found == 0  # identifier: case-sensitive
+    assert rows["useEffect"].found == 0
+    assert rows["GitHub"].identifier and not rows["npm"].identifier
+
+
+def test_terms_are_whole_tokens_not_substrings():
+    result = term_accuracy("we use npm here", "we use pnpm here", ["npm"])
+    assert result.rows[0].found == 0
+
+
+def test_extra_occurrences_in_the_hypothesis_do_not_count_twice():
+    result = term_accuracy("npm once", "npm npm npm", ["npm"])
+    assert (result.rows[0].expected, result.rows[0].found) == (1, 1)
+    assert result.accuracy == 1
+
+
+def test_terms_absent_from_the_reference_are_excluded():
+    result = term_accuracy("only kubectl here", "only kubectl here", ["kubectl", "Docker"])
+    assert [row.term for row in result.rows] == ["kubectl"]
+    assert result.absent == ["Docker"]
+    assert result.accuracy == 1
+
+
+def test_no_term_in_the_reference_gives_no_average():
+    result = term_accuracy("nothing relevant", "nothing relevant", ["Docker"])
+    assert result.accuracy is None and result.rows == []
+
+
+# --- false-edit rate -------------------------------------------------------
+
+
+def test_false_edit_is_a_raw_hit_that_the_fix_broke():
+    ref = tokenize("we run the claude code agent today")
+    raw = tokenize("we run the cloud code agent today")  # 6 hits, one error
+    fixed = tokenize("we ran the claude code agent today")  # fixes cloud, breaks run
+    result = false_edit_rate(raw, fixed, ref)
+    assert (result.false_edits, result.raw_hits) == (1, 6)
+    assert result.rate == pytest.approx(1 / 6)
+
+
+def test_a_fix_that_only_corrects_has_no_false_edits():
+    ref = tokenize("we run the claude code agent")
+    raw = tokenize("we run the cloud code agent")
+    result = false_edit_rate(raw, ref, ref)
+    assert result.false_edits == 0 and result.rate == 0
+
+
+def test_false_edit_rate_without_raw_hits_is_undefined():
+    result = false_edit_rate(["x", "y"], ["a", "b"], ["a", "b"])
+    assert result.raw_hits == 0 and result.rate is None
+
+
+# --- timing drift, reading speed -------------------------------------------
+
+
+def test_timing_drift_is_not_implemented_yet():
+    with pytest.raises(NotImplementedError, match="hand-labelled"):
+        metrics.timing_drift([], [])
+
+
+def test_reading_speed_per_cue_and_share_above_threshold():
+    cues = [
+        ("ten chars!", 0.0, 1.0),  # 10 cps
+        ("twenty  characters\nhere", 1.0, 2.0),  # "twenty characters here" = 22 cps
+        ("a" * 34, 2.0, 4.0),  # 17 cps: at the threshold, not above it
+    ]
+    result = reading_speed(cues)
+    assert result.cps == pytest.approx([10, 22, 17])
+    assert result.share_above == pytest.approx(1 / 3)
+    assert result.max_cps == pytest.approx(22)
+    assert reading_speed(cues, threshold=12).share_above == pytest.approx(2 / 3)
+
+
+@pytest.mark.parametrize("cues", [[("text", 2.0, 2.0)], [("text", 3.0, 1.0)], []])
+def test_reading_speed_rejects_bad_cues(cues):
+    with pytest.raises(ValueError):
+        reading_speed(cues)
