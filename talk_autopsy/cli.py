@@ -1,11 +1,13 @@
 """
 Command line: `cut`, `transcribe` (faster-whisper or a cloud engine), `draft`,
-`ref-from-draft`, `eval` (work now) and `run` (prints the plan).
+`ref-from-draft`, `adjudicate`, `resolve`, `eval` (work now) and `run` (prints
+the plan).
 
 Only argument parsing and printing live here; the stages are plain functions in
 the package, so a web UI can call them the same way later.
 """
 
+import json
 import logging
 import re
 import sys
@@ -14,6 +16,7 @@ from typing import Annotated
 
 import typer
 
+from talk_autopsy import adjudicate as consensus_module
 from talk_autopsy import config, evaluation, ingest, proofread
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
@@ -317,3 +320,91 @@ def eval_command(
         except (FileNotFoundError, ValueError) as e:
             _fail(str(e))
         typer.echo(f"Recorded in {config.BENCHMARK_CSV}")
+
+
+def _fragment(fragment: str) -> str:
+    if not FRAGMENT_ID.match(fragment):
+        raise typer.BadParameter(f"expected an ID such as T2, got {fragment!r}", param_hint="FRAGMENT")
+    return fragment
+
+
+def _consensus_path(fragment: str) -> Path:
+    return config.WORK_DIR / fragment / "consensus.json"
+
+
+@app.command(name="adjudicate")
+def adjudicate_command(
+    fragment: Annotated[str, typer.Argument(help="Test-set fragment ID, e.g. T2.")],
+    backbone: Annotated[Path, typer.Option(help="Transcript with word timings (faster-whisper).")],
+    hyp: Annotated[list[Path], typer.Option(help="Cloud transcript; give it twice (AssemblyAI, Gemini).")],
+    audio: Annotated[Path | None, typer.Option(
+        help="Audio for the clips. Default: data/test-set/<FRAGMENT>.wav.")] = None,
+    force: ForceOption = False,
+) -> None:
+    """Align three transcripts; write the adjudication file and one audio clip per disagreement."""
+    fragment = _fragment(fragment)
+    if len(hyp) != 2:
+        raise typer.BadParameter(f"give --hyp exactly twice, got {len(hyp)}", param_hint="--hyp")
+    audio = audio or config.TEST_SET_DIR / f"{fragment}.wav"
+    out = config.TEST_SET_DIR / f"{fragment}.adjudication.md"
+    if out.exists() and not force:
+        _fail(f"{out} exists; it may hold your choices. Pass --force to overwrite it.")
+    try:
+        transcripts = [load_transcript(path) for path in (backbone, *hyp)]
+        seconds = ingest.probe(audio)
+        result = consensus_module.build_consensus(fragment, transcripts[0], transcripts[1:], seconds)
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        _fail(str(e))
+    clip_dir = config.WORK_DIR / fragment / "clips"
+    for old in clip_dir.glob("*.wav"):  # clips of an earlier alignment would no longer match the numbers
+        old.unlink()
+    try:
+        clips = consensus_module.write_clips(result, audio, clip_dir)
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        _fail(str(e))
+    consensus_file = _consensus_path(fragment)
+    consensus_file.parent.mkdir(parents=True, exist_ok=True)
+    consensus_file.write_text(consensus_module.consensus_to_json(result), encoding="utf-8", newline="\n")
+    shown = f"work/{fragment}/clips"
+    text = consensus_module.adjudication_markdown(result, shown, link_prefix="../../")
+    _write_new(out, text, force=True)
+    c = result.counts()
+    typer.echo(f"Wrote {out}: {c['words']} words, {c['unanimous_share'] * 100:.1f}% unanimous, "
+               f"{c['majority_spans']} majority and {c['split_spans']} split spans, "
+               f"{len(clips)} clips ({c['clip_minutes']} min) in {clip_dir}")
+
+
+@app.command(name="resolve")
+def resolve_command(
+    fragment: Annotated[str, typer.Argument(help="Test-set fragment ID, e.g. T2.")],
+    out: Annotated[Path | None, typer.Option(
+        "--out", "-o", help="Reference to write. Default: data/test-set/<FRAGMENT>.ref.txt.")] = None,
+    force: ForceOption = False,
+) -> None:
+    """Compose the reference from the agreed words and the variants chosen in the adjudication file."""
+    fragment = _fragment(fragment)
+    out = out or config.TEST_SET_DIR / f"{fragment}.ref.txt"
+    adjudication = config.TEST_SET_DIR / f"{fragment}.adjudication.md"
+    consensus_file = _consensus_path(fragment)
+    for path in (adjudication, consensus_file):
+        if not path.is_file():
+            _fail(f"No {path}; run talk-autopsy adjudicate {fragment} first")
+    try:
+        result = consensus_module.consensus_from_json(consensus_file.read_text(encoding="utf-8"))
+        choices = consensus_module.parse_choices(adjudication.read_text(encoding="utf-8-sig"))
+        resolution = consensus_module.resolve(result, choices)
+    except (ValueError, TypeError, KeyError) as e:
+        _fail(str(e))
+    _write_new(out, resolution.reference, force)
+    protocol_path = out.with_name(out.name.removesuffix(".txt") + ".protocol.json")
+    protocol_path.write_text(json.dumps(resolution.protocol, ensure_ascii=False, indent=2) + "\n",
+                             encoding="utf-8", newline="\n")
+    t = resolution.protocol["totals"]
+    typer.echo(f"Wrote {out}: {t['reference_words']} words")
+    typer.echo(f"  from consensus (all engines agree): {t['consensus_words']} words")
+    for engine in resolution.protocol["engines"]:
+        typer.echo(f"  chosen variant had {engine:<16} {t['words_by_engine'][engine]} words "
+                   f"in {t['spans_by_engine'][engine]} spans")
+    typer.echo(f"  typed by the owner: {t['typed_words']} words in {t['spans_typed']} spans")
+    typer.echo(f"  majority spans kept / changed: {t['majority_kept']} / {t['majority_changed']}")
+    typer.echo(f"Wrote {protocol_path}")

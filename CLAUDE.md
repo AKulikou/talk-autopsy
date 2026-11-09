@@ -35,6 +35,8 @@ uv run talk-autopsy transcribe <file>.wav --engine assemblyai --out work/T2/raw.
 uv run talk-autopsy transcribe <file>.wav --engine gemini --out work/T2/raw.gemini.json          # cloud, uploads audio
 uv run talk-autopsy draft <transcript>.json --out data/test-set/T2.draft.txt      # for proofreading
 uv run talk-autopsy ref-from-draft data/test-set/T2.draft.txt --out data/test-set/T2.ref.txt
+uv run talk-autopsy adjudicate T2 --backbone work/T2/raw.whisper-large-v3.json --hyp work/T2/raw.assemblyai.json --hyp work/T2/raw.gemini.json
+uv run talk-autopsy resolve T2                    # after ticking data/test-set/T2.adjudication.md -> T2.ref.txt + protocol
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
 uv run talk-autopsy run <source> --lang ru --steps stt,fix,translate,srt      # prints the plan (stages not implemented)
 ```
@@ -53,9 +55,10 @@ after any change. Use the uv-managed Python 3.13, not the system `python`.
 - `talk_autopsy/stt/` — `base.py` `Transcriber` protocol and `drop_wordless`; `faster_whisper.py` first engine (large-v3, int8, CPU; reads the WAV itself, see its docstring); `assemblyai.py` cloud engine (Universal-3.5 Pro, keyterms with `--glossary-prompt`); `gemini.py` cloud engine (Files API upload, verbatim JSON transcript; timestamps are model estimates, never for subtitles)
 - `talk_autopsy/metrics.py` — pure metric functions: `tokenize` (the one normalization; drops fillers uh/um/er/ah/hmm), WER, term accuracy (base form or regular plural of the last word), false-edit rate, reading speed; timing drift is an interface only
 - `talk_autopsy/evaluation.py` — reads hypothesis/reference/glossary files, `evaluate`, the benchmark row and its append
+- `talk_autopsy/adjudicate.py` — reference by consensus: aligns two cloud transcripts to the faster-whisper backbone, spans of disagreement, the adjudication file, clips, `resolve` to the reference and its protocol
 - `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import for hand-checked transcripts
 - `talk_autopsy/correct.py`, `translate.py` (stage 2), `subtitles.py` (stage 3), `tts/edge.py` (stage 4) — stubs with input -> output in the docstring
-- `talk_autopsy/cli.py` — typer CLI (`cut`, `transcribe`, `draft`, `ref-from-draft`, `eval`, `run`); argument parsing and printing only
+- `talk_autopsy/cli.py` — typer CLI (`cut`, `transcribe`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval`, `run`); argument parsing and printing only
 - `talk_autopsy/core/` — shared with autopsy-template: `structured_call.py` (structured request, stop-reason checks, validation, one retry), `claude_client.py`, `batch_client.py` (Message Batches at half price), `token_summary.py` (cost)
 - `tests/` — `conftest.py` has the fake Claude client (`fake_claude`) and the generated sine WAV (`sine`)
 - `data/test-set/` — media and reference transcripts are local only; `README.md` and `*.glossary.md` are tracked
