@@ -14,10 +14,10 @@ from typing import Annotated
 
 import typer
 
-from talk_autopsy import config, evaluation, ingest
+from talk_autopsy import config, evaluation, ingest, proofread
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
-from talk_autopsy.segments import save_transcript
+from talk_autopsy.segments import load_transcript, save_transcript
 from talk_autopsy.stt.faster_whisper import FasterWhisperTranscriber
 
 app = typer.Typer(
@@ -123,6 +123,49 @@ def transcribe(
     meta = transcript.meta
     typer.echo(f"Wrote {out}: {len(transcript.segments)} segments, {meta['audio_seconds']:.0f} s of audio "
                f"in {meta['wall_seconds']:.0f} s (realtime factor {meta['realtime_factor']})")
+
+
+ForceOption = Annotated[bool, typer.Option("--force", help="Overwrite OUT if it exists.")]
+
+
+def _write_new(out: Path, text: str, force: bool) -> None:
+    """Write `text` to `out`; an existing file (maybe hours of hand edits) needs --force."""
+    if out.exists() and not force:
+        _fail(f"{out} exists; it may hold hand edits. Pass --force to overwrite it.")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8", newline="\n")
+
+
+@app.command()
+def draft(
+    transcript: Annotated[Path, typer.Argument(help="Transcript JSON, e.g. work/T2/raw.<engine>.json.")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="Draft .txt to write.")],
+    force: ForceOption = False,
+) -> None:
+    """Draft for proofreading: one segment per line as [mm:ss] text, a blank line every minute."""
+    try:
+        source = load_transcript(transcript)
+    except (FileNotFoundError, ValueError) as e:
+        _fail(str(e))
+    _write_new(out, proofread.draft_text(source), force)
+    typer.echo(f"Wrote {out}: {len(source.segments)} lines")
+
+
+@app.command(name="ref-from-draft")
+def ref_from_draft(
+    draft_file: Annotated[Path, typer.Argument(metavar="DRAFT", help="Proofread draft .txt.")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="Reference .txt to write.")],
+    force: ForceOption = False,
+) -> None:
+    """Reference transcript from a proofread draft: prefixes removed, one paragraph per minute block."""
+    if not draft_file.is_file():
+        _fail(f"No such file: {draft_file}")
+    reference = proofread.reference_from_draft(draft_file.read_text(encoding="utf-8-sig"))
+    if not reference:
+        _fail(f"{draft_file} has no text")
+    _write_new(out, reference, force)
+    paragraphs = len(reference.strip().split("\n\n"))
+    typer.echo(f"Wrote {out}: {len(reference.split())} words, {paragraphs} paragraphs")
 
 
 @app.command()

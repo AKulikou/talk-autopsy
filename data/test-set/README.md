@@ -40,7 +40,8 @@ above, not taken from whatever files are at hand.
 |---|---|---|
 | `T<n>.source.mp4` | the original video or audio | no |
 | `T<n>.wav` | 16 kHz mono audio of the fragment (`talk-autopsy cut`) | no |
-| `T<n>.ref.txt` | reference transcript, checked by hand | no |
+| `T<n>.draft.txt` | speech recognition draft, `[mm:ss] text` per line, proofread while listening (`talk-autopsy draft`) | no |
+| `T<n>.ref.txt` | reference transcript, checked by hand (`talk-autopsy ref-from-draft`) | no |
 | `T<n>.glossary.md` | terms of the fragment, in the format of `talk_autopsy/glossary.py` | yes |
 
 Reference transcripts and media are not published, so the benchmark is
