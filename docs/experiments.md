@@ -117,9 +117,47 @@ for AssemblyAI and Gemini, whose WER is biased in their favour:
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| A3 | 2026-11-09 | glossary as AssemblyAI keyterms raises term accuracy | Universal-3.5 Pro + keyterms (reviewed glossaries); T2, T1 | T2 term accuracy 80.4% -> 99.1%, WER 6.97% -> 4.43%; T1 95.8% -> 100%, 1.41% -> 0.33%; 0.084 USD | holds on these numbers; size inflated by a glossary built from the reference and by reference bias | recorded; re-test with a reference-free glossary on T3–T5 |
 | A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### A3: AssemblyAI with the glossary as key terms
+
+- **Hypothesis:** passing the fragment's glossary to AssemblyAI as
+  `keyterms_prompt` raises term accuracy over the run without it, without
+  raising WER. (The project plan is not in the repository; the wording follows
+  the session prompt of 2026-11-09.)
+- **Run:** 2026-11-09, engine code at 0505ba9 (unchanged), Universal-3.5 Pro,
+  `--glossary-prompt` with the reviewed glossaries (39 terms on T2, 37 on T1;
+  none over 6 words), otherwise as A3 (setup). Outputs
+  `work/T<n>/raw.assemblyai+keyterms.json`. Test-set runs 9 and 10 of 10 in
+  stage 1 (A2's two runs are 7 and 8).
+- **Numbers** (reviewed glossaries; baseline = A3 (setup) transcripts re-scored):
+
+  | | T2 baseline | T2 keyterms | T1 baseline | T1 keyterms |
+  |---|---|---|---|---|
+  | WER | 6.97% | 4.43% | 1.41% | 0.33% |
+  | substitutions / deletions / insertions | 37 / 95 / 11 | 17 / 66 / 8 | 11 / 4 / 2 | 3 / 0 / 1 |
+  | term accuracy | 80.37% (86/107) | 99.07% (106/107) | 95.76% (113/118) | 100.00% (118/118) |
+  | wall time | 39 s | 27 s | 35 s | 25 s |
+  | cost at list price | 0.035 USD | 0.043 USD | 0.033 USD | 0.041 USD |
+
+  The keyterms runs cost $0.26 per hour of audio ($0.21 + $0.05 for keyterms,
+  pricing page); 0.084 USD for both, from the free credit.
+- **Conclusion:** on these numbers the hypothesis holds: +18.7 points of term
+  accuracy on T2, +4.2 on T1, and WER fell too. Three biases make the size
+  untrustworthy. (1) The glossary was reviewed against the reference so that
+  every term occurs in it: the engine was told exactly which rare words to
+  expect, which a real run on an unseen video does not get (its glossary would
+  be drafted from a first transcript and include terms that never occur).
+  (2) AssemblyAI helped build both references (methodology, bias caveat), so
+  its WER is biased low; T1's 0.33% mostly says that T1's reference agrees with
+  AssemblyAI. (3) On T2 most remaining errors are deletions (66): AssemblyAI
+  drops repetitions and false starts that the verbatim reference keeps.
+- **Decision:** recorded as `assemblyai+keyterms`. Whether a keyterms run on an
+  unseen video keeps the gain needs a glossary drafted without the reference
+  (T3–T5); Backlog.
 
 ### A4 (setup): Gemini transcripts of T2 and T1
 
@@ -243,6 +281,10 @@ Ideas that come up during a stage and wait for a later one.
   window. For flagging doubtful segments for correction, use word probabilities
   (for example the minimum or mean per segment) instead.
 
+- Glossary leak in A2 and A3 (2026-11-09): both runs pass a glossary that was
+  reviewed against the reference, so every term is known to occur. On T3–T5,
+  measure the prompt or keyterms with a glossary drafted from a first
+  transcript only, the way an unseen video would get it.
 - Term matching and possessives (glossary review, 2026-11-09): `Anthropic`
   occurs in T1 only as "Anthropic's", which `metrics.term_accuracy` does not
   count, so the term is excluded as absent. Accepting `'s` on the last token,
