@@ -108,6 +108,8 @@ def placeholder_api_key(monkeypatch):
     need a missing key still set it themselves.
     """
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-not-used")
+    # run checks the Gemini key before any work for the default gemini+align engine; CI has none
+    monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key-not-used")
 
 
 @pytest.fixture(autouse=True)
