@@ -111,6 +111,8 @@ def placeholder_api_key(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-not-used")
     # run checks the Gemini key before any work for the default gemini+align engine; CI has none
     monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key-not-used")
+    # run checks the AssemblyAI key before any work for the default assemblyai engine; CI has none
+    monkeypatch.setenv("ASSEMBLYAI_API_KEY", "aai-test-key-not-used")
 
 
 @pytest.fixture(autouse=True)
