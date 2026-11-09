@@ -102,10 +102,11 @@ def _log_to_stderr() -> None:
 ENGINES = ("faster-whisper", "assemblyai", "gemini")
 
 
-def make_engine(engine: str, model: str | None, glossary_prompt: bool):
+def make_engine(engine: str, model: str | None, glossary_prompt: bool, threads: int = 0):
     """The Transcriber for an --engine name; `model` overrides the engine's default model."""
     if engine == "faster-whisper":
-        return FasterWhisperTranscriber(model_size=model or "large-v3", glossary_prompt=glossary_prompt)
+        return FasterWhisperTranscriber(model_size=model or "large-v3", glossary_prompt=glossary_prompt,
+                                        cpu_threads=threads)
     if engine == "assemblyai":
         return AssemblyAITranscriber(model=model or assemblyai.MODEL, glossary_prompt=glossary_prompt)
     if engine == "gemini":
@@ -135,9 +136,13 @@ def transcribe(
         "--glossary-prompt",
         help="Pass the glossary terms to the engine "
              "(Whisper prompt, AssemblyAI keyterms, Gemini context).")] = False,
+    threads: Annotated[int, typer.Option(
+        min=0, help="CPU threads for faster-whisper; 0 = its default (4).")] = 0,
 ) -> None:
     """Speech recognition of AUDIO: faster-whisper on the CPU, or a cloud engine (the audio is uploaded)."""
     engine = _check_engine(engine)
+    if threads and engine != "faster-whisper":
+        raise typer.BadParameter("--threads applies to faster-whisper only", param_hint="--threads")
     if glossary_prompt and glossary is None:
         raise typer.BadParameter("--glossary-prompt needs --glossary", param_hint="--glossary-prompt")
     if not audio.is_file():
@@ -147,7 +152,7 @@ def transcribe(
     except (FileNotFoundError, GlossaryError) as e:
         _fail(str(e))
     _log_to_stderr()
-    transcriber = make_engine(engine, model, glossary_prompt)
+    transcriber = make_engine(engine, model, glossary_prompt, threads)
     try:
         transcript = transcriber.transcribe(audio, terms)
     except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError) as e:

@@ -117,10 +117,59 @@ for AssemblyAI and Gemini, whose WER is biased in their favour:
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| A2 | 2026-11-09 | glossary as Whisper `initial_prompt` raises term accuracy by >= 20 points | faster-whisper large-v3 + `--glossary-prompt`, 8 CPU threads; T2, T1 | T2 term accuracy 61.7% -> 51.4%, WER 6.19% -> 6.43%; T1 55.1% -> 96.6%, 11.20% -> 4.32%; realtime factor 0.19 (T2) / 0.57 (T1) | holds on T1, fails on T2 (the accented fragment, the one that matters) | not adopted as a fix for accented speech; Whisper stays the fallback engine |
 | A3 | 2026-11-09 | glossary as AssemblyAI keyterms raises term accuracy | Universal-3.5 Pro + keyterms (reviewed glossaries); T2, T1 | T2 term accuracy 80.4% -> 99.1%, WER 6.97% -> 4.43%; T1 95.8% -> 100%, 1.41% -> 0.33%; 0.084 USD | holds on these numbers; size inflated by a glossary built from the reference and by reference bias | recorded; re-test with a reference-free glossary on T3–T5 |
 | A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### A2: faster-whisper with the glossary as initial prompt (and 8 CPU threads)
+
+- **Hypothesis:** the glossary as Whisper's `initial_prompt` raises term
+  accuracy by at least 20 points over the run without it. The same pair also
+  measures speed with `cpu_threads` = 8 (the logical CPUs) against the
+  4-thread runs of A1 (setup); thread count by itself does not change the
+  decoded text.
+- **Run:** 2026-11-09, faster-whisper 1.2.1, large-v3, int8, CPU, beam 5,
+  VAD on, `--glossary-prompt` (the reviewed glossary joined with ", ", capped at
+  200 tokens; all 39 T2 and 37 T1 terms fit), `--threads 8` (new option,
+  recorded as `meta.cpu_threads`). T2 then T1, nothing else heavy on the CPU
+  except a few minutes of light editing and tests; a second faster-whisper
+  process started for about one minute near the end of the T1 run (a chunk
+  fallback in the 2.4 smoke test, stopped at once). Test-set runs 7 and 8 of 10.
+- **Numbers** (reviewed glossaries; baseline = A1 (setup) re-scored):
+
+  | | T2 baseline | T2 prompt | T1 baseline | T1 prompt |
+  |---|---|---|---|---|
+  | term accuracy | 61.68% (66/107) | 51.40% (55/107) | 55.08% (65/118) | 96.61% (114/118) |
+  | WER | 6.19% | 6.43% | 11.20% | 4.32% |
+  | substitutions / deletions / insertions | 60 / 42 / 25 | 85 / 26 / 21 | 67 / 47 / 21 | 17 / 3 / 32 |
+  | segments | 127 | 54 | 93 | 95 |
+  | CPU threads | 4 | 8 | 4 | 8 |
+  | transcription wall time | 1312 s | 3155 s | 1295 s | 1002 s |
+  | realtime factor | 0.457 | 0.190 | 0.438 | 0.566 |
+
+- **Conclusion:** the hypothesis holds on T1 (+41.5 points) and fails on T2
+  (-10.3 points), the accented fragment the stage is about. On T1 the speaker
+  says "Claude" clearly, and the prompt only settles the spelling (`CloudCode`
+  -> `Claude Code` 42 times). On T2 the accent makes the audio sound like
+  "Quad Code", and the prompt does not move Whisper off it (0/28 either way);
+  it also made Whisper decode whole 30-second windows as single segments,
+  write "code base" for `codebase` (0/7) and fall back to temperature
+  sampling repeatedly, which is where the 53 minutes went (one window took
+  about 25 minutes). `Excalidraw`, in the prompt, still came out as
+  "Excaladrol" / "Excalibur" (0/3). The same biases as A3 apply: the glossary
+  was reviewed against the reference, and T1's reference spells product names
+  by a rule that matches the glossary.
+  Speed: on T1, where the prompt barely changed the segmentation, 8 threads
+  ran at 0.57x real time against 0.44x with 4 (1.29x faster). The laptop has 8
+  logical CPUs (likely 4 physical cores), so doubling threads does not double
+  speed. The T2 number is not a thread measurement: the decoding itself
+  changed.
+- **Decision:** not adopted for accented speech. Whisper stays the fallback
+  engine (owner direction); if it is used, `--threads 8` is the faster
+  setting. A one-hour talk at 0.57x takes about 1 h 45 min on this laptop,
+  far over the plan's limit of 30 minutes per hour of video.
 
 ### A3: AssemblyAI with the glossary as key terms
 
@@ -272,11 +321,11 @@ Money: 0.07 USD at list price, all from free credit.
 
 Ideas that come up during a stage and wait for a later one.
 
-- Speed of faster-whisper on this laptop (A1): full fragments ran at 0.44–0.46x
-  real time, a 30-second clip at 0.95x. Candidates: `cpu_threads` (4 by default
-  of 8 logical CPUs), power or thermal limits on long
-  runs, and decoding fallbacks on long audio. Matters for stage 3 (a one-hour
-  talk would take over two hours), not for the stage 1 gate.
+- ~~Speed of faster-whisper on this laptop (A1)~~ Closed 2026-11-09 by A2:
+  `cpu_threads` 8 gives 0.57x real time on T1 against 0.44x with the default
+  4 (1.29x). A one-hour talk still takes about 1 h 45 min; Whisper is the
+  fallback engine, not the main one. Decoding fallbacks (temperature retries)
+  can make one window take many minutes (A2 on T2); not pursued further.
 - Segment confidence (A1): faster-whisper's `avg_logprob` is per 30-second
   window. For flagging doubtful segments for correction, use word probabilities
   (for example the minimum or mean per segment) instead.

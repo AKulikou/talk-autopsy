@@ -4,9 +4,11 @@ The first engine: faster-whisper (CTranslate2 Whisper) running locally on the CP
     audio.wav -> raw.json (Transcript with word timings and probabilities)
 
 Settings are fixed for the benchmark: large-v3, int8 weights on the CPU, beam
-size 5, Silero VAD on, word timestamps, English. The only option is a glossary
+size 5, Silero VAD on, word timestamps, English. The options are a glossary
 prompt (Whisper's `initial_prompt`), off by default: it is hypothesis A2 and is
-measured against the run without it.
+measured against the run without it; and the number of CPU threads
+(`cpu_threads`; 0 = faster-whisper's default of 4), which changes speed but not
+the decoded text.
 
 Segments whose text has no word (only `.`, typical at the end of the audio) are
 dropped before the transcript is written, and ids are assigned after dropping
@@ -51,6 +53,7 @@ PROMPT_TOKEN_LIMIT = 224
 DEFAULT_PROMPT_TOKENS = 200
 
 PROGRESS_EVERY_SECONDS = 60.0  # log progress once per minute of audio
+DEFAULT_CPU_THREADS = 4  # what faster-whisper uses when cpu_threads is 0
 
 
 def estimate_tokens(text: str) -> int:
@@ -143,8 +146,12 @@ class FasterWhisperTranscriber:
     vad_filter = True
 
     def __init__(self, model_size: str = "large-v3", device: str = "cpu", compute_type: str = "int8",
-                 glossary_prompt: bool = False, prompt_tokens: int = DEFAULT_PROMPT_TOKENS):
+                 glossary_prompt: bool = False, prompt_tokens: int = DEFAULT_PROMPT_TOKENS,
+                 cpu_threads: int = 0):
+        if cpu_threads < 0:
+            raise ValueError(f"cpu_threads must be 0 (default) or positive, got {cpu_threads}")
         self.model_size = model_size
+        self.cpu_threads = cpu_threads
         self.device = device
         self.compute_type = compute_type
         self.glossary_prompt = glossary_prompt
@@ -156,9 +163,10 @@ class FasterWhisperTranscriber:
         announce_download(self.model_size)
         started = time.perf_counter()
         model = faster_whisper.WhisperModel(self.model_size, device=self.device,
-                                            compute_type=self.compute_type)
+                                            compute_type=self.compute_type, cpu_threads=self.cpu_threads)
         seconds = time.perf_counter() - started
-        logger.info("Loaded %s (%s, %s) in %.1f s", self.model_size, self.device, self.compute_type, seconds)
+        logger.info("Loaded %s (%s, %s, %d CPU threads) in %.1f s", self.model_size, self.device,
+                    self.compute_type, self.cpu_threads or DEFAULT_CPU_THREADS, seconds)
         return model, seconds, getattr(faster_whisper, "__version__", "unknown")
 
     @staticmethod
@@ -237,6 +245,7 @@ class FasterWhisperTranscriber:
                 # audio seconds per wall second of decoding, model load excluded; > 1 = faster than real time
                 "realtime_factor": round(realtime, 3) if realtime else None,
                 "cpu_count": os.cpu_count(),
+                "cpu_threads": self.cpu_threads or DEFAULT_CPU_THREADS,
                 "cost_usd": 0.0,  # runs locally: no API cost
             },
         )

@@ -61,8 +61,9 @@ def fake_whisper(monkeypatch):
     models = []
 
     class WhisperModel:
-        def __init__(self, model_size, device, compute_type):
+        def __init__(self, model_size, device, compute_type, cpu_threads=0):
             self.args = (model_size, device, compute_type)
+            self.cpu_threads = cpu_threads
             self.calls = []
             self.hf_tokenizer = FakeTokenizer()
             models.append(self)
@@ -227,3 +228,26 @@ def test_wordless_segments_are_dropped_and_ids_follow(fake_whisper, audio, monke
     texts = [(s.id, s.text) for s in transcript.segments]
     assert texts == [(1, "Open cloud code."), (2, "Then npm install.")]
     assert transcript.meta["segments_dropped_wordless"] == 1
+
+
+def test_cpu_threads_reach_the_model_and_meta(fake_whisper, audio):
+    transcript = FasterWhisperTranscriber(cpu_threads=8).transcribe(audio, None)
+    assert fake_whisper[0].cpu_threads == 8 and transcript.meta["cpu_threads"] == 8
+
+
+def test_default_cpu_threads_are_recorded_as_four(fake_whisper, audio):
+    transcript = FasterWhisperTranscriber().transcribe(audio, None)
+    assert fake_whisper[0].cpu_threads == 0 and transcript.meta["cpu_threads"] == 4
+
+
+def test_threads_flag_is_for_faster_whisper_only(audio, tmp_path):
+    result = runner.invoke(cli.app, ["transcribe", str(audio), "--out", str(tmp_path / "o.json"),
+                                     "--engine", "gemini", "--threads", "8"])
+    assert result.exit_code == 2 and "--threads" in plain(result.output)
+
+
+def test_threads_flag_reaches_the_engine(fake_whisper, audio, tmp_path):
+    out = tmp_path / "o.json"
+    result = runner.invoke(cli.app, ["transcribe", str(audio), "--out", str(out), "--threads", "8"])
+    assert result.exit_code == 0, result.output
+    assert load_transcript(out).meta["cpu_threads"] == 8
