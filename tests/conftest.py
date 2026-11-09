@@ -101,6 +101,17 @@ def sine(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def placeholder_api_key(monkeypatch):
+    """
+    Every test starts with the placeholder key, whatever a local .env holds:
+    config.py loads .env with override=True, which would otherwise replace the
+    module-level default above (an empty key in .env broke the CLI tests).
+    Tests that need a missing key still set it themselves.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-not-used")
+
+
+@pytest.fixture(autouse=True)
 def no_real_client(monkeypatch):
     """A module that calls get_client() without being patched fails loudly
     instead of reaching the real API."""
