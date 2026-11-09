@@ -6,6 +6,23 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-09 — no server-side refusal fallback on the Claude stages
+
+The API offers a server-side fallback (`fallbacks: "default"`) that re-runs a
+request on another model when Sonnet 5.5 or Opus 5.5 declines it. The
+correction and translation stages do not use it. Every stage 2 number is a
+measurement of one named model (B1 Sonnet, B4 Opus); a silent switch to another
+model inside a call would make a row in `results/benchmark.csv` describe a model
+that did not produce it. A refusal is already a hard error in
+`core/structured_call.py`, so a declined block fails visibly instead. Decided
+when the correction stage was written (the Backlog item asked for that), by
+the assistant during the unattended session of 2026-11-09; the owner may
+reverse it for the v1.0 tool, where availability matters more than attribution.
+
+What it rules out: a run that completes on a different model without saying
+so. What it costs: a block a classifier declines stays uncorrected (and is
+listed in `meta.correction.failed_blocks`).
+
 ## 2026-11-09 — Gate 1 -> 2 passed: Gemini as the main engine
 
 Owner decision of 2026-11-09, given in advance in the session prompt of that
