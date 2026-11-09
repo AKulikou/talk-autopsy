@@ -23,6 +23,7 @@ from talk_autopsy import (
     config,
     correct,
     evaluation,
+    glossary_auto,
     ingest,
     pipeline,
     proofread,
@@ -245,6 +246,57 @@ def fix_command(
                f"{len(c['edits'])} edits, {len(c['failed_blocks'])} failed blocks; {c['cost_usd']:.4f} USD "
                f"({c['usage']['input_tokens']} in, {c['usage']['cache_creation_input_tokens']} cache write, "
                f"{c['usage']['cache_read_input_tokens']} cache read, {c['usage']['output_tokens']} out)")
+
+
+@app.command(name="glossary-auto")
+def glossary_auto_command(
+    transcript: Annotated[Path, typer.Argument(help="Raw transcript JSON (first speech recognition pass).")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="Glossary Markdown table to write.")],
+    context: Annotated[str | None, typer.Option(
+        help="Video title, description, chapter titles: text, or a file holding it. "
+             "A local file's name is not context.")] = None,
+    lang: Annotated[str | None, typer.Option(help="Target language code. Default: TARGET_LANG.")] = None,
+    model: Annotated[str | None, typer.Option(help="Claude model. Default: HELPER_MODEL.")] = None,
+    compare: Annotated[Path | None, typer.Option(
+        help="Reference glossary: print coverage (reference terms spelled right) and noise.")] = None,
+    max_cost: Annotated[float, typer.Option(help="Stop if the estimate is above this (USD).")]
+    = config.COST_CONFIRMATION_USD,
+) -> None:
+    """Draft the glossary of a video from its first transcript (glossary-auto-v1, helper model)."""
+    try:
+        config.require_api_key()
+        target_lang = config.check_lang(lang if lang is not None else config.TARGET_LANG)
+        source = load_transcript(transcript)
+        reference = load_glossary(compare) if compare is not None else None
+    except (ConfigurationError, FileNotFoundError, ValueError, GlossaryError) as e:
+        _fail(str(e))
+    context_text = glossary_auto.read_context(context)
+    model = model or config.HELPER_MODEL
+    _confirm_cost(glossary_auto.estimate(source, target_lang, context_text, model), max_cost)
+    _log_to_stderr()
+    try:
+        result = glossary_auto.generate(source, target_lang, context_text, model=model)
+    except (RuntimeError, ValueError, ConfigurationError) as e:
+        _fail(str(e))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(result.markdown, encoding="utf-8", newline="\n")
+    u = result.usage
+    typer.echo(f"Wrote {out}: {len(result.glossary.entries)} terms, {len(result.heard_as)} with corrected "
+               f"mis-recognitions, {len(result.dropped)} dropped; {result.cost_usd:.4f} USD "
+               f"({u.input_tokens} in, {u.output_tokens} out), {result.wall_seconds:.0f} s")
+    for term, forms in result.heard_as.items():
+        typer.echo(f"  {term} <- {', '.join(forms)}")
+    if result.dropped:
+        typer.echo(f"  dropped: {'; '.join(result.dropped)}")
+    if reference is not None:
+        c = glossary_auto.coverage(result.glossary, reference)
+        typer.echo(f"Coverage of {compare.name}: {len(c.covered)}/{c.reference_terms} "
+                   f"({_percent(c.share)})")
+        if c.wrong_case:
+            typer.echo("  right word, wrong case: " + "; ".join(f"{r} as {a}" for r, a in c.wrong_case))
+        if c.missing:
+            typer.echo(f"  missing: {', '.join(c.missing)}")
+        typer.echo(f"  not in the reference ({len(c.noise)}): {', '.join(c.noise)}")
 
 
 @app.command(name="translate")

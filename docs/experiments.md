@@ -181,6 +181,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| B5 | 2026-11-09 | a glossary drafted by Haiku from the first transcript covers >= 70% of the reference glossary | `glossary-auto-v1`, `claude-haiku-5-5`, raw AssemblyAI T2/T1, no context; two runs; then AssemblyAI with the auto terms | coverage T2 74.4% / 79.5%, T1 56.8% / 62.2%; STT terms with auto terms T2 96.3%, T1 98.3% (reference glossary: 99.1% / 100%); 0.0096 USD Claude, 0.084 USD AssemblyAI | met on T2, not on T1; the second pass keeps most of the keyterm gain | auto-glossary is the pipeline's glossary step |
 | C1 | 2026-11-09 | translation-v1 subtitles score >= 4.0 with the owner | owner rated 20 random T2 segments (one system, not yet blind) | mean 3.85; 5 x8, 4 x4, 3 x5, 2 x3 | under the target; all three 2s lose meaning through the compression rule | translation-v2 without meaning compression (decisions); blind comparison next |
 | B2 | 2026-11-09 | correction-v1 edits distort meaning in < 5% of cases | owner checked the 3 edits on T2 Gemini input | 0 of 3 distort meaning | met on a tiny sample | recorded; re-checked on v2 (`B2-review-v2.md`) |
 | T1 re-score | 2026-11-09 | none: reference fix `@Claude` -> `@claude` | `resolve T1 --force`, T1 rows re-recorded | WER unchanged; term accuracy now counts `@claude` (2 occurrences) | only AssemblyAI + keyterms writes `@claude` | old T1 rows marked `superseded: @claude fix` |
@@ -192,6 +193,83 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### B5: auto-glossary from the first transcript
+
+- **Hypothesis:** a glossary drafted by the helper model from the raw
+  transcript alone covers at least 70% of the reference glossary's terms with
+  the right spelling (target from the project plan), so an unseen video gets
+  useful key terms without a hand-made glossary.
+- **Run:** 2026-11-09, `talk-autopsy glossary-auto` (new,
+  `talk_autopsy/glossary_auto.py`), prompt `glossary-auto-v1`,
+  `claude-haiku-5-5` (default adaptive thinking, effort medium), one call per
+  fragment. Input: the existing raw AssemblyAI transcripts
+  `work/T<n>/raw.assemblyai.json` (A3 (setup), no key terms; no new speech
+  recognition run), no context (the fragments have none; a local file name is
+  not context). The model returns 20–60 terms with canonical spelling, `keep`,
+  a Russian translation when not kept, and `heard_as`: the transcript's forms it
+  takes for mis-recognitions of the term. A term with no evidence in the
+  transcript (neither its spelling nor a `heard_as` form) is dropped. Output
+  `work/T<n>/auto.glossary.md`. The same prompt ran twice per fragment to see
+  the variance (run 2 in `auto.glossary.run2.md`); run 1 is the one used below.
+- **Coverage** = reference-glossary terms present in the auto-glossary with the
+  right spelling, by the metrics' term rule (identifiers case-sensitive,
+  regular plural of the last word accepted):
+
+  | | T2 run 1 | T2 run 2 | T1 run 1 | T1 run 2 |
+  |---|---|---|---|---|
+  | auto terms | 31 | 35 | 24 | 26 |
+  | coverage | **29/39 (74.4%)** | 31/39 (79.5%) | **21/37 (56.8%)** | 23/37 (62.2%) |
+  | terms with corrected mis-recognitions | 4 | 3 | 4 | 3 |
+  | noise (auto terms not in the reference) | 2 | 4 | 3 | 2 |
+  | cost | 0.0026 USD | 0.0027 USD | 0.0022 USD | 0.0021 USD |
+  | wall time | 20 s | 19 s | 17 s | 15 s |
+
+  Run 1 details. T2 mis-recognitions corrected: `Claude Code` <- "QuadCode",
+  "Cloud Code"; `/install-github-app` <- "/install GitHub app";
+  `/terminal-setup` <- "terminal setup"; `codebase` <- "code base". Missing:
+  daltonized, at-mention, allowed tools, onboarding, indexing, WebFetch,
+  stand-up, LLM, commit, PR. Noise: "Daltonize" (the reference's word in
+  another form), "web fetch" (the reference's `WebFetch` in its spoken form).
+  T1 corrected: `Claude Code` <- "Quad Code", "QuadCode", "QuadCodes";
+  `Claude` <- "claud", "@claud"; `GitHub Actions` <- "GitHub Action";
+  `Claude Code SDK` <- "QuadCode SDK". Missing: Claude 4, research preview,
+  generally available, beta, agentic, coding agent, SDK, @claude, repo,
+  open-source, diffs, flaky tests, test coverage, on-call, triage, Slack.
+  Noise: Claude Code SDK, agentic coding, backlog (real terms of the talk that
+  the reference lists in parts or not at all). One term ("diff") was dropped
+  by the evidence check because the transcript has only "diffs"; fixed after
+  run 2 (a regular plural now counts as evidence); no coverage number changes,
+  since the reference term is "diffs".
+- **Second speech recognition pass:** AssemblyAI Universal-3.5 Pro with the
+  run-1 auto-glossary as key terms (`--glossary-prompt`; 31 and 24 terms),
+  `work/T<n>/raw.assemblyai+autoterms.json`, scored against the reference
+  glossaries:
+
+  | | no key terms (A3 (setup)) | auto terms (B5) | reference glossary terms (A3) |
+  |---|---|---|---|
+  | T2 term accuracy | 80.37% | **96.26%** (103/107) | 99.07% |
+  | T2 WER | 6.97% | 4.73% | 4.43% |
+  | T1 term accuracy | 94.17% | **98.33%** (118/120) | 100.00% |
+  | T1 WER | 1.41% | 0.58% | 0.33% |
+  | wall time / cost | | 25 s, 0.043 USD / 24 s, 0.041 USD | |
+
+  T2 still misses daltonized, at-mention, WebFetch, stand-up (none in the
+  auto-glossary); T1 misses `@claude` twice (written "@Claude").
+- **Conclusion:** coverage meets the 70% target on T2 (both runs) and misses it
+  on T1 (both runs); run-to-run spread is about 5 points. What the
+  auto-glossary misses are mostly ordinary technical nouns (beta, repo, triage,
+  flaky tests) that the recognizer already spells right; the names it was
+  built for — the product name heard as "QuadCode" — it found on both
+  fragments. With those terms as key terms the second pass keeps most of the
+  keyterm gain: on T2 96.3% against 99.1% with the reference-checked
+  glossary. Biases: AssemblyAI helped build both references (its WER is biased
+  low); T1's reference was decided by a Claude model; two fragments.
+- **Decision:** the auto-glossary is the glossary step of the pipeline (Part 7
+  of the session prompt); its suggested translations are suggestions, not
+  agreed translations (translation-v2 records a deviation as a warning).
+  Coverage on T1 is not chased with prompt changes against this reference;
+  the hold-out T6 gives the honest number.
 
 ### C1: the owner's rating of translation-v1
 
