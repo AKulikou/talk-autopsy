@@ -37,10 +37,18 @@ class FinishReason(Enum):
     MAX_TOKENS = "MAX_TOKENS"
 
 
-class ClientError(Exception):
+class APIError(Exception):
     def __init__(self, code, status):
         super().__init__(f"{code} {status}")
         self.code, self.status = code, status
+
+
+class ClientError(APIError):
+    pass
+
+
+class ServerError(APIError):
+    pass
 
 
 def response(text, finish=FinishReason.STOP, model="gemini-3.8-flash"):
@@ -72,6 +80,8 @@ def fake_genai(monkeypatch):
     def generate_content(model, contents, config):
         state.generate.append((model, contents, config.kwargs))
         answer = state.answers[model]
+        if isinstance(answer, list):  # one answer per call
+            answer = answer.pop(0)
         if isinstance(answer, Exception):
             raise answer
         return answer
@@ -96,12 +106,15 @@ def fake_genai(monkeypatch):
     types.FileState = FileState
     types.FinishReason = FinishReason
     errors = ModuleType("google.genai.errors")
+    errors.APIError = APIError
     errors.ClientError = ClientError
+    errors.ServerError = ServerError
     for name, module in (("google.genai", genai), ("google.genai.types", types),
                          ("google.genai.errors", errors)):
         monkeypatch.setitem(sys.modules, name, module)
     monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key")
     monkeypatch.setattr(gemini, "POLL_SECONDS", 0.0)
+    monkeypatch.setattr(gemini, "RETRY_WAIT_SECONDS", (0, 0))
     return state
 
 
@@ -170,7 +183,7 @@ def test_quota_rejection_falls_back_once_and_is_recorded(fake_genai, audio):
 
 def test_other_client_errors_do_not_fall_back(fake_genai, audio):
     fake_genai.answers = {"gemini-3.8-flash": ClientError(400, "INVALID_ARGUMENT")}
-    with pytest.raises(ClientError):
+    with pytest.raises(RuntimeError, match="gemini-3.8-flash failed: 400 INVALID_ARGUMENT"):
         engine().transcribe(audio, None)
     assert len(fake_genai.generate) == 1 and fake_genai.deleted == ["files/abc"]
 
@@ -218,3 +231,19 @@ def test_transcribe_command_with_the_gemini_engine(fake_genai, audio, tmp_path):
     assert result.exit_code == 0, result.output
     assert load_transcript(out).meta["timestamps"] == "model-estimated"
     assert "2 segments" in result.output
+
+
+def test_server_error_is_retried_on_the_same_model_and_recorded(fake_genai, audio):
+    fake_genai.answers = {"gemini-3.8-flash": [ServerError(503, "UNAVAILABLE"), response(json.dumps(ANSWER))]}
+    t = engine().transcribe(audio, None)
+    assert [g[0] for g in fake_genai.generate] == ["gemini-3.8-flash", "gemini-3.8-flash"]
+    assert t.meta["model"] == "gemini-3.8-flash"
+    failed = {"model": "gemini-3.8-flash", "attempt": 1, "error": "503 UNAVAILABLE"}
+    assert t.meta["failed_attempts"] == [failed]
+
+
+def test_server_errors_past_the_retries_fail_cleanly(fake_genai, audio):
+    fake_genai.answers = {"gemini-3.8-flash": [ServerError(503, "UNAVAILABLE") for _ in range(3)]}
+    with pytest.raises(RuntimeError, match="503 UNAVAILABLE"):
+        engine().transcribe(audio, None)
+    assert len(fake_genai.generate) == 3 and fake_genai.deleted == ["files/abc"]

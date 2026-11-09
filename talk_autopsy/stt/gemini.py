@@ -10,7 +10,9 @@ to aistudio.google.com/docs) and the installed SDK `google-genai` 3.0.0:
 - Models: the flagship `gemini-4-argon` is not on the free tier. The default is
   `gemini-3.8-flash` ("our most intelligent Flash model", free tier); on a
   quota rejection (HTTP 429 RESOURCE_EXHAUSTED, `errors.ClientError`) the
-  engine retries once with `gemini-3.6-flash`. `meta.model` is the model that
+  engine retries once with `gemini-3.6-flash`. A server error (HTTP 5xx, such
+  as 503 "high demand") is retried on the same model after 20, 60 and 120 s;
+  failed attempts are listed in `meta.failed_attempts`. `meta.model` is the model that
   actually ran. Both are set in config.py and overridable through .env.
 - Audio: 32 tokens per second; a 10-minute 16 kHz mono WAV is about 19 MB, so
   it goes through the Files API (inline data is limited to 20 MB per request),
@@ -66,6 +68,7 @@ MAX_OUTPUT_TOKENS = 32768  # a 10-minute transcript as JSON is a few thousand to
 UPLOAD_TIMEOUT_SECONDS = 300.0
 POLL_SECONDS = 2.0
 QUOTA_STATUS = 429
+RETRY_WAIT_SECONDS = (20, 60, 120)  # after a server error (5xx); then the run fails
 
 PROMPT = """\
 Transcribe the speech in this audio recording verbatim, in English.
@@ -140,6 +143,12 @@ def cost_at_paid_prices(model: str, prompt_tokens: int, output_tokens: int) -> f
     return round((prompt_tokens * price_in + output_tokens * price_out) / 1e6, 6)
 
 
+def _describe(error: Exception) -> str:
+    """`503 UNAVAILABLE` for an SDK API error; the class name for anything else."""
+    code, status = getattr(error, "code", None), getattr(error, "status", None)
+    return " ".join(str(x) for x in (code, status) if x) or type(error).__name__
+
+
 def _is_quota_error(error: Exception, errors_module) -> bool:
     return isinstance(error, errors_module.ClientError) and getattr(error, "code", None) == QUOTA_STATUS
 
@@ -195,6 +204,25 @@ class GeminiTranscriber:
                                "incomplete")
         return response
 
+    def _generate_with_retries(self, client, types, errors, model: str, uploaded, prompt: str,
+                               failures: list[dict]):
+        """
+        `_generate`, retried after a server error (HTTP 5xx, e.g. 503 "high demand")
+        with the waits in RETRY_WAIT_SECONDS. Each failed attempt is appended to
+        `failures`. Client errors (4xx, including quota) are raised at once.
+        """
+        for attempt, wait in enumerate((*RETRY_WAIT_SECONDS, None), start=1):
+            logger.info("Gemini %s: transcribing (attempt %d)", model, attempt)
+            try:
+                return self._generate(client, types, model, uploaded, prompt)
+            except errors.ServerError as e:
+                failures.append({"model": model, "attempt": attempt, "error": _describe(e)})
+                if wait is None:
+                    raise
+                logger.warning("Gemini %s: %s; waiting %d s before retrying", model, _describe(e), wait)
+                time.sleep(wait)
+        raise AssertionError("unreachable")
+
     def transcribe(self, audio_path: Path, glossary: Glossary | None) -> Transcript:
         audio_path = Path(audio_path)
         if not audio_path.is_file():
@@ -213,18 +241,24 @@ class GeminiTranscriber:
         logger.info("Gemini: uploading %s (%.0f s of audio)", audio_path.name, audio_seconds)
         uploaded = self._upload(client, types, audio_path)
         upload_seconds = time.perf_counter() - started
-        model, fallback_reason = self.model, None
+        model, fallback_reason, failures = self.model, None, []
+
+        def generate(name: str):
+            return self._generate_with_retries(client, types, errors, name, uploaded, prompt, failures)
+
         try:
-            logger.info("Gemini %s: transcribing", model)
             try:
-                response = self._generate(client, types, model, uploaded, prompt)
-            except Exception as e:
+                response = generate(model)
+            except errors.APIError as e:
                 if not _is_quota_error(e, errors):
-                    raise
-                fallback_reason = f"{model}: HTTP {QUOTA_STATUS} {getattr(e, 'status', '')}".strip()
+                    raise RuntimeError(f"Gemini {model} failed: {_describe(e)}") from e
+                fallback_reason = f"{model}: {_describe(e)}"
                 logger.warning("Gemini %s rejected for quota; retrying with %s", model, self.fallback_model)
                 model = self.fallback_model
-                response = self._generate(client, types, model, uploaded, prompt)
+                try:
+                    response = generate(model)
+                except errors.APIError as e2:
+                    raise RuntimeError(f"Gemini {model} failed: {_describe(e2)}") from e2
         finally:
             try:
                 client.files.delete(name=uploaded.name)
@@ -257,6 +291,7 @@ class GeminiTranscriber:
                 "model_version": getattr(response, "model_version", None),
                 "model_requested": self.model,
                 "fallback_reason": fallback_reason,
+                "failed_attempts": failures,
                 "glossary_prompt": self.glossary_prompt,
                 "prompt": prompt,
                 "request_id": getattr(response, "response_id", None),
