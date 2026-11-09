@@ -153,7 +153,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 
 ## Known issues
 
-- T1's reference was decided by a Claude model without listening; it is secondary evidence for the Claude stages. It writes "@Claude" against the `@claude` convention (Backlog).
+- T1's reference was decided by a Claude model without listening; it is secondary evidence for the Claude stages.
 - Gemini's free tier: 503 "high demand" is frequent and the daily quota can run out within one long talk (2026-11-09: on the third chunk). The chunked engine falls back per chunk on 503 and stops on quota; `run --gemini-cache-only` finishes a video with faster-whisper for the missing chunks.
 - Forced alignment places word starts 130–230 ms later than faster-whisper does; which is closer to the truth is not measured (no hand-labelled onsets yet).
 - Glossaries are reviewed against the references, so term accuracy with a glossary in the prompt is optimistic for unseen videos. Dubbing is a stub.

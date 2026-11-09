@@ -159,6 +159,9 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| C1 | 2026-11-09 | translation-v1 subtitles score >= 4.0 with the owner | owner rated 20 random T2 segments (one system, not yet blind) | mean 3.85; 5 x8, 4 x4, 3 x5, 2 x3 | under the target; all three 2s lose meaning through the compression rule | translation-v2 without meaning compression (decisions); blind comparison next |
+| B2 | 2026-11-09 | correction-v1 edits distort meaning in < 5% of cases | owner checked the 3 edits on T2 Gemini input | 0 of 3 distort meaning | met on a tiny sample | recorded; re-checked on v2 (`B2-review-v2.md`) |
+| T1 re-score | 2026-11-09 | none: reference fix `@Claude` -> `@claude` | `resolve T1 --force`, T1 rows re-recorded | WER unchanged; term accuracy now counts `@claude` (2 occurrences) | only AssemblyAI + keyterms writes `@claude` | old T1 rows marked `superseded: @claude fix` |
 | B4 | 2026-11-09 | Opus corrects terms better than Sonnet on the same input | correction-v1, `claude-opus-5-5`, T2 Gemini+align input | term accuracy 100% vs Sonnet 96.3%; WER 2.00% vs 2.14%; false edits 0 both; 0.129 vs 0.060 USD | Opus fixed the 4 terms Sonnet left (one fragment, one run each) | Sonnet stays the default; Opus noted as the option where terms are dense |
 | B1 | 2026-11-09 | Claude correction lifts term accuracy to >= 85% without false edits | correction-v1, `claude-sonnet-5-5`, inputs: Gemini+align and raw faster-whisper, T2 and T1 | T2 Gemini 93.5% -> 96.3%, faster-whisper 61.7% -> 94.4%; T1 Gemini 99.2% (no edit), faster-whisper 55.1% -> 100%; false-edit rate 0 in all four; 0.23 USD | holds on all four; T1 evidence is secondary (Claude-decided reference) | correction-v1 kept; owner checks the T2 edits (B2) |
 | A5 (setup) | 2026-11-09 | none: forced alignment of the Gemini transcripts, before Gemini can drive subtitles | wav2vec2 base 960h (torchaudio 2.11.1, CPU) + numpy Viterbi; existing Gemini transcripts of T2, T1 | 0 unplaced words; 8.6x / 10.3x real time; start times vs faster-whisper: median 130 / 230 ms, p95 410 / 660 ms | Gemini text gets measured word times; aligner starts words later than Whisper by a steady offset | `gemini+align` engine built on it; smoke test on a full talk below |
@@ -167,6 +170,66 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### C1: the owner's rating of translation-v1
+
+- **Hypothesis:** Russian subtitles from `translation-v1` (Sonnet) reach the
+  stage 2 target of a mean score >= 4.0 out of 5.
+- **Run:** the owner rated `work/T2/C1-rating.md`: 20 segments of the corrected
+  T2 fragment drawn with seed 20261109, English and Russian side by side, a
+  score of 1–5 each. One system only, so this is not yet the blind comparison
+  the gate asks for.
+- **Numbers:** mean **3.85**; scores 5 x 8, 4 x 4, 3 x 5, 2 x 3.
+- **Owner's comments (in the file):** all three segments rated 2 (4, 7, 10)
+  lose or distort meaning — segment 4 drops "at the same time" (whole features
+  in one go). The cause in all three is the compression rule of translation-v1.
+  English technical terms left untranslated (onboarding, indexing, codebase)
+  were rated 5.
+- **Conclusion:** under the target, and the low scores have one cause that the
+  prompt asked for.
+- **Decision:** no meaning compression from translation-v2 on; subtitles up to
+  3 lines with an `.ass` file (decisions, 2026-11-09). The blind comparison
+  of v1 and v2 on the same 20 segments follows (C1 blind).
+
+### B2: the owner's check of correction-v1's edits
+
+- **Hypothesis:** fewer than 5% of correction edits distort the meaning of what
+  was said.
+- **Run:** the owner reviewed `work/T2/B2-review.md`: the 3 edits correction-v1
+  (Sonnet) made on the T2 Gemini + alignment input (B1): `/terminal:setup` ->
+  `/terminal-setup`, `web fetch` -> `WebFetch`, `LM` -> `LLM`, each with the
+  aligned reference text.
+- **Numbers:** 0 of 3 distort meaning (the owner accepted the assistant's
+  check).
+- **Conclusion:** the criterion (< 5% distorting) is met on this sample. The
+  sample is tiny: 3 edits on one fragment say little about the rate.
+- **Decision:** recorded. correction-v2 gets the same check
+  (`work/T2/B2-review-v2.md`).
+
+### T1 re-scored after the `@claude` fix
+
+- **What:** the reference conventions write the GitHub mention `@claude`; the
+  assistant had adjudicated T1 spans 0052 and 0055 as `@Claude`, so the
+  case-sensitive identifier matched nothing and `@claude` was excluded as absent.
+  On 2026-11-09 (owner's instruction) both spans got `other: @claude` in
+  `T1.adjudication.md` (no other span chose `@Claude`), `resolve T1 --force`
+  rebuilt the reference (1205 words, only those two words changed), and every
+  T1 row was recorded again; the previous T1 rows carry `superseded: @claude fix`.
+- **Numbers** (term accuracy, 36 terms, 120 occurrences now; WER unchanged,
+  the normalizer ignores case):
+
+  | T1 run | before | after |
+  |---|---|---|
+  | faster-whisper large-v3 | 55.08% | 54.17% |
+  | AssemblyAI | 95.76% | 94.17% |
+  | Gemini | 99.15% | 97.50% |
+  | AssemblyAI + keyterms | 100.00% | 100.00% (writes `@claude` 2/2) |
+  | faster-whisper + glossary prompt | 96.61% | 95.00% |
+  | Gemini + align + correction-v1 | 99.15% | 97.50% |
+  | faster-whisper + correction-v1 | 100.00% | 98.33% |
+
+  correction-v1 did not change "@Claude" to `@claude` on either input. The
+  stage 1 and B1 tables below keep the numbers of the day they were written.
 
 ### Translation and Russian subtitles of T2 (operational, before C1)
 
@@ -617,11 +680,9 @@ Ideas that come up during a stage and wait for a later one.
   count, so the term is excluded as absent. Accepting `'s` on the last token,
   like the regular plural, would count it; changing the metric rescores every
   row, so it waits for a stage boundary.
-- T1 reference spells the GitHub mention "@Claude" (twice), against the
-  reference convention `@claude`; the term is an identifier and matched
-  case-sensitively, so it counts 0 occurrences and is excluded. Fix in
-  `T1.adjudication.md` (type `@claude` in those spans) and `resolve T1 --force`
-  — an owner edit; this session may not touch the adjudication file.
+- ~~T1 reference spells the GitHub mention "@Claude"~~ Closed 2026-11-09:
+  spans 0052 and 0055 set to `@claude` on the owner's instruction, T1
+  re-scored (see "T1 re-scored after the `@claude` fix").
 
 - Server-side refusal fallback on the Claude calls (the docs recommend it for
   Sonnet 5.5 and Opus 5.5); decide when the correction stage is written.

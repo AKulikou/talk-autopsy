@@ -6,6 +6,43 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-09 — No meaning compression in translation; subtitles up to 3 lines
+
+Owner decision after rating C1 (`work/T2/C1-rating.md`, mean 3.85 against the
+target of 4.0). All three segments rated 2 lost or distorted meaning, and the
+cause in each was the compression rule of `translation-v1` ("compress where
+the target text would be much longer"). From `translation-v2` on, translation
+keeps every content clause; only disfluencies (fillers, repetitions, false
+starts) may be dropped. Reading speed is handled in the subtitle layer: cues
+may hold up to 3 lines, every `.srt` gets a sibling `.ass` file with a smaller
+font so three lines fit, and reading speed is reported per file, never
+enforced by cutting meaning.
+
+What it rules out: shortening a translation to meet a characters-per-second
+limit. What it costs: some cues will be read faster than 17 characters per
+second; the share is reported so the trade-off stays visible. Hypothesis D1
+(compression for reading speed) is answered for now by this decision.
+
+## 2026-11-09 — Gate 1 -> 2 passed: AssemblyAI with key terms as the main engine
+
+Owner's choice after the stage 1 summary (`docs/experiments.md`). AssemblyAI
+Universal-3.5 Pro with the glossary as key terms reached 99.1% term accuracy
+on T2 (100% on T1) and WER 4.43% on T2, in about 26 s per 10 minutes of audio
+(about 23x real time) at about $0.26 per hour of audio list price. It replaces
+the earlier "Gemini as the main engine" direction and the gate entry below
+that named Gemini: Gemini's free tier ran into 503 "high demand" answers and
+its daily quota within one 28-minute talk, and `gemini+align` took about 65
+minutes per hour of audio against the 30-minute limit. Fallbacks, in order:
+Gemini + forced alignment (free tier), then faster-whisper large-v3 (local).
+
+Caveat: the 99% used a glossary reviewed against the reference, so every term
+was known to occur. The realistic number comes from a glossary drafted
+automatically from the first transcript (B5) and from the sealed hold-out T6.
+
+What it rules out: Gemini as the main path, and a pipeline step that waits on
+the free tier's daily quota. What it costs: audio of every video goes to
+AssemblyAI (a paid service; the account's free credit covers it for now).
+
 ## 2026-11-09 — no server-side refusal fallback on the Claude stages
 
 The API offers a server-side fallback (`fallbacks: "default"`) that re-runs a
