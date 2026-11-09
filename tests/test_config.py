@@ -74,3 +74,17 @@ def test_environment_variable_wins_over_dotenv(tmp_path):
 def test_dotenv_fills_a_variable_the_environment_does_not_set(tmp_path):
     # The control for the test above: the temporary .env is really read.
     assert _target_lang_after_import(tmp_path, None) == "de"
+
+
+@pytest.mark.parametrize("name", list(config.OPTIONAL_KEYS))
+def test_optional_engine_key_is_required_only_when_asked(monkeypatch, name):
+    monkeypatch.setenv(name, "  ")
+    with pytest.raises(ConfigurationError, match=f"{name} is not set.*--engine"):
+        config.require_key(name)
+    monkeypatch.setenv(name, " value ")
+    assert config.require_key(name) == "value"
+
+
+def test_unknown_optional_key_is_a_programming_error():
+    with pytest.raises(ValueError, match="unknown key"):
+        config.require_key("OTHER_KEY")

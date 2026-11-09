@@ -9,8 +9,10 @@ authors = [{ name = "Aliaksei Kulikou" }]
 requires-python = ">=3.13"
 dependencies = [
     "anthropic>=2.6.0",
+    "assemblyai>=1.8.2",
     "edge-tts>=7.3.1",
     "faster-whisper>=1.2.1",
+    "google-genai>=3.0.0",
     "jiwer>=4.0.0",
     "numpy>=2.5.4",
     "pydantic>=2.14.3",

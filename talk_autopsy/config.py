@@ -46,6 +46,34 @@ def require_api_key() -> str:
     return key
 
 
+# --- Optional keys of the cloud speech recognition engines ------------------
+
+# Each is needed only when its engine is selected (`transcribe --engine`), so
+# they are read when the engine starts, never at import. The values are never
+# printed or logged.
+OPTIONAL_KEYS: dict[str, str] = {
+    "ASSEMBLYAI_API_KEY": "the AssemblyAI engine (transcribe --engine assemblyai)",
+    "GEMINI_API_KEY": "the Gemini engine (transcribe --engine gemini)",
+}
+
+
+def require_key(name: str) -> str:
+    """
+    The value of the optional key `name` (one of OPTIONAL_KEYS), or
+    ConfigurationError naming the engine that needs it. Call it only when that
+    engine is selected.
+    """
+    if name not in OPTIONAL_KEYS:
+        raise ValueError(f"unknown key {name!r}; known: {', '.join(OPTIONAL_KEYS)}")
+    key = os.getenv(name, "").strip()
+    if not key:
+        raise ConfigurationError(
+            f"{name} is not set; it is needed by {OPTIONAL_KEYS[name]}.\n"
+            "Set it in .env in the project root (see .env.example)."
+        )
+    return key
+
+
 # --- Target language -------------------------------------------------------
 
 # ISO 639-1 (or 639-3) code. The core never assumes a language: every stage takes
