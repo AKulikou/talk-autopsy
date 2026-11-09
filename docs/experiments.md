@@ -168,6 +168,45 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
 
+### Translation and Russian subtitles of T2 (operational, before C1)
+
+- **What:** `translation-v1` (`claude-sonnet-5-5`) on the Sonnet-corrected T2
+  fragment (B1, Gemini input), then `.srt` in Russian and corrected English,
+  for the owner to watch; and the whole pipeline on the full T2 talk.
+- **First run and a validator change:** the first translation of the fragment
+  (0.084 USD) failed block 1 twice: two segments had compressed a repeated
+  "Claude Code" and "GitHub" away, and the validator rejected any segment
+  missing a kept glossary term. That check went beyond the spec (which asks
+  for agreed glossary translations) and contradicts the prompt's compression
+  rule, so a missing kept term is now a warning in
+  `meta.translation.warnings` (daec62b). Rerun: 0 failed blocks, 1 warning
+  ("GitHub" dropped in segment 35), 0.054 USD. Outputs `work/T2/T2.ru.json`,
+  `work/T2/T2.ru.srt` (161 cues, 53% above 17 cps, max 30.0 cps, 3 shorter
+  than 1 s) and `work/T2/T2.en.srt` (204 cues, 86% above 17 cps).
+- **Full talk** (`talk-autopsy run data/test-set/T2.source.mp4 --lang ru
+  --steps stt,align,fix,translate,srt --engine gemini+align
+  --gemini-cache-only --glossary data/test-set/T2.glossary.md`, 27:52):
+  estimate printed first 0.538 USD; spent 0.319 USD (correction 0.166, 6
+  blocks, 33 segments changed, 0 failed; translation 0.154, 6 blocks, 0
+  failed, 1 warning). Wall time 20.6 min: stt 892 s (two chunks from the
+  cache, one by faster-whisper), alignment 170 s, correction 73 s,
+  translation 95 s. Claude cost per hour of video: about 0.69 USD. Outputs
+  `work/T2.source/T2.source.ru.srt` (447 cues, 54% above 17 cps) and
+  `T2.source.en.srt` (531 cues). Without the cache, Gemini for the whole talk
+  would have added about 27 min (A5 (setup) smoke test).
+- **A defect found in the full run:** in the faster-whisper chunk an audience
+  question came out garbled ("How much have you used files?"); correction
+  rebuilt it by pulling words from the next segment ("... used Claude Code for
+  machine learning modeling and a..."), with a reason, so the validator let it
+  pass. The segment's 1.3 s then carries a whole sentence: the two fastest
+  cues of both SRTs (77 and 85 cps). This breaks the prompt's rule never to
+  move words between segments; Backlog (validator: a segment that grows by
+  far more than its neighbour shrinks).
+- **For C1 (the owner's blind rating, later):** `work/T2/C1-rating.md` holds 20
+  segments drawn with a fixed seed, English and Russian side by side, a 1–5
+  field each. A second translation to compare against comes in a later
+  session; until then it is a rating of one system, not a blind comparison.
+
 ### B1: correction-v1 on Gemini and faster-whisper transcripts
 
 - **Hypothesis:** Claude correction with the video's glossary brings term
@@ -307,6 +346,43 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 - **Decision:** the aligner is used for the `gemini+align` engine. Timing drift
   against hand-labelled onsets (metrics `timing_drift`) remains for stage 3;
   Backlog.
+
+**Smoke test on a full talk (operational, not scored).** `gemini+align` on the
+whole T2 source, 27:52 (1672.5 s of audio extracted from
+`data/test-set/T2.source.mp4`); no `eval`, no benchmark row; outputs in
+`work/T2.source/`. Chunk plan: cuts at 580.1 s and 1187.8 s (the longest
+silences near the 10-minute marks), chunks of 580, 608 and 485 s.
+
+| Attempt | What happened |
+|---|---|
+| 1 (20:00) | chunk 1 on `gemini-3.8-flash`: 104 segments, 749 s. Chunk 2: `gemini-3.8-flash` answered 503 on all attempts (waits 20, 60, 120 s), then `gemini-3.6-flash` the same; at 1405 s the chunk went to faster-whisper, as designed. Stopped by hand: a second faster-whisper decode would have spoiled the A2 timing running at the same time. Chunk 1 stayed cached. |
+| 2 (20:38) | chunk 1 from the cache in 0.6 s. Chunk 2 on `gemini-3.8-flash`: 108 segments, 411 s, no retry. Chunk 3: **429 RESOURCE_EXHAUSTED with a per-day quota**; the run stopped with the message that finished chunks are cached, as designed (12.4 min). No further Gemini call was made in the session (session rule). |
+| 3 (20:56, the 3.6 pipeline run) | `run --gemini-cache-only` (added for this case): chunks 1–2 from the cache, chunk 3 by faster-whisper large-v3 on 8 threads, 887 s for 485 s of audio (0.55x), not cached. Then forced alignment of all 1672 s. |
+
+| | Value |
+|---|---|
+| Gemini time per chunk (one call each, no retry) | 749 s for 580 s of audio; 411 s for 608 s |
+| Gemini time per hour of audio, from those two chunks | about 59 min (1160 s for 1188 s of audio) |
+| retries / fallbacks used | attempt 1: 6 failed calls, model fallback, faster-whisper fallback; attempt 2: none before the quota stop |
+| forced alignment, whole talk | 165 s for 1672 s of audio (10.1x real time), 30 blocks, 0 failed, 0 low-probability, 5483 words, 2 unplaced (0.04%) |
+| alignment time per hour of audio | about 6 min |
+| total per hour of audio (Gemini + alignment, no retries) | about 65 min, against the plan's limit of 30 min per hour of video |
+
+Conclusion: the path works end to end on a real talk, and the cache, the
+model fallback, the per-chunk faster-whisper fallback and the quota stop all
+fired on real errors on the first day. It does not meet the time limit:
+Gemini on the free tier takes about as long as the audio, chunks run one after
+another, and 503 retries add minutes. The free daily quota did not last
+through one 28-minute talk on a day that had already used Gemini for the test
+set (A4 (setup): about ten calls). Backlog: chunks in parallel, within the
+free tier's rate limits.
+
+The subtitle writer (`talk_autopsy/subtitles.py`, `talk-autopsy srt`) was
+built ahead of stage 3 as a viewing tool, so the owner can watch the output;
+hypothesis D1 (compression for reading speed) is measured in stage 3. From the
+smoke-test output, uncorrected English: `work/T2.source.en.srt`, 530 cues, 84%
+of them above 17 characters per second (verbatim English of a fast speaker),
+20 cues shorter than 1 s.
 
 ### A2: faster-whisper with the glossary as initial prompt (and 8 CPU threads)
 
@@ -515,6 +591,13 @@ Ideas that come up during a stage and wait for a later one.
   window. For flagging doubtful segments for correction, use word probabilities
   (for example the minimum or mean per segment) instead.
 
+- Words moved between segments (3.6, 2026-11-09): correction pulled words from
+  the next segment into a garbled one; the edit had a reason, so the validator
+  passed it. Add a check that a segment does not gain words its neighbour
+  loses, and say in correction-v2 that a garbled segment is left as it is.
+- Gemini chunks in parallel (A5 (setup) smoke test): about 65 min per hour of
+  audio against the 30-minute limit, because chunks run one after another;
+  measure two or three at a time against the free tier's rate limits.
 - correction-v2 candidate (B1/B4, 2026-11-09): Sonnet keeps Gemini's
   "shift-Enter", "@-mention", "Cmd+F", "pr" and faster-whisper's spoken
   "slash theme"; Opus fixes the first four. A prompt line asking to write
