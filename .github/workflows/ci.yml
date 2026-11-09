@@ -13,6 +13,8 @@ jobs:
       ANTHROPIC_API_KEY: sk-ant-ci-placeholder
     steps:
       - uses: actions/checkout@v7
+      # The audio tests generate and convert WAV files with ffmpeg.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - uses: astral-sh/setup-uv@v10
         with:
           python-version: "3.13"
