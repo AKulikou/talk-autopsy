@@ -153,15 +153,63 @@ def _is_quota_error(error: Exception, errors_module) -> bool:
     return isinstance(error, errors_module.ClientError) and getattr(error, "code", None) == QUOTA_STATUS
 
 
+class GeminiError(RuntimeError):
+    """A Gemini call failed; `model` is the model that was asked."""
+
+    def __init__(self, message: str, model: str):
+        super().__init__(message)
+        self.model = model
+        self.failed_attempts: list[dict] = []  # the retried attempts before this error
+
+
+class GeminiUnavailable(GeminiError):
+    """Overloaded or rate-limited past the retries (5xx, or a per-minute 429): another model may work."""
+
+
+class GeminiQuotaExhausted(GeminiError):
+    """A daily quota is used up or billing is required: no model of this key will work today."""
+
+
+def is_daily_quota_or_billing(error: Exception) -> bool:
+    """
+    True for a 429 whose details name a per-day quota (`...PerDay...`), or any
+    client error that mentions billing without being a 429 (e.g. 400
+    FAILED_PRECONDITION "billing not enabled"). A plain 429 is a per-minute rate
+    limit, which passes after a wait. The free tier's 429 message always says
+    "check your plan and billing details", so "billing" alone does not mark a 429.
+    """
+    text = f"{error} {getattr(error, 'message', '') or ''} {getattr(error, 'details', '') or ''}"
+    code = getattr(error, "code", None)
+    if code == QUOTA_STATUS:
+        return "perday" in text.replace(" ", "").lower()
+    return code is not None and 400 <= int(code) < 500 and "billing" in text.lower()
+
+
+def classify_error(error: Exception, errors_module, model: str) -> GeminiError:
+    """The SDK error as GeminiQuotaExhausted, GeminiUnavailable or a plain GeminiError."""
+    message = f"Gemini {model} failed: {_describe(error)}"
+    if is_daily_quota_or_billing(error):
+        return GeminiQuotaExhausted(message + " (daily quota used up or billing required)", model)
+    if isinstance(error, errors_module.ServerError) or _is_quota_error(error, errors_module):
+        return GeminiUnavailable(message, model)
+    return GeminiError(message, model)
+
+
 class GeminiTranscriber:
     """Transcriber backed by a Gemini model through the Files API and structured output."""
 
     language = "en"
 
     def __init__(self, model: str | None = None, fallback_model: str | None = None,
-                 glossary_prompt: bool = False, tier: str | None = None):
+                 glossary_prompt: bool = False, tier: str | None = None, quota_fallback: bool = True):
+        """
+        quota_fallback: on a 429, retry once with `fallback_model` (the single-call
+        engine, A4). Off for the chunked engine, which retries a per-minute 429 on
+        the same model after RETRY_WAIT_SECONDS and chooses the next model itself.
+        """
         self.model = model or config.GEMINI_MODEL
         self.fallback_model = fallback_model or config.GEMINI_FALLBACK_MODEL
+        self.quota_fallback = quota_fallback
         self.glossary_prompt = glossary_prompt
         self.tier = tier or config.GEMINI_TIER
         if self.tier not in ("free", "paid"):
@@ -209,13 +257,19 @@ class GeminiTranscriber:
         """
         `_generate`, retried after a server error (HTTP 5xx, e.g. 503 "high demand")
         with the waits in RETRY_WAIT_SECONDS. Each failed attempt is appended to
-        `failures`. Client errors (4xx, including quota) are raised at once.
+        `failures`. Client errors (4xx) are raised at once, except a per-minute
+        rate limit (429 without a daily quota) when `quota_fallback` is off: it is
+        retried like a server error.
         """
         for attempt, wait in enumerate((*RETRY_WAIT_SECONDS, None), start=1):
             logger.info("Gemini %s: transcribing (attempt %d)", model, attempt)
             try:
                 return self._generate(client, types, model, uploaded, prompt)
-            except errors.ServerError as e:
+            except errors.APIError as e:
+                rate_limited = _is_quota_error(e, errors) and not is_daily_quota_or_billing(e)
+                retryable = isinstance(e, errors.ServerError) or (not self.quota_fallback and rate_limited)
+                if not retryable:
+                    raise
                 failures.append({"model": model, "attempt": attempt, "error": _describe(e)})
                 if wait is None:
                     raise
@@ -250,15 +304,17 @@ class GeminiTranscriber:
             try:
                 response = generate(model)
             except errors.APIError as e:
-                if not _is_quota_error(e, errors):
-                    raise RuntimeError(f"Gemini {model} failed: {_describe(e)}") from e
+                if not (self.quota_fallback and _is_quota_error(e, errors)):
+                    error = classify_error(e, errors, model)
+                    error.failed_attempts = list(failures)
+                    raise error from e
                 fallback_reason = f"{model}: {_describe(e)}"
                 logger.warning("Gemini %s rejected for quota; retrying with %s", model, self.fallback_model)
                 model = self.fallback_model
                 try:
                     response = generate(model)
                 except errors.APIError as e2:
-                    raise RuntimeError(f"Gemini {model} failed: {_describe(e2)}") from e2
+                    raise classify_error(e2, errors, model) from e2
         finally:
             try:
                 client.files.delete(name=uploaded.name)

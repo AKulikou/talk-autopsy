@@ -85,6 +85,11 @@ DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-3.6-flash"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
 GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "").strip() or DEFAULT_GEMINI_FALLBACK_MODEL
 GEMINI_TIER = os.getenv("GEMINI_TIER", "").strip().lower() or "free"
+# Model order of the chunked engine (stt/chunked.py): each chunk tries these in turn, then
+# faster-whisper. Comma-separated in .env; default: GEMINI_MODEL, then GEMINI_FALLBACK_MODEL.
+GEMINI_MODELS = list(dict.fromkeys(
+    [m.strip() for m in os.getenv("GEMINI_MODELS", "").split(",") if m.strip()]
+    or [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]))
 
 # --- Target language -------------------------------------------------------
 
