@@ -9,11 +9,13 @@ URL or a local file) into subtitles in a target language, later also a dubbed
 audio track. It runs locally; only text goes to the Claude API.
 
 ```
-input (URL/file) -> ffmpeg audio.wav + meta.json
-  -> STT engine (pluggable; first: faster-whisper large-v3, CPU) -> raw.json
-  -> Claude correction (terms, names, accent-distorted words; glossary + video context) -> fixed.json
-  -> Claude translation (blocks of 5-10 min with overlap, one glossary per video) -> <lang>.json
-  -> subtitles .srt (target language + corrected English) | later: TTS dub (edge-tts + ffmpeg)
+input (URL/file) -> ffmpeg audio.wav (+ audio.flac for upload) + meta.json
+  -> AssemblyAI, first pass -> raw.json          (fallbacks: chunked Gemini + forced alignment, then faster-whisper)
+  -> auto-glossary (Haiku, from raw.json + context), merged with the user's glossary -> glossary.md
+  -> AssemblyAI with the glossary as key terms -> raw2.json
+  -> Claude correction (correction-v2; terms, names, accent-distorted words) -> fixed.json
+  -> Claude translation (translation-v2; blocks of 5 min with context, no meaning compression) -> <lang>.json
+  -> subtitles .srt + .ass (target language + corrected English) | later: TTS dub (edge-tts + ffmpeg)
 ```
 
 The research question is measurement, not features: every stage is benchmarked on
@@ -37,20 +39,26 @@ uv run talk-autopsy transcribe <file>.wav --engine gemini --out work/T2/raw.gemi
 uv run talk-autopsy transcribe <file>.wav --engine gemini+align --out work/<run>/raw.gemini+align.json  # chunked Gemini + forced alignment
 uv run talk-autopsy transcribe <file>.wav --threads 8 ...                                       # faster-whisper CPU threads
 uv run talk-autopsy align <transcript>.json <file>.wav --out <aligned>.json                     # measured word times
-uv run talk-autopsy srt <transcript>.json --out <file>.srt [--glossary <md>]                    # subtitles
-uv run talk-autopsy fix <transcript>.json --glossary <md> --out <fixed>.json [--model <id>]       # Claude correction, prints the estimate
-uv run talk-autopsy translate <fixed>.json --lang ru --glossary <md> --out <ru>.json             # Claude translation
+uv run talk-autopsy srt <transcript>.json --out <file>.srt [--glossary <md>]                    # subtitles: .srt + sibling .ass
+uv run talk-autopsy glossary-auto <raw>.json --out <glossary>.md [--context <text-or-file>] [--compare <ref>.md]  # Haiku auto-glossary (B5)
+uv run talk-autopsy fix <transcript>.json --glossary <md> --out <fixed>.json [--model <id>] [--prompt correction-v1]  # Claude correction (default v2), prints the estimate
+uv run talk-autopsy translate <fixed>.json --lang ru --glossary <md> --out <ru>.json [--prompt translation-v1]       # Claude translation (default v2)
 uv run talk-autopsy adjudicate T2 --backbone work/T2/raw.whisper-large-v3.json --hyp work/T2/raw.assemblyai.json --hyp work/T2/raw.gemini.json
 uv run talk-autopsy resolve T2                    # after ticking data/test-set/T2.adjudication.md -> T2.ref.txt + protocol
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
-uv run talk-autopsy run <source> --lang ru --steps stt,align,fix,translate,srt --engine gemini+align --glossary <md>
-                                           # the pipeline; work/<video-id>/, skips steps that are up to date; --dry-run prints the plan;
-                                           # --gemini-cache-only: no Gemini call (cached chunks + faster-whisper)
+uv run talk-autopsy run <source> --lang ru [--context <text-or-file>] [--glossary <md>]
+                                           # the pipeline (default steps stt,glossary,stt2,align,fix,translate,srt; engine assemblyai);
+                                           # work/<video-id>/, skips steps that are up to date; --dry-run prints the plan;
+                                           # --engine gemini+align|faster-whisper|gemini; --gemini-cache-only: no Gemini call
 ```
+
+`fix`, `translate` and `eval` are the experiment commands: no refusal fallback, one
+named model per benchmark row. `run` is the tool: refusal fallback on.
 
 Requires ffmpeg (with ffprobe) on PATH. `ANTHROPIC_API_KEY` in `.env` (never commit
 it) is needed only by the Claude stages; the CLI checks it before any work on a run
-that includes `fix` or `translate`. Run `uv run pytest` and `uv run ruff check .`
+that includes `glossary`, `fix` or `translate`. `ASSEMBLYAI_API_KEY` is needed by the
+default `run`; `GEMINI_API_KEY` only for the Gemini engine or fallback. Run `uv run pytest` and `uv run ruff check .`
 after any change. Use the uv-managed Python 3.13, not the system `python`.
 
 ## Layout
@@ -66,11 +74,13 @@ after any change. Use the uv-managed Python 3.13, not the system `python`.
 - `talk_autopsy/adjudicate.py` — reference by consensus: aligns two cloud transcripts to the faster-whisper backbone, spans of disagreement, the adjudication file, clips, `resolve` to the reference and its protocol
 - `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import; superseded by `adjudicate.py` for the test set (`draft`, `ref-from-draft` still work)
 - `talk_autopsy/blocks.py` — what correction and translation share: 5-minute blocks with 3 read-only context segments, video context from `meta.json`, token and cost estimates, stage meta
-- `talk_autopsy/correct.py` — Claude correction (`correction-v1`), validator, failed blocks keep their text and are listed; `translate.py` — Claude translation (`translation-v1`), `target_lang` a parameter; prompts in `talk_autopsy/prompts/<version>.md`
-- `talk_autopsy/subtitles.py` — SRT writer: 2 x 42 characters, 1-7 s, breaks at sentence/clause ends, never inside a glossary term; built ahead of stage 3 as a viewing tool
-- `talk_autopsy/pipeline.py` — `run`: stt, align, fix, translate, srt in `work/<video-id>/`, stamp files to skip unchanged steps, key checks first, cost estimate and limit, cost report, progress events
+- `talk_autopsy/glossary_auto.py` — auto-glossary (`glossary-auto-v1`, helper model): terms, `keep`, suggested translation, `heard_as` mis-recognitions, evidence rule; `coverage` against a reference glossary; `merge` with a user glossary (user wins, drafted translations become "suggested" notes)
+- `talk_autopsy/correct.py` — Claude correction (`correction-v2` default, `correction-v1`), validator (incl. 70% words kept in order, no runs of words from a neighbouring segment), failed blocks keep their text and are listed; `translate.py` — Claude translation (`translation-v2` default: no meaning compression; `translation-v1`), `target_lang` a parameter; prompts in `talk_autopsy/prompts/<version>.md`
+- `talk_autopsy/subtitles.py` — SRT and `.ass` writer: up to 3 x 48 characters, 1-7 s, breaks at sentence/clause ends, never inside a glossary term; `.ass` 1920x1080, Arial 42, outline, bottom centre; reading speed reported (shares above 17 and 25 cps), never enforced
+- `talk_autopsy/pipeline.py` — `run`: stt (AssemblyAI on `audio.flac`; fallback chunked Gemini, then faster-whisper), glossary, stt2 (key terms), align (model-estimated times only), fix, translate, srt in `work/<video-id>/`; stamp files to skip unchanged steps, key checks first, cost estimate and limit, Claude and speech recognition cost report, fallbacks listed, progress events
+- `talk_autopsy/core/structured_call.py` also has `refusal_fallback` (`fallbacks: "default"` through the beta endpoint); `run` turns it on for Sonnet calls
 - `talk_autopsy/tts/edge.py` (stage 4) — stub with input -> output in the docstring
-- `talk_autopsy/cli.py` — typer CLI (`cut`, `transcribe`, `align`, `srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval`, `run`); argument parsing and printing only
+- `talk_autopsy/cli.py` — typer CLI (`cut`, `transcribe`, `align`, `glossary-auto`, `fix`, `translate`, `srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval`, `run`); argument parsing and printing only
 - `talk_autopsy/core/` — shared with autopsy-template: `structured_call.py` (structured request, stop-reason checks, validation, one retry), `claude_client.py`, `batch_client.py` (Message Batches at half price), `token_summary.py` (cost)
 - `tests/` — `conftest.py` has the fake Claude client (`fake_claude`) and the generated sine WAV (`sine`)
 - `data/test-set/` — media and reference transcripts are local only; `README.md` and `*.glossary.md` are tracked
@@ -142,11 +152,14 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 - **Stage 0 (done):** foundation. Repository, CI, shared core, data format,
   `cut` command, test set T1–T2.
 - **Stage 1 (gate passed 2026-11-09):** reference transcripts for T1–T2; STT
-  engine chosen against the WER gate (Gemini as `gemini+align`, faster-whisper
-  fallback); baselines measured. Still open from the plan: prior-art survey,
-  T3–T6.
+  engine chosen against the WER gate: AssemblyAI with key terms (owner's choice,
+  decisions), Gemini + forced alignment and faster-whisper as fallbacks;
+  baselines measured. Still open from the plan: prior-art survey, T3–T5.
 - **Stage 2 (current):** correction and translation prompts, measured and frozen; hold-out
-  and external audit at the gate. `correction-v1` and `translation-v1` exist with first runs (B1, B4).
+  and external audit at the gate. `correction-v2` and `translation-v2` are the defaults; the
+  auto-glossary (B5) feeds the key-term pass; the blind C1 file and the B2 v2 review wait for
+  the owner. T6 is cut (blind) and sealed until the v2 prompts are frozen with a git tag
+  (`docs/experiments.md`, T6 protocol).
 - **Stage 3:** the CLI tool with subtitles; external audit; v1.0.
 - **Stage 4:** dubbed audio track.
 - **v1.1:** local web UI over the same core.
@@ -161,7 +174,8 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 - AssemblyAI and Gemini helped build the T1/T2 references, so their WER against them is biased in their favour; compare them through the resolve protocol (docs/experiments.md, methodology).
 - faster-whisper 1.2.1 cannot decode files with PyAV 19 (`metadata_errors`); the engine reads the WAV itself and passes samples.
 - faster-whisper's segment `avg_logprob` is per 30-second decoding window, so segment `confidence` is too; word probabilities are per word.
-- T3–T6 are not selected; T1's speaker is assumed native (to be confirmed).
+- T3–T5 are not selected; T6 is cut blind (25:46–35:46 of `T6.source.mp4`) and sealed: never transcribe, play or describe it before the freeze tag. T1's speaker is assumed native (to be confirmed).
+- AssemblyAI costs about $0.47 per hour of video in `run` (two passes, list price: $0.21 + $0.26 with key terms), drawn from the account's free credit for now.
 - Claude Haiku 5.5 costs more for prompts over 100,000 tokens; the cost estimate
   uses the lower tier.
 - The shared core was written against `anthropic` 1.x; the lock has 2.x (2.6.0).

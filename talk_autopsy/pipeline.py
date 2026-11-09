@@ -85,10 +85,11 @@ class RunSettings:
     helper_model: str = field(default_factory=lambda: config.HELPER_MODEL)
     gemini_cache_only: bool = False  # no Gemini call; uncached chunks go to faster-whisper
     refusal_fallback: bool = True
+    name: str = ""  # work/<name>/ and <name>.<lang>.srt; default: the source file's stem
 
     @property
     def video_id(self) -> str:
-        return Path(self.source).stem
+        return self.name or Path(self.source).stem
 
     @property
     def work_dir(self) -> Path:

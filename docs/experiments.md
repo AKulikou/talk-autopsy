@@ -135,6 +135,74 @@ non-native English accent). Its 10-minute window was cut blind on
    recorded whatever they are; a prompt change after seeing them starts a new
    version that T6 can no longer judge.
 
+## Operational runs
+
+Whole videos through the production `run` (not scored: no reference, no
+benchmark row). Default path since 2026-11-09: AssemblyAI first pass on
+compressed audio (`audio.flac`), auto-glossary (Haiku), AssemblyAI with the
+glossary as key terms, correction-v2 and translation-v2 (Sonnet, refusal
+fallback on), `.srt` + `.ass` in Russian and English. No `--context` and no
+user glossary in either run. Laptop as in the stage 1 runs; network times
+include upload.
+
+| | T2.source (talk, strong accent) | real-01 (interview, native speakers) |
+|---|---|---|
+| duration | 27:52 (1673 s) | 38:30 (2310 s) |
+| command | `run data/test-set/T2.source.mp4 --lang ru` | `run data/test-set/source-video-1.mp4 --name real-01 --lang ru` |
+| stt (extract audio, FLAC, AssemblyAI) | 34.5 s | 59.1 s |
+| glossary (Haiku) | 17.4 s, 35 terms, 4 with corrected mis-recognitions | 19.3 s, 29 terms, 2 with corrected mis-recognitions |
+| stt2 (AssemblyAI + key terms) | 35.6 s | 44.7 s |
+| align | pass-through (measured times) | pass-through |
+| fix (correction-v2, 6 / 8 blocks) | 79.2 s | 81.7 s |
+| translate (translation-v2) | 105.4 s | 144.0 s |
+| srt + ass | 0.8 s | 1.7 s |
+| **total wall time** | **273 s (4.6 min): 9.8 min per hour of video** | **351 s (5.8 min): 9.1 min per hour** |
+| limit of the plan | 30 min per hour | 30 min per hour |
+| AssemblyAI (list price, two passes) | 0.218 USD = 0.47 USD per hour | 0.302 USD = 0.47 USD per hour |
+| Claude estimate / spent | 0.532 / 0.380 USD = 0.82 USD per hour | 0.726 / 0.431 USD = 0.67 USD per hour |
+| failed blocks | correction block 4/6 (see below); translation 0 | 0 / 0 |
+| segments changed by correction | 3 (first run), 8 (rerun) | 1 |
+| translation warnings (kept term missing) | 3 | 3 |
+| Russian cues: above 17 / above 25 cps | 76.8% / 22.5% (422 cues) | 50.9% / 13.7% (591 cues) |
+| English cues: above 17 / above 25 cps | 84.2% / 22.3% (430 cues) | 66.0% / 15.6% (582 cues) |
+| fallbacks used | none (AssemblyAI answered both passes; no refusal) | none |
+
+- **Auto-glossary on real videos.** T2.source: `Claude Code` <- "QuadCode",
+  "Quad Code", "Cloud Code", "Cod Code"; `CLAUDE.md` <- "Claude MD", "Claude
+  MT", "CloudMD", "Quad MD" and five more forms; `/install-github-app`;
+  `.mcp.json` <- "MCP JSON". real-01: `[removed]` <- "[removed]" (and a
+  harmless `GPU` <- "GPUs").
+- **A validator bug found here and fixed.** On T2.source correction block 4/6
+  failed validation twice ("glossary terms removed: Claude, MCP, JSON"), so
+  its segments (211–271) kept the key-term transcript. Cause: the
+  auto-glossary lists `.mcp.json` and `CLAUDE.md` as well as `MCP`, `JSON` and
+  `Claude`; the right edits "MCP JSON" -> `.mcp.json` and "Claude MD" ->
+  `CLAUDE.md` remove the shorter terms, which the old check took for lost
+  terms. A removal is now excused when a listed edit turned those words into
+  another glossary term (`correct.merged_into_term`, with a test). The
+  T2.source correction, translation and subtitles were then run again (stamp
+  of `fixed.json` deleted by hand; stt and glossary reused): 0 failed blocks,
+  8 segments changed (`.mcp.json` twice, `CLAUDE.md` three times, `.claude`,
+  `Claude Code`, `Claudes`), 0.347 USD (correction 0.163, translation 0.183).
+  The first-run files are kept as `work/T2.source/fixed.first.json` and
+  `ru.first.json`; the table above has the rerun's subtitle numbers and the
+  first run's times and costs.
+- **A CLI bug found here and fixed.** `run --name real-01` wrote to
+  `work/srt/` with files `srt.*.srt`: the loop that prints the plan reused
+  the variable `name`. Fixed and tested; the folder was renamed to
+  `work/real-01/` and the subtitles rewritten with `--steps srt` (no API call).
+- **Reading speed.** Nothing is cut (owner decision), so the shares are high
+  on the fast, accented talk and lower on the interview. Many fast cues are
+  short sentences (AssemblyAI segments by sentence) that cannot linger
+  because the next cue starts at once; cues never cross a segment boundary.
+- **Outputs:** `work/T2.source/T2.source.ru.srt` / `.ass`,
+  `T2.source.en.srt` / `.ass`; `work/real-01/real-01.ru.srt` / `.ass`,
+  `real-01.en.srt` / `.ass`. The prompt-05 outputs of the Gemini run are in
+  `work/T2.source.prompt05/`. Of the money: the first start of the T2.source
+  run was stopped by hand after its upload had begun (the old outputs had
+  not been backed up yet); its AssemblyAI pass (up to 0.098 USD) is counted
+  as spent in the session total.
+
 ## Stage 1 summary
 
 Speech recognition on T1 (native speaker, 9:27) and T2 (strong accent, 10:00),
@@ -919,5 +987,23 @@ Ideas that come up during a stage and wait for a later one.
   titles by meaning (C1 blind run, 2026-11-09). Revisit after the owner's
   blind scores; a third translation prompt version is within the limit of 5.
 
-- Server-side refusal fallback on the Claude calls (the docs recommend it for
-  Sonnet 5.5 and Opus 5.5); decide when the correction stage is written.
+- Rejected answers are not saved (operational runs, 2026-11-09): when a block
+  fails validation twice only the problem list is logged, so the cause had to
+  be inferred from the glossary. Save the rejected answer next to the output
+  (`<output>.rejected.json`).
+- Stamps do not include the code version (operational runs): a validator fix
+  did not invalidate `fixed.json`, and its stamp had to be deleted by hand.
+  Add the prompt file hash and a validator version to the fix and translate
+  stamps.
+- Short sentence cues (operational runs): AssemblyAI segments by sentence, so
+  many cues are one short sentence that cannot linger; 45 Russian cues of
+  real-01 are shorter than 1 s. Joining consecutive short segments into one
+  cue (still never splitting a segment) would lower the reading speed
+  without cutting text; measure in stage 3 (D-hypotheses).
+- Translation warnings for kept terms (operational runs): translation-v2
+  dropped "[removed]", "commit", "tokens" in a few segments (3 warnings per
+  video). With no compression rule left, check whether these are pronoun
+  substitutions or real losses before the C1 decision.
+
+- ~~Server-side refusal fallback on the Claude calls~~ Decided 2026-11-09:
+  on in `run`, off in experiments (decisions).

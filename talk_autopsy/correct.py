@@ -132,6 +132,25 @@ def moved_runs(own_input: str, output: str, neighbours: list[str], glossary: Glo
     return found
 
 
+def merged_into_term(term: str, terms: list[str], edits: list[Edit]) -> bool:
+    """
+    True if a listed edit turned words holding `term` into another glossary term:
+    an auto-glossary can list both `MCP` and `.mcp.json` (heard as "MCP JSON"),
+    and the right fix "MCP JSON" -> ".mcp.json" removes the term `MCP`.
+    """
+    for e in edits:
+        if not metrics.term_accuracy(e.before, e.before, [term]).rows:
+            continue
+        for other in terms:
+            if other == term:
+                continue
+            gained = metrics.term_accuracy(e.after, e.after, [other]).rows
+            had = metrics.term_accuracy(e.before, e.before, [other]).rows
+            if gained and (not had or gained[0].expected > had[0].expected):
+                return True
+    return False
+
+
 def validate_block(segments: list[Segment], glossary: Glossary, answer: CorrectionAnswer,
                    context: list[Segment] | None = None) -> list[str]:
     """
@@ -173,6 +192,7 @@ def validate_block(segments: list[Segment], glossary: Glossary, answer: Correcti
     terms = [e.term for e in glossary.entries]
     if terms:
         removed = [r.term for r in metrics.term_accuracy(before, after, terms).rows if r.found < r.expected]
+        removed = [term for term in removed if not merged_into_term(term, terms, answer.edits)]
         if removed:
             problems.append(f"glossary terms removed: {', '.join(removed)}")
     if before and abs(len(after) - len(before)) > MAX_LENGTH_DRIFT * len(before):

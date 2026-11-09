@@ -210,3 +210,17 @@ def test_a_term_fix_that_matches_a_neighbour_is_not_a_move():
     assert moved_runs("open quad code and", "open Claude Code and",
                       ["open Claude Code and run it"], GLOSSARY) == []
     assert moved_runs("I sink so", "I think so", ["I think so too"], Glossary()) == []
+
+
+def test_a_term_turned_into_another_glossary_term_is_not_a_removal():
+    # auto-glossary: ".mcp.json" heard as "MCP JSON", and "MCP", "JSON" listed as terms too
+    glossary = Glossary(entries=[GlossaryEntry(term=t, keep=True) for t in (".mcp.json", "MCP", "JSON")])
+    segments = [seg(1, "Put the servers in the MCP JSON file.")]
+    fixed = CorrectionAnswer(segments=[SegmentText(id=1, text="Put the servers in the .mcp.json file.")],
+                             edits=[Edit(id=1, before="the MCP JSON file", after="the .mcp.json file",
+                                         reason="file name")])
+    assert validate_block(segments, glossary, fixed) == []
+    # without an edit that makes another term, a lost term is still a problem
+    lost = CorrectionAnswer(segments=[SegmentText(id=1, text="Put the servers in the config file.")],
+                            edits=[Edit(id=1, before="MCP JSON", after="config", reason="?")])
+    assert any("glossary terms removed" in p for p in validate_block(segments, glossary, lost))

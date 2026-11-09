@@ -109,3 +109,16 @@ def test_steps_without_claude_need_no_key(sine, monkeypatch):
     args = ["run", str(sine), "--steps", "stt,srt", "--engine", "faster-whisper", "--dry-run"]
     result = runner.invoke(cli.app, args)
     assert result.exit_code == 0 and "API_KEY" not in result.output
+
+
+def test_run_name_reaches_the_pipeline(sine, monkeypatch):
+    from talk_autopsy import pipeline
+    seen = {}
+
+    def fake_run(settings, progress=None):
+        seen["name"] = settings.name
+        return pipeline.RunReport()
+    monkeypatch.setattr(pipeline, "run", fake_run)
+    result = runner.invoke(cli.app, ["run", str(sine), "--name", "real-01", "--steps", "srt"])
+    assert result.exit_code == 0, result.output
+    assert seen["name"] == "real-01"  # not the last step name printed in the plan

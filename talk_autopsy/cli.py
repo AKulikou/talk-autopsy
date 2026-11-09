@@ -437,6 +437,9 @@ def run(
     max_cost: Annotated[float, typer.Option(
         help="Stop before the Claude steps if their estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
+    name: Annotated[str | None, typer.Option(
+        help="Name of the run: work/<name>/ and <name>.<lang>.srt. Default: the file name.")]
+    = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print the plan and stop.")] = False,
     gemini_cache_only: Annotated[bool, typer.Option(
         "--gemini-cache-only",
@@ -463,14 +466,14 @@ def run(
     typer.echo(f"Source: {source} ({'URL' if is_url(source) else 'local file'})")
     typer.echo(f"Target language: {target_lang}")
     typer.echo("Steps:")
-    for number, name in enumerate(selected, start=1):
-        detail = STEPS[name].format(correction=f"{correct.PROMPT_VERSION}, {config.CORRECTION_MODEL}",
+    for number, step_name in enumerate(selected, start=1):
+        detail = STEPS[step_name].format(correction=f"{correct.PROMPT_VERSION}, {config.CORRECTION_MODEL}",
                                     translation=f"{translate.PROMPT_VERSION}, {config.TRANSLATION_MODEL}",
                                     helper=config.HELPER_MODEL, lang=target_lang, engine=engine)
-        typer.echo(f"  {number}. {name:<10} {detail}")
+        typer.echo(f"  {number}. {step_name:<10} {detail}")
     settings = pipeline.RunSettings(source=Path(source), target_lang=target_lang, steps=selected,
                                     engine=engine, glossary=glossary, max_cost_usd=max_cost,
-                                    context=glossary_auto.read_context(context),
+                                    context=glossary_auto.read_context(context), name=name or "",
                                     gemini_cache_only=gemini_cache_only)
     try:
         pipeline.check_keys(settings)  # fail before any work, not after speech recognition

@@ -232,6 +232,14 @@ def test_missing_assemblyai_key_fails_before_any_work(default_path, monkeypatch)
     assert calls == [] and not settings.work_dir.exists()
 
 
+def test_a_run_name_sets_the_work_folder_and_file_names(default_path, fake_claude):
+    settings, _ = default_path
+    fake_claude(claude_handler)
+    settings.name, settings.steps = "real-01", ["stt", "srt"]
+    pipeline.run(settings)
+    assert settings.work_dir.name == "real-01" and (settings.work_dir / "real-01.en.srt").is_file()
+
+
 # --- fix and translate commands ------------------------------------------------------
 
 
