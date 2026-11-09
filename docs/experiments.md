@@ -243,5 +243,16 @@ Ideas that come up during a stage and wait for a later one.
   window. For flagging doubtful segments for correction, use word probabilities
   (for example the minimum or mean per segment) instead.
 
+- Term matching and possessives (glossary review, 2026-11-09): `Anthropic`
+  occurs in T1 only as "Anthropic's", which `metrics.term_accuracy` does not
+  count, so the term is excluded as absent. Accepting `'s` on the last token,
+  like the regular plural, would count it; changing the metric rescores every
+  row, so it waits for a stage boundary.
+- T1 reference spells the GitHub mention "@Claude" (twice), against the
+  reference convention `@claude`; the term is an identifier and matched
+  case-sensitively, so it counts 0 occurrences and is excluded. Fix in
+  `T1.adjudication.md` (type `@claude` in those spans) and `resolve T1 --force`
+  — an owner edit; this session may not touch the adjudication file.
+
 - Server-side refusal fallback on the Claude calls (the docs recommend it for
   Sonnet 5.5 and Opus 5.5); decide when the correction stage is written.
