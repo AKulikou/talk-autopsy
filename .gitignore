@@ -1,0 +1,44 @@
+# Virtual environment (uv creates .venv/)
+.venv/
+venv/
+env/
+
+# Logs, run outputs and intermediate files
+logs/
+*.log
+work/
+# results/ is ignored except the benchmark table: ignore the contents, not the
+# directory, so the exception below can re-include the file.
+results/*
+!results/benchmark.csv
+
+# Test set: media and reference transcripts stay local. Only the README and the
+# per-fragment glossaries are published.
+data/test-set/*
+!data/test-set/README.md
+!data/test-set/*.glossary.md
+
+# Environment variables
+*.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
