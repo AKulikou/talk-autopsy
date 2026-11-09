@@ -43,12 +43,12 @@ def test_shell_command_keeps_its_flag():
 
 
 def test_dashes_ellipses_and_markers_are_not_words():
-    text = "so - this ... works — really… [inaudible] ...and [Laughter]"
+    text = "so - this ... works \u2014 really\u2026 [inaudible] ...and [Laughter]"
     assert tokenize(text) == ["so", "this", "works", "really", "and"]
 
 
 def test_typographic_apostrophe_matches_ascii():
-    assert tokenize("don’t") == tokenize("don't") == ["don't"]
+    assert tokenize("don\u2019t") == tokenize("don't") == ["don't"]
 
 
 def test_nothing_is_expanded():

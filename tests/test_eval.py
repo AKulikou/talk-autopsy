@@ -11,7 +11,7 @@ from talk_autopsy.segments import Segment, Transcript, save_transcript
 
 runner = CliRunner()
 
-ANSI = re.compile(r"\[[0-9;]*m")
+ANSI = re.compile(chr(27) + r"\[[0-9;]*m")  # ESC [ ... m
 
 
 def plain(output: str) -> str:
