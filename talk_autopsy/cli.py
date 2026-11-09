@@ -1,7 +1,7 @@
 """
 Command line: `cut`, `transcribe` (faster-whisper or a cloud engine), `align`,
-`draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval` (work now) and `run`
-(prints the plan).
+`srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval` (work now) and
+`run` (prints the plan).
 
 Only argument parsing and printing live here; the stages are plain functions in
 the package, so a web UI can call them the same way later.
@@ -18,7 +18,7 @@ import typer
 
 from talk_autopsy import adjudicate as consensus_module
 from talk_autopsy import align as align_module
-from talk_autopsy import config, evaluation, ingest, proofread
+from talk_autopsy import config, evaluation, ingest, proofread, subtitles
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
 from talk_autopsy.segments import load_transcript, save_transcript
@@ -187,6 +187,26 @@ def transcribe(
 
 
 ForceOption = Annotated[bool, typer.Option("--force", help="Overwrite OUT if it exists.")]
+
+
+@app.command(name="srt")
+def srt_command(
+    transcript: Annotated[Path, typer.Argument(help="Transcript JSON (aligned English or a translation).")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="SRT file to write.")],
+    glossary: Annotated[Path | None, typer.Option(help="Glossary: no cue break inside a term.")] = None,
+) -> None:
+    """Subtitles: cues of at most 2 x 42 characters, 1-7 s on screen, split at sentence and clause ends."""
+    try:
+        source = load_transcript(transcript)
+        terms = load_glossary(glossary) if glossary is not None else None
+        result = subtitles.write_srt(source, out, terms)
+    except (FileNotFoundError, ValueError, GlossaryError) as e:
+        _fail(str(e))
+    r = result.reading
+    typer.echo(f"Wrote {out}: {result.cues} cues; reading speed max {r.max_cps:.1f} cps, "
+               f"{r.share_above * 100:.1f}% above {r.threshold:.0f} cps; shorter than "
+               f"{subtitles.MIN_SECONDS:.0f} s: {result.shorter_than_min}, longer than "
+               f"{subtitles.MAX_SECONDS:.0f} s: {result.longer_than_max}")
 
 
 @app.command(name="align")
