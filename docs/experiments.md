@@ -159,12 +159,89 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| B4 | 2026-11-09 | Opus corrects terms better than Sonnet on the same input | correction-v1, `claude-opus-5-5`, T2 Gemini+align input | term accuracy 100% vs Sonnet 96.3%; WER 2.00% vs 2.14%; false edits 0 both; 0.129 vs 0.060 USD | Opus fixed the 4 terms Sonnet left (one fragment, one run each) | Sonnet stays the default; Opus noted as the option where terms are dense |
+| B1 | 2026-11-09 | Claude correction lifts term accuracy to >= 85% without false edits | correction-v1, `claude-sonnet-5-5`, inputs: Gemini+align and raw faster-whisper, T2 and T1 | T2 Gemini 93.5% -> 96.3%, faster-whisper 61.7% -> 94.4%; T1 Gemini 99.2% (no edit), faster-whisper 55.1% -> 100%; false-edit rate 0 in all four; 0.23 USD | holds on all four; T1 evidence is secondary (Claude-decided reference) | correction-v1 kept; owner checks the T2 edits (B2) |
 | A5 (setup) | 2026-11-09 | none: forced alignment of the Gemini transcripts, before Gemini can drive subtitles | wav2vec2 base 960h (torchaudio 2.11.1, CPU) + numpy Viterbi; existing Gemini transcripts of T2, T1 | 0 unplaced words; 8.6x / 10.3x real time; start times vs faster-whisper: median 130 / 230 ms, p95 410 / 660 ms | Gemini text gets measured word times; aligner starts words later than Whisper by a steady offset | `gemini+align` engine built on it; smoke test on a full talk below |
 | A2 | 2026-11-09 | glossary as Whisper `initial_prompt` raises term accuracy by >= 20 points | faster-whisper large-v3 + `--glossary-prompt`, 8 CPU threads; T2, T1 | T2 term accuracy 61.7% -> 51.4%, WER 6.19% -> 6.43%; T1 55.1% -> 96.6%, 11.20% -> 4.32%; realtime factor 0.19 (T2) / 0.57 (T1) | holds on T1, fails on T2 (the accented fragment, the one that matters) | not adopted as a fix for accented speech; Whisper stays the fallback engine |
 | A3 | 2026-11-09 | glossary as AssemblyAI keyterms raises term accuracy | Universal-3.5 Pro + keyterms (reviewed glossaries); T2, T1 | T2 term accuracy 80.4% -> 99.1%, WER 6.97% -> 4.43%; T1 95.8% -> 100%, 1.41% -> 0.33%; 0.084 USD | holds on these numbers; size inflated by a glossary built from the reference and by reference bias | recorded; re-test with a reference-free glossary on T3–T5 |
 | A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### B1: correction-v1 on Gemini and faster-whisper transcripts
+
+- **Hypothesis:** Claude correction with the video's glossary brings term
+  accuracy to the stage 2 target (>= 85%) without changing words that were
+  already right (false-edit rate near 0) and without raising WER. (The
+  project plan is not in the repository; the wording follows the session
+  prompt and the stage 2 gate.)
+- **Run:** 2026-11-09, `talk-autopsy fix` (commit 2359042's code),
+  prompt `correction-v1` (`talk_autopsy/prompts/correction-v1.md`),
+  `claude-sonnet-5-5`, default effort and adaptive thinking, blocks of about
+  5 minutes (2 per fragment) with 3 read-only context segments, the reviewed
+  glossary in the cached prefix, no video context (the test-set fragments
+  have no `meta.json`). Inputs: `work/T<n>/aligned.gemini.json` (A5 (setup):
+  Gemini text, aligned times) and `work/T<n>/raw.whisper-large-v3.json`
+  (A1 (setup)). Scored with `eval --raw <input>`.
+- **Numbers:**
+
+  | | T2 Gemini | T2 faster-whisper | T1 Gemini | T1 faster-whisper |
+  |---|---|---|---|---|
+  | term accuracy, input -> corrected | 93.46% -> 96.26% | 61.68% -> 94.39% | 99.15% -> 99.15% | 55.08% -> 100.00% |
+  | WER, input -> corrected | 2.34% -> 2.14% | 6.19% -> 3.12% | 1.41% -> 1.41% | 11.20% -> 3.24% |
+  | false-edit rate | 0.00% (0 of 2022) | 0.00% (0 of 1950) | 0.00% (0 of 1193) | 0.00% (0 of 1091) |
+  | segments changed / edits | 3 / 3 | 34 / 34 | 0 / 0 | 51 / 51 |
+  | failed blocks | 0 | 0 | 0 | 0 |
+  | tokens in / cache write / cache read / out | 3,884 / 1,862 / 1,862 / 4,716 | 3,948 / 0 / 3,724 / 6,179 | 2,636 / 1,793 / 1,793 / 3,092 | 2,785 / 0 / 3,586 / 5,354 |
+  | cost | 0.060 USD | 0.070 USD | 0.041 USD | 0.060 USD |
+  | estimate before the run | 0.092 USD | 0.092 USD | 0.060 USD | 0.061 USD |
+
+  The second run on each fragment read the whole prefix from the cache (same
+  prompt and glossary within five minutes). Output tokens include adaptive
+  thinking.
+- **Conclusion:** the hypothesis holds on all four inputs. The largest gain is
+  on faster-whisper's T2 transcript: every "Quadcode" became "Claude Code"
+  (product name in the glossary), plus `tmux`, `macOS`, `daltonized`,
+  `at-mention`, `codebase`, `LLM`. What the correction did not do: turn spoken
+  slash commands and key names into their written form on faster-whisper input
+  ("slash theme" stays; 6 terms of T2 missed), and on Gemini input
+  `Shift+Enter`, `at-mention`, `PR`, `Command+F` stayed as Gemini wrote them
+  ("shift-Enter", "@-mention", "pr", "Cmd+F"). WER fell together with the term
+  fixes; no correct word was changed. Biases: the glossary was reviewed
+  against the reference (the model was told which terms occur); T1's
+  reference was decided by a Claude model by rules close to the prompt's, so
+  T1 is secondary evidence; the false-edit rate counts words, not meaning,
+  and the owner's check of the T2 edits (B2) is pending in
+  `work/T2/B2-review.md` (3 edits, with time codes and the reference text).
+- **Decision:** keep correction-v1 as the stage 2 baseline. The hold-out T6 and
+  the term target are judged at the gate, not here.
+
+### B4: Opus instead of Sonnet for correction-v1
+
+- **Hypothesis:** the larger model makes more of the needed term fixes on the
+  same input, at a higher cost.
+- **Run:** 2026-11-09, as B1 on `work/T2/aligned.gemini.json` only, with
+  `--model claude-opus-5-5` (default effort `medium`, adaptive thinking).
+- **Numbers:**
+
+  | | Sonnet 5.5 (B1) | Opus 5.5 |
+  |---|---|---|
+  | term accuracy | 96.26% (103/107) | 100.00% (107/107) |
+  | WER | 2.14% | 2.00% |
+  | false-edit rate | 0.00% | 0.00% |
+  | segments changed | 3 | 6 |
+  | output tokens | 4,716 | 5,169 |
+  | cost | 0.060 USD | 0.129 USD |
+
+  Opus made Sonnet's three edits plus `Shift+Enter`, `at-mention`,
+  `Command+F` and `PR`.
+- **Conclusion:** on this one input Opus reached every glossary term at 2.2x
+  the cost; Sonnet left four spellings that Gemini had written in a common
+  but non-glossary form. One run per model on one fragment: no variance
+  estimate, and the gain is four term occurrences.
+- **Decision:** Sonnet stays the default (`config.py`; the owner reserved Opus
+  for experiments, 2026-11-09). Whether a prompt change gets
+  Sonnet to the same spellings is a correction-v2 question; Backlog.
 
 ### A5 (setup): forced alignment of Gemini transcripts
 
@@ -438,6 +515,12 @@ Ideas that come up during a stage and wait for a later one.
   window. For flagging doubtful segments for correction, use word probabilities
   (for example the minimum or mean per segment) instead.
 
+- correction-v2 candidate (B1/B4, 2026-11-09): Sonnet keeps Gemini's
+  "shift-Enter", "@-mention", "Cmd+F", "pr" and faster-whisper's spoken
+  "slash theme"; Opus fixes the first four. A prompt line asking to write
+  terms exactly as the glossary spells them, including key combinations and
+  slash commands said aloud, may close the gap; measure on T2 only after the
+  owner's B2 check.
 - Timing reference for A5 / D-hypotheses (2026-11-09): label word onsets by
   hand for a few minutes of T1 and T2 so the aligner's +130–230 ms offset
   against Whisper can be attributed to one of them; then decide whether to
