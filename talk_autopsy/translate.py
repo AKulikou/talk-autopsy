@@ -166,7 +166,7 @@ def estimate(transcript: Transcript, glossary: Glossary, target_lang: str,
 
 def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, model: str | None = None,
               context: blocks.VideoContext | None = None, version: str = PROMPT_VERSION,
-              progress=None) -> Transcript:
+              progress=None, refusal_fallback: bool = False) -> Transcript:
     """The translated transcript: same ids and times, texts in `target_lang`, usage in `meta.translation`."""
     config.require_api_key()
     target_lang = config.check_lang(target_lang)
@@ -177,6 +177,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     failed: list[dict] = []
     warnings: list[str] = []
     usage = Usage()
+    served_by: set[str] = set()
     started = time.perf_counter()
     parts = blocks.make_blocks(transcript)
     for block in parts:
@@ -185,6 +186,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
             response = request_structured(
                 client, label=label, model=model, max_tokens=config.MAX_TOKENS, system="",
                 user=_user(block), output_format=TranslationAnswer, cached_prefix=prefix,
+                refusal_fallback=refusal_fallback,
                 validate=lambda answer, segments=block.segments: validate_block(
                     segments, glossary, target_lang, answer),
             )
@@ -194,6 +196,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
             logger.warning("%s failed validation twice; its segments stay in English: %s", label, e)
         else:
             blocks.merge_usage(usage, response.usage)
+            served_by.add(response.model or model)
             texts.update({s.id: s.text for s in response.result.segments})
             warnings.extend(kept_terms_missing(block.segments, glossary, response.result))
         if progress is not None:
@@ -205,6 +208,8 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     meta["translation"] = {
         "prompt_version": version,
         "model": model,
+        "served_by": sorted(served_by),  # differs from model only after a refusal fallback
+        "refusal_fallback": refusal_fallback,
         "target_lang": target_lang,
         "blocks": len(parts),
         "failed_blocks": failed,

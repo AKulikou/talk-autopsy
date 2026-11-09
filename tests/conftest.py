@@ -51,6 +51,7 @@ class FakeClaude:
         self._cached: set[str] = set()
         self._lock = threading.Lock()
         self.messages = SimpleNamespace(parse=self._parse)
+        self.beta = SimpleNamespace(messages=SimpleNamespace(parse=self._parse))
 
     def _parse(self, **kwargs):
         with self._lock:

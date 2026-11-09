@@ -210,7 +210,8 @@ def estimate(transcript: Transcript, glossary: Glossary, context: blocks.VideoCo
 
 
 def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoContext | str, *,
-            model: str | None = None, version: str = PROMPT_VERSION, progress=None) -> Transcript:
+            model: str | None = None, version: str = PROMPT_VERSION, progress=None,
+            refusal_fallback: bool = False) -> Transcript:
     """
     The corrected transcript: same ids and times, corrected texts, the edits and
     the API usage in `meta.correction`. `progress(block_number, block_count)` is
@@ -227,6 +228,7 @@ def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoCon
     edits: list[dict] = []
     failed: list[dict] = []
     usage = Usage()
+    served_by: set[str] = set()
     started = time.perf_counter()
     parts = blocks.make_blocks(transcript)
     for block in parts:
@@ -235,6 +237,7 @@ def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoCon
             response = request_structured(
                 client, label=label, model=model, max_tokens=config.MAX_TOKENS, system="",
                 user=_user(block), output_format=CorrectionAnswer, cached_prefix=prefix,
+                refusal_fallback=refusal_fallback,
                 validate=lambda answer, segments=block.segments, context=block.context: validate_block(
                     segments, glossary, answer, context),
             )
@@ -244,6 +247,7 @@ def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoCon
             logger.warning("%s failed validation twice; its segments keep their input text: %s", label, e)
         else:
             blocks.merge_usage(usage, response.usage)
+            served_by.add(response.model or model)
             texts.update({s.id: s.text for s in response.result.segments})
             edits.extend(e.model_dump() for e in response.result.edits)
         if progress is not None:
@@ -259,6 +263,8 @@ def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoCon
     meta["correction"] = {
         "prompt_version": version,
         "model": model,
+        "served_by": sorted(served_by),  # differs from model only after a refusal fallback
+        "refusal_fallback": refusal_fallback,
         "blocks": len(parts),
         "failed_blocks": failed,
         "segments_changed": sum(1 for a, b in zip(transcript.segments, segments, strict=True)

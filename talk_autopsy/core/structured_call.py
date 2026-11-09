@@ -28,6 +28,9 @@ MAX_ATTEMPTS = 2
 # A server-side tool loop (web search) can pause a long turn; resume it this many times.
 MAX_CONTINUATIONS = 3
 EPHEMERAL = {"type": "ephemeral"}
+# Server-side refusal fallback, "default" form: the API re-runs a declined request on the
+# model Anthropic recommends for the refusal category (Claude API only; not for Haiku).
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 class InvalidResultError(RuntimeError):
@@ -102,6 +105,7 @@ def build_system(system: str, cached_prefix: str | None) -> str | list[dict]:
 class StructuredResponse[ResultT: BaseModel]:
     result: ResultT
     usage: Usage
+    model: str = ""  # the model that produced the accepted answer (differs after a refusal fallback)
 
 
 def request_structured[ResultT: BaseModel](
@@ -118,6 +122,7 @@ def request_structured[ResultT: BaseModel](
     thinking: bool = False,
     tools: list[dict] | None = None,
     effort: str | None = None,
+    refusal_fallback: bool = False,
 ) -> StructuredResponse[ResultT]:
     """
     Send the request, check why generation stopped, and validate the parsed result.
@@ -130,6 +135,10 @@ def request_structured[ResultT: BaseModel](
             MAX_CONTINUATIONS times. Tools come before the system prompt in the
             cache order, so calls with different tools never share a cache.
         effort: output_config.effort (None = the model's default).
+        refusal_fallback: send `fallbacks: "default"` (beta FALLBACK_BETA) through
+            the beta endpoint, so a request the model's classifiers decline is
+            answered by the fallback model instead; the serving model is in
+            the result's `model`.
 
     Raises:
         RuntimeError: on truncation or refusal
@@ -142,6 +151,10 @@ def request_structured[ResultT: BaseModel](
         extra["tools"] = tools
     if effort:
         extra["output_config"] = {"effort": effort}
+    if refusal_fallback:
+        extra["betas"] = [FALLBACK_BETA]
+        extra["fallbacks"] = "default"
+    parse = client.beta.messages.parse if refusal_fallback else client.messages.parse
     system_param = build_system(system, cached_prefix)
     problems: list[str] = []
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -153,7 +166,7 @@ def request_structured[ResultT: BaseModel](
         messages = [{"role": "user", "content": user}]
         paused_content = []
         for continuation in range(MAX_CONTINUATIONS + 1):
-            response = client.messages.parse(
+            response = parse(
                 model=model,
                 max_tokens=max_tokens,
                 system=system_param,
@@ -195,7 +208,8 @@ def request_structured[ResultT: BaseModel](
                     f"{label}: caching was requested but nothing was cached or read; the prefix is "
                     "probably shorter than the model's minimum cacheable length"
                 )
-            return StructuredResponse(response.parsed_output, usage)
+            served_by = str(getattr(response, "model", "") or model)
+            return StructuredResponse(response.parsed_output, usage, served_by)
         logger.warning(
             f"{label}: invalid result on attempt {attempt}/{MAX_ATTEMPTS} "
             f"(request_id={response._request_id}): {'; '.join(problems)}"

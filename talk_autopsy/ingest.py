@@ -112,3 +112,23 @@ def download(url: str, out_dir: Path) -> Path:
     the file path. Stage 1.
     """
     raise NotImplementedError("stage 1")
+
+
+def compress_audio(wav: Path, out_flac: Path) -> Path:
+    """
+    A FLAC copy of a WAV (lossless, about half the size), for upload to a cloud
+    speech recognition engine; written to a temporary name first.
+    """
+    wav, out_flac = Path(wav), Path(out_flac)
+    if not wav.is_file():
+        raise FileNotFoundError(f"No such file: {wav}")
+    out_flac.parent.mkdir(parents=True, exist_ok=True)
+    partial = out_flac.with_name(out_flac.name + ".part.flac")
+    command = [_tool("ffmpeg"), "-hide_banner", "-loglevel", "error", "-y", "-i", str(wav),
+               "-c:a", "flac", "-compression_level", "8", str(partial)]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        partial.unlink(missing_ok=True)
+        raise RuntimeError(f"ffmpeg could not compress {wav.name}: {result.stderr.strip()[-500:]}")
+    partial.replace(out_flac)
+    return out_flac

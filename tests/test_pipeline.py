@@ -1,6 +1,7 @@
 """The pipeline end to end on a three-segment transcript: fake STT, stub aligner, fake Claude."""
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -8,6 +9,7 @@ from talk_autopsy import align as align_module
 from talk_autopsy import pipeline
 from talk_autopsy.correct import CorrectionAnswer
 from talk_autopsy.correct import SegmentText as FixSegment
+from talk_autopsy.glossary_auto import AutoGlossaryAnswer, AutoTerm
 from talk_autopsy.segments import Segment, Transcript, load_transcript
 from talk_autopsy.translate import SegmentText as RuSegment
 from talk_autopsy.translate import TranslationAnswer
@@ -31,6 +33,9 @@ class FakeSTT:
 
 
 def claude_handler(kwargs):
+    if kwargs["output_format"] is AutoGlossaryAnswer:
+        term = AutoTerm(term="Three", heard_as=[], kind="product", keep=True, translation="", note="")
+        return response(AutoGlossaryAnswer(terms=[term]))
     body = kwargs["messages"][0]["content"]
     found = re.findall(r"^\[(\d+)\] (.*)$", body.split("Segments to")[1], re.M)
     pairs = [(int(i), text) for i, text in found]
@@ -49,8 +54,9 @@ def setup(monkeypatch, tmp_path, sine):
     monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key")
     glossary = tmp_path / "g.md"
     glossary.write_text("| term | keep |\n|---|---|\n| Two | no |\n", encoding="utf-8")
-    settings = pipeline.RunSettings(source=sine, target_lang="ru", steps=list(pipeline.STEPS),
-                                    engine="gemini+align", glossary=glossary, work_root=tmp_path / "work")
+    steps = ["stt", "align", "fix", "translate", "srt"]
+    settings = pipeline.RunSettings(source=sine, target_lang="ru", steps=steps, engine="gemini+align",
+                                    glossary=glossary, work_root=tmp_path / "work")
     return settings, stt_calls
 
 
@@ -62,7 +68,7 @@ def test_all_steps_write_their_files(setup, fake_claude):
     work = settings.work_dir
     assert work.name == "sine"
     for name in ("audio.wav", "meta.json", "raw.json", "aligned.json", "fixed.json", "ru.json",
-                 "sine.ru.srt", "sine.en.srt"):
+                 "sine.ru.srt", "sine.en.srt", "sine.ru.ass", "sine.en.ass"):
         assert (work / name).is_file(), name
     aligned = load_transcript(work / "aligned.json")
     assert aligned.meta["timestamps"] == "aligned" and aligned.segments[1].start == pytest.approx(0.8)
@@ -114,6 +120,116 @@ def test_a_step_without_its_input_says_which_step_to_run(setup, fake_claude):
     settings.steps = ["fix"]
     with pytest.raises(pipeline.PipelineError, match="run the step that writes it"):
         pipeline.run(settings)
+
+
+# --- the default path: AssemblyAI, auto-glossary, key terms -----------------------------
+
+
+class FakeAssemblyAI:
+    def __init__(self, calls, fail=False):
+        self.calls, self.fail = calls, fail
+
+    def __call__(self, glossary_prompt):
+        self.glossary_prompt = glossary_prompt
+        return self
+
+    def transcribe(self, audio, glossary):
+        self.calls.append((Path(audio).name, self.glossary_prompt,
+                           [e.term for e in glossary.entries] if glossary else None))
+        if self.fail:
+            raise RuntimeError("service unavailable")
+        segments = [Segment(id=n, start=0.1 * n, end=0.1 * n + 0.1, text=t) for n, t in enumerate(TEXTS, 1)]
+        return Transcript(segments=segments, language="en", source="assemblyai universal-3-5-pro",
+                          meta={"timestamps": "measured", "cost_usd": 0.01, "audio_seconds": 2.0})
+
+
+@pytest.fixture
+def default_path(monkeypatch, tmp_path, sine):
+    calls = []
+    monkeypatch.setattr(pipeline, "make_assemblyai", FakeAssemblyAI(calls))
+    monkeypatch.setenv("ASSEMBLYAI_API_KEY", "aai-test-key")
+    glossary = tmp_path / "user.md"
+    rows = ["| term | keep | notes |", "|---|---|---|", "| Two | yes | from the user |"]
+    glossary.write_text(chr(10).join(rows) + chr(10), encoding="utf-8")
+    settings = pipeline.RunSettings(source=sine, target_lang="ru", steps=list(pipeline.STEPS),
+                                    glossary=glossary, context="Title: a test talk",
+                                    work_root=tmp_path / "work")
+    return settings, calls
+
+
+def stub_aligner(monkeypatch):
+    monkeypatch.setattr(align_module, "Wav2Vec2Emitter",
+                        lambda: StubEmitter(spoken([(10, "one"), (40, "two"), (70, "three")])))
+
+
+def test_default_path_runs_glossary_and_a_key_term_pass(default_path, fake_claude):
+    settings, calls = default_path
+    fake = fake_claude(claude_handler)
+    report = pipeline.run(settings)
+    work = settings.work_dir
+    for name in ("audio.flac", "raw.json", "glossary.auto.md", "glossary.md", "raw2.json", "aligned.json",
+                 "fixed.json", "ru.json", "sine.ru.srt", "sine.ru.ass", "sine.en.srt", "sine.en.ass"):
+        assert (work / name).is_file(), name
+    # both passes upload the compressed audio; the second gets the merged glossary as key terms
+    assert calls == [("audio.flac", False, None), ("audio.flac", True, ["Two", "Three"])]
+    assert [s.step for s in report.steps] == list(pipeline.STEPS)
+    assert report.stt_cost_usd == pytest.approx(0.02) and report.fallbacks == []
+    glossary_request, fix_request, translate_request = fake.requests
+    assert glossary_request["model"] == "claude-haiku-5-5" and "fallbacks" not in glossary_request
+    assert "Title: a test talk" in glossary_request["messages"][0]["content"]
+    # run turns the refusal fallback on for the Sonnet stages
+    assert fix_request["fallbacks"] == "default"
+    assert translate_request["betas"] == ["server-side-fallback-2026-07-01"]
+    assert "Title: a test talk" in fix_request["system"][0]["text"]
+    assert load_transcript(work / "fixed.json").meta["correction"]["refusal_fallback"] is True
+    assert set(report.subtitles) == {"sine.ru.srt", "sine.en.srt"}
+
+
+def test_assemblyai_failure_falls_back_and_skips_the_key_term_pass(default_path, fake_claude, monkeypatch):
+    settings, calls = default_path
+    monkeypatch.setattr(pipeline, "make_assemblyai", FakeAssemblyAI(calls, fail=True))
+    used = []
+
+    def fallback_engine(engine, cache_dir, progress, cache_only=False):
+        used.append(engine)
+        return FakeSTT([])
+    monkeypatch.setattr(pipeline, "make_stt", fallback_engine)
+    stub_aligner(monkeypatch)
+    fake_claude(claude_handler)
+    events = []
+    report = pipeline.run(settings, progress=events.append)
+    assert used == ["gemini+align"] and len(calls) == 1  # no second AssemblyAI call
+    raw = load_transcript(settings.work_dir / "raw.json")
+    assert raw.meta["fallback"]["to"] == "gemini+align"
+    assert "service unavailable" in raw.meta["fallback"]["reason"]
+    assert "passed_through" in load_transcript(settings.work_dir / "raw2.json").meta
+    assert load_transcript(settings.work_dir / "aligned.json").meta["timestamps"] == "aligned"
+    assert any(e.event == "fallback" for e in events) and report.fallbacks
+
+
+def test_without_a_gemini_key_the_fallback_is_faster_whisper(default_path, fake_claude, monkeypatch):
+    settings, calls = default_path
+    monkeypatch.setattr(pipeline, "make_assemblyai", FakeAssemblyAI(calls, fail=True))
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    used = []
+
+    def fallback_engine(engine, cache_dir, progress, cache_only=False):
+        used.append(engine)
+        return FakeSTT([])
+    monkeypatch.setattr(pipeline, "make_stt", fallback_engine)
+    fake_claude(claude_handler)
+    settings.steps = ["stt"]
+    pipeline.run(settings)
+    assert used == ["faster-whisper"]
+
+
+def test_missing_assemblyai_key_fails_before_any_work(default_path, monkeypatch):
+    from talk_autopsy.config import ConfigurationError
+    settings, calls = default_path
+    monkeypatch.setenv("ASSEMBLYAI_API_KEY", "")
+    with pytest.raises(ConfigurationError, match="ASSEMBLYAI_API_KEY"):
+        pipeline.run(settings)
+    assert calls == [] and not settings.work_dir.exists()
 
 
 # --- fix and translate commands ------------------------------------------------------

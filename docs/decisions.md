@@ -6,6 +6,18 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-09 — Refusal fallback on in `run`, off in experiments
+
+Owner instruction of 2026-11-09 (session prompt 06), revising the entry "no
+server-side refusal fallback" below: `talk-autopsy run`, the tool a viewer
+uses, sends `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`)
+on the Sonnet correction and translation calls, so a block the classifiers
+decline is answered by the fallback model instead of staying untranslated;
+the serving models are recorded in `meta.<stage>.served_by`. The experiment
+commands (`fix`, `translate`, and therefore every `eval` row) keep it off,
+so a benchmark row still describes one named model. The Haiku auto-glossary
+call has no server-side fallback (the API offers none for Haiku).
+
 ## 2026-11-09 — No meaning compression in translation; subtitles up to 3 lines
 
 Owner decision after rating C1 (`work/T2/C1-rating.md`, mean 3.85 against the

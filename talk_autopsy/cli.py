@@ -47,15 +47,17 @@ app = typer.Typer(
 
 # Pipeline order; `run --steps` takes any subset and keeps this order.
 STEPS: dict[str, str] = {
-    "stt": "speech recognition ({engine}) -> raw.json",
-    "align": "forced alignment of the words to the audio -> aligned.json",
+    "stt": "speech recognition ({engine}; first pass, compressed audio upload) -> raw.json",
+    "glossary": "auto-glossary ({helper}) merged with --glossary -> glossary.md",
+    "stt2": "speech recognition with the glossary as key terms -> raw2.json",
+    "align": "forced alignment where times are model estimates -> aligned.json",
     "fix": "Claude correction ({correction}) -> fixed.json",
     "translate": "Claude translation ({translation}) -> {lang}.json",
-    "srt": "subtitles -> .{lang}.srt and .en.srt",
+    "srt": "subtitles -> .{lang}.srt/.ass and .en.srt/.ass",
     "dub": "dubbed audio (edge-tts + ffmpeg) -> .{lang}.dub.m4a",
 }
-CLAUDE_STEPS = {"fix", "translate"}
-DEFAULT_STEPS = "stt,align,fix,translate,srt"
+CLAUDE_STEPS = {"glossary", "fix", "translate"}
+DEFAULT_STEPS = "stt,glossary,stt2,align,fix,translate,srt"
 
 
 def parse_steps(value: str) -> list[str]:
@@ -427,7 +429,11 @@ def run(
     steps: Annotated[str, typer.Option(help=f"Comma-separated, any of: {', '.join(STEPS)}.")] = DEFAULT_STEPS,
     engine: Annotated[str, typer.Option(help=f"Speech recognition: {' | '.join(pipeline.ENGINES)}.")]
     = pipeline.DEFAULT_ENGINE,
-    glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the video.")] = None,
+    glossary: Annotated[Path | None, typer.Option(
+        help="Your glossary (Markdown table); merged with the auto-glossary, your entries win.")] = None,
+    context: Annotated[str | None, typer.Option(
+        help="Video title, description, chapter titles: text, or a file holding it. "
+             "A local file's name is not context.")] = None,
     max_cost: Annotated[float, typer.Option(
         help="Stop before the Claude steps if their estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
@@ -437,7 +443,10 @@ def run(
         help="No Gemini call: reuse cached Gemini chunks, transcribe the rest with faster-whisper "
              "(for a day when the free quota is used up).")] = False,
 ) -> None:
-    """Run the pipeline on SOURCE; every step writes its file in work/<video-id>/ and skips if up to date."""
+    """
+    Run the pipeline on SOURCE; every step writes its file in work/<video-id>/ and skips if up to date.
+    Default: AssemblyAI, auto-glossary, AssemblyAI with key terms, correction, translation, subtitles.
+    """
     selected = parse_steps(steps)
     try:
         target_lang = config.check_lang(lang if lang is not None else config.TARGET_LANG)
@@ -455,11 +464,13 @@ def run(
     typer.echo(f"Target language: {target_lang}")
     typer.echo("Steps:")
     for number, name in enumerate(selected, start=1):
-        detail = STEPS[name].format(correction=config.CORRECTION_MODEL, translation=config.TRANSLATION_MODEL,
-                                    lang=target_lang, engine=engine)
+        detail = STEPS[name].format(correction=f"{correct.PROMPT_VERSION}, {config.CORRECTION_MODEL}",
+                                    translation=f"{translate.PROMPT_VERSION}, {config.TRANSLATION_MODEL}",
+                                    helper=config.HELPER_MODEL, lang=target_lang, engine=engine)
         typer.echo(f"  {number}. {name:<10} {detail}")
     settings = pipeline.RunSettings(source=Path(source), target_lang=target_lang, steps=selected,
                                     engine=engine, glossary=glossary, max_cost_usd=max_cost,
+                                    context=glossary_auto.read_context(context),
                                     gemini_cache_only=gemini_cache_only)
     try:
         pipeline.check_keys(settings)  # fail before any work, not after speech recognition
@@ -478,6 +489,9 @@ def run(
     typer.echo("Cost report:")
     for line in pipeline.cost_lines(report):
         typer.echo(line)
+    for name, r in report.subtitles.items():
+        typer.echo(f"  {name}: {r['cues']} cues, {r['share_above_17_cps'] * 100:.1f}% above 17 cps, "
+                   f"{r['share_above_25_cps'] * 100:.1f}% above 25 cps")
 
 
 FRAGMENT_ID = re.compile(r"^T\d+$")
