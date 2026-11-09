@@ -134,7 +134,7 @@ def test_fix_command_prints_the_estimate_and_writes_the_file(tmp_path, fake_clau
     result = CliRunner().invoke(cli.app, ["fix", str(_three_segments(tmp_path)), "--out", str(out)])
     assert result.exit_code == 0, result.output
     assert "Estimate: 1 block(s)" in result.output and "0 of 3 segments changed" in result.output
-    assert load_transcript(out).meta["correction"]["prompt_version"] == "correction-v1"
+    assert load_transcript(out).meta["correction"]["prompt_version"] == "correction-v2"
 
 
 def test_translate_command_stops_above_the_cost_limit(tmp_path, fake_claude):

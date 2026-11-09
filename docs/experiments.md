@@ -181,6 +181,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| B1 (v2) | 2026-11-09 | correction-v2 with the auto-glossary keeps the realistic pipeline at >= 85% term accuracy without false edits or words moved between segments | `correction-v2`, Sonnet, on AssemblyAI + auto key terms, auto-glossary; T2, T1 | term accuracy T2 96.26% -> 96.26%, T1 98.33% -> 98.33%; WER T2 4.73% -> 4.73%, T1 0.58% -> 0.50%; false edits 0; edits 0 / 2; 0.108 USD | the realistic pipeline is at 96.3% / 98.3%; correction adds nothing measurable on this input | correction-v2 is the default; owner checks `B2-review-v2.md` |
 | B5 | 2026-11-09 | a glossary drafted by Haiku from the first transcript covers >= 70% of the reference glossary | `glossary-auto-v1`, `claude-haiku-5-5`, raw AssemblyAI T2/T1, no context; two runs; then AssemblyAI with the auto terms | coverage T2 74.4% / 79.5%, T1 56.8% / 62.2%; STT terms with auto terms T2 96.3%, T1 98.3% (reference glossary: 99.1% / 100%); 0.0096 USD Claude, 0.084 USD AssemblyAI | met on T2, not on T1; the second pass keeps most of the keyterm gain | auto-glossary is the pipeline's glossary step |
 | C1 | 2026-11-09 | translation-v1 subtitles score >= 4.0 with the owner | owner rated 20 random T2 segments (one system, not yet blind) | mean 3.85; 5 x8, 4 x4, 3 x5, 2 x3 | under the target; all three 2s lose meaning through the compression rule | translation-v2 without meaning compression (decisions); blind comparison next |
 | B2 | 2026-11-09 | correction-v1 edits distort meaning in < 5% of cases | owner checked the 3 edits on T2 Gemini input | 0 of 3 distort meaning | met on a tiny sample | recorded; re-checked on v2 (`B2-review-v2.md`) |
@@ -193,6 +194,60 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### B1 (v2): correction-v2 on the realistic input
+
+- **Hypothesis:** with the input a real video gets — AssemblyAI with the
+  auto-glossary as key terms (B5) and the same auto-glossary given to
+  correction — correction-v2 keeps term accuracy at or above the stage 2
+  target (>= 85%, scored against the **reference** glossary) with no false
+  edits, and no longer moves words between segments.
+- **What changed from v1** (`talk_autopsy/prompts/correction-v2.md`): edits
+  stay inside a segment — no word moves to or from a neighbouring segment, a
+  garbled segment is left alone rather than rebuilt from its neighbours (the
+  full-talk run of v1 built an audience question out of the next segment's
+  words, giving cues at 77–85 characters per second); the glossary is
+  described as auto-drafted, with its "heard as" notes. Unchanged: fix only
+  recognition errors, keep wording, leave anything uncertain. Validator
+  (`correct.py`, for every version): a segment must keep >= 70% of its input
+  words in order unless the listed edits cover every change; no output segment
+  may hold a run of >= 3 words from a neighbouring input segment that its own
+  input lacks (counted only when at least two of those words are new to the
+  segment and not glossary words, so a one-word fix that happens to match a
+  neighbour is not taken for a move). Tests for both rules.
+- **Run:** 2026-11-09, `talk-autopsy fix --prompt correction-v2`,
+  `claude-sonnet-5-5`, blocks of 5 minutes, glossary
+  `work/T<n>/auto.glossary.md` (B5 run 1), inputs
+  `work/T<n>/raw.assemblyai+autoterms.json`. Scored with
+  `eval --raw <input>` against the reference transcripts and the reference
+  glossaries.
+- **Numbers:**
+
+  | | T2 | T1 |
+  |---|---|---|
+  | term accuracy, input -> corrected | 96.26% -> 96.26% (103/107) | 98.33% -> 98.33% (118/120) |
+  | WER, input -> corrected | 4.73% -> 4.73% | 0.58% -> 0.50% |
+  | false-edit rate | 0.00% (0 of 1964) | 0.00% (0 of 1200) |
+  | segments changed / edits | 0 / 0 | 2 / 2 |
+  | failed blocks / validator rejections | 0 / 0 | 0 / 0 |
+  | estimate / cost | 0.094 / 0.064 USD | 0.063 / 0.044 USD |
+
+  T1's two edits: "@claud" -> "@Claude" (the reference writes `@claude`, so the
+  term still counts as missed) and "Claude codes" -> "Claude Codes".
+- **Conclusion:** the realistic estimate of the whole English pipeline (first
+  pass, auto-glossary, second pass, correction) is **96.3% term accuracy on
+  T2 and 98.3% on T1**, above the 85% target, against 96.3% / 98.3% before
+  correction: on this input correction-v2 adds nothing measurable. The terms
+  still missed on T2 (daltonized, at-mention, WebFetch, stand-up) are not in
+  the auto-glossary in the reference's spelling, so neither the second pass
+  nor correction had them. Whether v2 still prevents moved words is not
+  tested here (no segment invited it); the validator tests cover the case.
+  Biases: AssemblyAI helped build both references; T1's reference was
+  decided by a Claude model; one run per fragment.
+- **Decision:** correction-v2 is the default prompt (`correct.PROMPT_VERSION`);
+  the owner checks the edits in `work/T2/B2-review-v2.md` (no T2 edit; the
+  two T1 edits as secondary evidence). Correction stays in the pipeline: on
+  faster-whisper or Gemini fallback input it did the most work (B1).
 
 ### B5: auto-glossary from the first transcript
 

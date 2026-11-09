@@ -5,7 +5,15 @@ import re
 import pytest
 
 from talk_autopsy import blocks, correct
-from talk_autopsy.correct import CorrectionAnswer, Edit, SegmentText, changed_share, validate_block
+from talk_autopsy.correct import (
+    CorrectionAnswer,
+    Edit,
+    SegmentText,
+    changed_share,
+    kept_share,
+    moved_runs,
+    validate_block,
+)
 from talk_autopsy.glossary import Glossary, GlossaryEntry
 from talk_autopsy.segments import Segment, Transcript, Word
 from tests.conftest import response
@@ -98,7 +106,7 @@ def test_correct_applies_fixes_keeps_ids_and_records_edits(fake_claude):
     assert result.segments[0].words is not None and result.segments[1].words is None  # changed: words dropped
     assert result.segments[1].start == t.segments[1].start
     c = result.meta["correction"]
-    assert c["prompt_version"] == "correction-v1" and c["segments_changed"] == 1
+    assert c["prompt_version"] == "correction-v2" and c["segments_changed"] == 1
     assert c["edits"][0]["reason"] == "product name" and c["failed_blocks"] == []
     assert result.meta["cost_usd"] == pytest.approx((1000 * 2 + 500 * 10) / 1e6)
     assert result.meta["input_wall_seconds"] == 60.0 and result.meta["timestamps"] == "aligned"
@@ -146,3 +154,59 @@ def test_estimate_counts_blocks_and_prices_them():
     e = correct.estimate(t, GLOSSARY, blocks.VideoContext(title="t"), model="claude-sonnet-5-5")
     assert e.blocks == 2 and e.input_tokens > 0 and e.output_tokens > 0
     assert e.usd == pytest.approx((e.input_tokens * 2 + e.output_tokens * 10) / 1e6)
+
+
+# --- edits stay inside their segment (correction-v2) ---------------------------------
+
+
+def test_kept_share_counts_words_in_order():
+    assert kept_share("how much have you used files", "how much have you used files") == 1.0
+    assert kept_share("one two three four", "one two") == 0.5
+    assert kept_share("", "anything") == 1.0
+
+
+def test_a_segment_that_loses_most_words_without_an_edit_is_rejected():
+    segments = [seg(1, "How much have you used files for machine learning?")]
+    answer = CorrectionAnswer(segments=[SegmentText(id=1, text="How much? Files.")], edits=[])
+    problems = validate_block(segments, Glossary(), answer)
+    assert any("keeps only" in p for p in problems), problems
+
+
+def test_a_low_kept_share_passes_when_the_edits_cover_every_change():
+    segments = [seg(1, "use cloth cold")]
+    answer = CorrectionAnswer(segments=[SegmentText(id=1, text="use Claude Code")],
+                              edits=[Edit(id=1, before="cloth cold", after="Claude Code", reason="product")])
+    assert not any("keeps only" in p for p in validate_block(segments, Glossary(), answer))
+
+
+def test_an_edit_that_does_not_cover_the_change_does_not_excuse_it():
+    segments = [seg(1, "how much have you used files")]
+    answer = CorrectionAnswer(segments=[SegmentText(id=1, text="how many bananas were eaten today")],
+                              edits=[Edit(id=1, before="files", after="today", reason="accent")])
+    assert any("keeps only" in p for p in validate_block(segments, Glossary(), answer))
+
+
+def test_words_pulled_from_the_next_segment_are_rejected():
+    # The full-T2 defect of correction-v1: a garbled question rebuilt from the next segment.
+    segments = [seg(1, "How much have you used files?"),
+                seg(2, "Claude Code for machine learning modeling and data analysis?")]
+    rebuilt = "How much have you used Claude Code for machine learning modeling?"
+    answer = CorrectionAnswer(segments=[SegmentText(id=1, text=rebuilt),
+                                        SegmentText(id=2, text=segments[1].text)],
+                              edits=[Edit(id=1, before="used files", after=rebuilt, reason="garbled")])
+    problems = validate_block(segments, GLOSSARY, answer)
+    assert any("segment 1 holds words of a neighbouring segment" in p for p in problems), problems
+
+
+def test_words_pulled_from_the_read_only_context_are_rejected():
+    context = [seg(9, "we ran the whole test suite last night")]
+    segments = [seg(10, "and then")]
+    answer = CorrectionAnswer(segments=[SegmentText(id=10, text="and then the whole test suite")], edits=[])
+    problems = validate_block(segments, Glossary(), answer, context)
+    assert any("neighbouring" in p for p in problems), problems
+
+
+def test_a_term_fix_that_matches_a_neighbour_is_not_a_move():
+    assert moved_runs("open quad code and", "open Claude Code and",
+                      ["open Claude Code and run it"], GLOSSARY) == []
+    assert moved_runs("I sink so", "I think so", ["I think so too"], Glossary()) == []

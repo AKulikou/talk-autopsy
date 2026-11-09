@@ -223,20 +223,25 @@ def fix_command(
     glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the video.")] = None,
     context: Annotated[Path | None, typer.Option(help="meta.json with title, description, chapters.")] = None,
     model: Annotated[str | None, typer.Option(help="Claude model. Default: CORRECTION_MODEL.")] = None,
+    prompt: Annotated[str, typer.Option(help=f"Prompt version: {' | '.join(correct.VERSIONS)}.")]
+    = correct.PROMPT_VERSION,
     max_cost: Annotated[float, typer.Option(help="Stop if the estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
 ) -> None:
-    """Claude correction of TRANSCRIPT (correction-v1): prints the estimate, then corrects block by block."""
+    """Claude correction of TRANSCRIPT: prints the estimate, then corrects block by block."""
+    if prompt not in correct.VERSIONS:
+        raise typer.BadParameter(f"unknown prompt {prompt!r}; known: {', '.join(correct.VERSIONS)}",
+                                 param_hint="--prompt")
     try:
         config.require_api_key()
     except ConfigurationError as e:
         _fail(str(e))
     source, terms, ctx = _stage_inputs(transcript, glossary, context)
     model = model or config.CORRECTION_MODEL
-    _confirm_cost(correct.estimate(source, terms, ctx, model), max_cost)
+    _confirm_cost(correct.estimate(source, terms, ctx, model, version=prompt), max_cost)
     _log_to_stderr()
     try:
-        result = correct.correct(source, terms, ctx, model=model,
+        result = correct.correct(source, terms, ctx, model=model, version=prompt,
                                  progress=lambda n, total: typer.echo(f"  block {n}/{total}", err=True))
     except (RuntimeError, ValueError, ConfigurationError) as e:
         _fail(str(e))
