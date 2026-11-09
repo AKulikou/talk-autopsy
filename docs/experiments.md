@@ -113,6 +113,28 @@ for AssemblyAI and Gemini, whose WER is biased in their favour:
 | AssemblyAI | 30 (26%) | 60 (82%) |
 | typed (no engine had it) | 29 (25%) | 1 (1%) |
 
+## T6 protocol
+
+T6 is the sealed hold-out of stage 2 (a workshop with a live demo, a
+non-native English accent). Its 10-minute window was cut blind on
+2026-11-09 by speech density only (`data/test-set/README.md`): 25:46–35:46 of
+41:24, 93.8% non-silent. Nothing else about it is known to the project.
+
+1. **Sealed until the freeze.** Nobody (the owner, the assistant, any prompt
+   or log) reads, transcribes or describes T6's content until `correction-v2`
+   (or its successor) and `translation-v2` (or its successor) are frozen with
+   a git tag. Before that, the only T6 facts allowed anywhere are durations and
+   silence statistics.
+2. **Then the reference.** After the tag, T6's reference is built as T1's and
+   T2's were (three engines, `adjudicate`, `resolve`), with one difference: the
+   owner adjudicates every span, the assistant decides none (T1's
+   assistant-decided reference is the reason). Its glossary is made the same
+   way as T2's, by the owner.
+3. **One run.** The frozen pipeline (`talk-autopsy run` with the tagged code,
+   the auto-glossary and no hand glossary) runs on T6 once. Its numbers are
+   recorded whatever they are; a prompt change after seeing them starts a new
+   version that T6 can no longer judge.
+
 ## Stage 1 summary
 
 Speech recognition on T1 (native speaker, 9:27) and T2 (strong accent, 10:00),

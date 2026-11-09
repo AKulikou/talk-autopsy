@@ -11,7 +11,7 @@ experiment to the next. T6 is a sealed hold-out.
 | T3 | conference talk | other non-native accent | TBD | TBD | TBD |
 | T4 | screen demo / tutorial | fast speech, code identifiers, shell commands | TBD | TBD | TBD |
 | T5 | university lecture | slow pace, long sentences | TBD | TBD | TBD |
-| T6 | sealed hold-out (another accent) | — | TBD | — | TBD |
+| T6 | workshop with live demo (sealed hold-out) | non-native English accent | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | sealed | sealed |
 
 ## What each fragment tests
 
@@ -31,8 +31,16 @@ experiment to the next. T6 is a sealed hold-out.
   transcribed for prompt work and not used during development; it runs once, at
   the stage 2 gate, with the prompts already frozen.
 
-T3–T6 are not chosen yet; they will be selected deliberately to cover the cases
+T3–T5 are not chosen yet; they will be selected deliberately to cover the cases
 above, not taken from whatever files are at hand.
+
+**How T6 was cut (blind, 2026-11-09).** Nobody listened to or transcribed the
+file. The 10-minute window was chosen by speech density alone: ffmpeg
+`silencedetect` (−35 dB, at least 0.5 s) on the whole audio, the first 5 and
+the last 3 minutes skipped, and the window (1-second steps) with the largest
+share of non-silent audio taken, the earliest on a tie. Result: 25:46–35:46,
+93.8% non-silent (the whole file: 92.5%, 245 silences). T6 stays sealed until
+the stage 2 prompts are frozen (`docs/experiments.md`, T6 protocol).
 
 ## Reference conventions
 
