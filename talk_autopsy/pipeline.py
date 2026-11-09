@@ -58,6 +58,7 @@ class RunSettings:
     max_cost_usd: float = config.COST_CONFIRMATION_USD
     correction_model: str = field(default_factory=lambda: config.CORRECTION_MODEL)
     translation_model: str = field(default_factory=lambda: config.TRANSLATION_MODEL)
+    gemini_cache_only: bool = False  # no Gemini call; uncached chunks go to faster-whisper
 
     @property
     def video_id(self) -> str:
@@ -114,7 +115,8 @@ def write_stamp(output: Path, inputs: dict[str, str]) -> None:
 # --- engines ----------------------------------------------------------------------
 
 
-def make_stt(engine: str, cache_dir: Path, progress: Callable[[ProgressEvent], None]):
+def make_stt(engine: str, cache_dir: Path, progress: Callable[[ProgressEvent], None],
+             gemini_cache_only: bool = False):
     """The stt step's transcriber; for gemini+align the chunked Gemini engine (the align step follows)."""
     if engine == "faster-whisper":
         import os
@@ -123,7 +125,7 @@ def make_stt(engine: str, cache_dir: Path, progress: Callable[[ProgressEvent], N
         return FasterWhisperTranscriber(cpu_threads=os.cpu_count() or 0)
     if engine in ("gemini", "gemini+align"):
         from talk_autopsy.stt.chunked import ChunkedGeminiTranscriber
-        return ChunkedGeminiTranscriber(cache_dir=cache_dir, progress=progress)
+        return ChunkedGeminiTranscriber(cache_dir=cache_dir, progress=progress, cache_only=gemini_cache_only)
     raise ValueError(f"unknown engine {engine!r}; known: {', '.join(ENGINES)}")
 
 
@@ -131,7 +133,7 @@ def check_keys(settings: RunSettings) -> None:
     """Raise ConfigurationError now for any key a selected step will need."""
     if CLAUDE_STEPS & set(settings.steps):
         config.require_api_key()
-    if "stt" in settings.steps and settings.engine.startswith("gemini"):
+    if "stt" in settings.steps and settings.engine.startswith("gemini") and not settings.gemini_cache_only:
         config.require_key("GEMINI_API_KEY")
 
 
@@ -188,11 +190,13 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
             emit("step-start", "audio", "extracting 16 kHz mono audio")
             ingest.extract_audio(source, audio)
             write_stamp(audio, source_stamp)
-        inputs = {"audio": file_sha256(audio), "engine": settings.engine}
+        inputs = {"audio": file_sha256(audio), "engine": settings.engine,
+                  "gemini_cache_only": str(settings.gemini_cache_only)}
         skipped = up_to_date(raw, inputs)
         if not skipped:
             emit("step-start", "stt", settings.engine)
-            transcript = make_stt(settings.engine, work / "chunks", emit_to).transcribe(audio, None)
+            transcript = make_stt(settings.engine, work / "chunks", emit_to,
+                                  settings.gemini_cache_only).transcribe(audio, None)
             save_transcript(transcript, raw)
             write_stamp(raw, inputs)
         step_done("stt", raw, skipped, 0.0, t0)

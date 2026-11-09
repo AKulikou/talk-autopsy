@@ -42,7 +42,8 @@ def claude_handler(kwargs):
 @pytest.fixture
 def setup(monkeypatch, tmp_path, sine):
     stt_calls = []
-    monkeypatch.setattr(pipeline, "make_stt", lambda engine, cache_dir, progress: FakeSTT(stt_calls))
+    monkeypatch.setattr(pipeline, "make_stt",
+                        lambda engine, cache_dir, progress, cache_only=False: FakeSTT(stt_calls))
     monkeypatch.setattr(align_module, "Wav2Vec2Emitter",
                         lambda: StubEmitter(spoken([(10, "one"), (40, "two"), (70, "three")])))
     monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key")

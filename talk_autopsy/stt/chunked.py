@@ -24,6 +24,11 @@ fallback, faster-whisper as the last resort, progress events.
   other Gemini model would work today, and falling through to faster-whisper
   for every remaining chunk would turn a 15-minute run into hours without
   anyone deciding it. Finished chunks stay cached for the rerun.
+- **Cache only** (`cache_only=True`, CLI `run --gemini-cache-only`): no Gemini
+  call at all; cached Gemini chunks are reused and every other chunk goes to
+  faster-whisper. For a day when the free quota is used up and the owner still
+  wants the whole video. Those faster-whisper chunks are not cached, so a later
+  normal run asks Gemini for them again. Recorded per chunk.
 - **Progress events** (requirement F13, for the future web UI): every step
   calls `progress(ProgressEvent)`; the CLI prints one line per event.
 
@@ -182,7 +187,8 @@ class ChunkedGeminiTranscriber:
                  cache_dir: Path | None = None, progress: ProgressCallback | None = None,
                  gemini_factory: Callable[[str], object] | None = None,
                  whisper_factory: Callable[[], object] | None = None,
-                 chunk_seconds: float = CHUNK_SECONDS, search_seconds: float = SEARCH_SECONDS):
+                 chunk_seconds: float = CHUNK_SECONDS, search_seconds: float = SEARCH_SECONDS,
+                 cache_only: bool = False):
         self.models = list(models or config.GEMINI_MODELS)
         if not self.models:
             raise ValueError("the Gemini model list is empty")
@@ -194,11 +200,18 @@ class ChunkedGeminiTranscriber:
         self.whisper_factory = whisper_factory or _default_whisper
         self.chunk_seconds = chunk_seconds
         self.search_seconds = search_seconds
+        self.cache_only = cache_only
         self.name = f"gemini chunked {' > '.join(self.models)}"
 
     def _chunk(self, wav: Path, glossary: Glossary | None, emit) -> tuple[Transcript, dict]:
         """Transcribe one chunk file: each model in turn, then faster-whisper. Returns it and its record."""
         errors: list[dict] = []
+        if self.cache_only:
+            errors.append({"model": None, "error": "cache only: no Gemini call", "failed_attempts": []})
+            emit("fallback", "Gemini calls are off (cache only); faster-whisper for this chunk")
+            result = self.whisper_factory().transcribe(wav, glossary)
+            return result, {"engine": "faster-whisper", "model": result.meta.get("model"), "errors": errors,
+                            "failed_attempts": []}
         for model in self.models:
             engine = self.gemini_factory(model)
             try:
@@ -269,7 +282,7 @@ class ChunkedGeminiTranscriber:
                             e.model) from e
                     record["cached"] = False
                     chunk.meta["chunk_record"] = record
-                    if cached_path is not None:
+                    if cached_path is not None and not (self.cache_only and record["engine"] != "gemini"):
                         save_transcript(chunk, cached_path)
                     state["engine"] = record.get("model") or record["engine"]
                 shifted, clamped = _shift(chunk.segments, start, end)
@@ -297,6 +310,7 @@ class ChunkedGeminiTranscriber:
             meta={
                 "engine": "gemini-chunked",
                 "models": self.models,
+                "cache_only": self.cache_only,
                 "glossary_prompt": self.glossary_prompt,
                 "prompt": prompt,
                 "input": audio_path.name,

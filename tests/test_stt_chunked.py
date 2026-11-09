@@ -190,3 +190,20 @@ def test_the_default_gemini_engine_has_no_quota_fallback_of_its_own():
     t = ChunkedGeminiTranscriber(models=["a"])
     inner = t.gemini_factory("a")
     assert isinstance(inner, gemini.GeminiTranscriber) and inner.quota_fallback is False
+
+
+def test_cache_only_reuses_gemini_chunks_and_calls_no_model(tmp_path, long_audio):
+    log = []
+    engine(tmp_path, log).transcribe(long_audio, None)  # all three chunks cached from Gemini
+    for path in sorted((tmp_path / "chunks").glob("chunk-003-*.json")):
+        path.unlink()  # chunk 3 never finished with Gemini
+    log.clear()
+    t = ChunkedGeminiTranscriber(models=["m1", "m2"], cache_dir=tmp_path / "chunks", cache_only=True,
+                                 gemini_factory=lambda model: FakeEngine(model, log),
+                                 whisper_factory=lambda: FakeEngine("whisper", log),
+                                 chunk_seconds=5.0, search_seconds=1.0).transcribe(long_audio, None)
+    assert [name for name, _ in log] == ["whisper"]
+    assert [c["engine"] for c in t.meta["chunks"]] == ["gemini", "gemini", "faster-whisper"]
+    assert t.meta["chunks"][2]["errors"][0]["error"] == "cache only: no Gemini call"
+    assert t.meta["cache_only"] is True
+    assert not list((tmp_path / "chunks").glob("chunk-003-*.json"))  # a later normal run asks Gemini again

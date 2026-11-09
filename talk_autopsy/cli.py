@@ -374,6 +374,10 @@ def run(
         help="Stop before the Claude steps if their estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Print the plan and stop.")] = False,
+    gemini_cache_only: Annotated[bool, typer.Option(
+        "--gemini-cache-only",
+        help="No Gemini call: reuse cached Gemini chunks, transcribe the rest with faster-whisper "
+             "(for a day when the free quota is used up).")] = False,
 ) -> None:
     """Run the pipeline on SOURCE; every step writes its file in work/<video-id>/ and skips if up to date."""
     selected = parse_steps(steps)
@@ -397,7 +401,8 @@ def run(
                                     lang=target_lang, engine=engine)
         typer.echo(f"  {number}. {name:<10} {detail}")
     settings = pipeline.RunSettings(source=Path(source), target_lang=target_lang, steps=selected,
-                                    engine=engine, glossary=glossary, max_cost_usd=max_cost)
+                                    engine=engine, glossary=glossary, max_cost_usd=max_cost,
+                                    gemini_cache_only=gemini_cache_only)
     try:
         pipeline.check_keys(settings)  # fail before any work, not after speech recognition
     except ConfigurationError as e:
