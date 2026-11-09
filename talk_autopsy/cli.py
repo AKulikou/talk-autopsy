@@ -21,6 +21,7 @@ from talk_autopsy.segments import load_transcript, save_transcript
 from talk_autopsy.stt import assemblyai
 from talk_autopsy.stt.assemblyai import AssemblyAITranscriber
 from talk_autopsy.stt.faster_whisper import FasterWhisperTranscriber
+from talk_autopsy.stt.gemini import GeminiTranscriber
 
 app = typer.Typer(
     help="English technical talks to subtitles in a target language.",
@@ -95,7 +96,7 @@ def _log_to_stderr() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per Hugging Face request otherwise
 
 
-ENGINES = ("faster-whisper", "assemblyai")
+ENGINES = ("faster-whisper", "assemblyai", "gemini")
 
 
 def make_engine(engine: str, model: str | None, glossary_prompt: bool):
@@ -104,6 +105,8 @@ def make_engine(engine: str, model: str | None, glossary_prompt: bool):
         return FasterWhisperTranscriber(model_size=model or "large-v3", glossary_prompt=glossary_prompt)
     if engine == "assemblyai":
         return AssemblyAITranscriber(model=model or assemblyai.MODEL, glossary_prompt=glossary_prompt)
+    if engine == "gemini":
+        return GeminiTranscriber(model=model, glossary_prompt=glossary_prompt)
     raise AssertionError(engine)  # _check_engine admits only ENGINES
 
 
@@ -123,11 +126,12 @@ def transcribe(
     = "faster-whisper",
     model: Annotated[str | None, typer.Option(
         help="Model of the engine. Default: large-v3 (faster-whisper), "
-             "universal-3-5-pro (assemblyai).")] = None,
+             "universal-3-5-pro (assemblyai), GEMINI_MODEL (gemini).")] = None,
     glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the fragment.")] = None,
     glossary_prompt: Annotated[bool, typer.Option(
         "--glossary-prompt",
-        help="Pass the glossary terms to the engine (Whisper prompt, AssemblyAI keyterms).")] = False,
+        help="Pass the glossary terms to the engine "
+             "(Whisper prompt, AssemblyAI keyterms, Gemini context).")] = False,
 ) -> None:
     """Speech recognition of AUDIO: faster-whisper on the CPU, or a cloud engine (the audio is uploaded)."""
     engine = _check_engine(engine)

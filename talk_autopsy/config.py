@@ -74,6 +74,18 @@ def require_key(name: str) -> str:
     return key
 
 
+# Gemini speech recognition (stt/gemini.py). Model list checked at
+# https://ai.google.dev/gemini-api/docs/models (now served from aistudio.google.com/docs)
+# on 2026-11-09: the flagship gemini-4-argon is not on the free tier, so the default
+# is the most capable free-tier model; on a quota rejection the engine retries
+# once with the fallback. GEMINI_TIER=free records cost 0 (tokens are still
+# recorded); paid records the estimate at list prices.
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-3.6-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
+GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "").strip() or DEFAULT_GEMINI_FALLBACK_MODEL
+GEMINI_TIER = os.getenv("GEMINI_TIER", "").strip().lower() or "free"
+
 # --- Target language -------------------------------------------------------
 
 # ISO 639-1 (or 639-3) code. The core never assumes a language: every stage takes

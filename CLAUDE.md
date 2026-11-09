@@ -32,6 +32,7 @@ uv run ruff check .                        # lint (config in pyproject.toml, tar
 uv run talk-autopsy cut <source> --start 00:00 --end 10:00 --out <file>.wav   # 16 kHz mono WAV
 uv run talk-autopsy transcribe <file>.wav --out work/T2/raw.whisper-large-v3.json   # faster-whisper, CPU
 uv run talk-autopsy transcribe <file>.wav --engine assemblyai --out work/T2/raw.assemblyai.json  # cloud, uploads audio
+uv run talk-autopsy transcribe <file>.wav --engine gemini --out work/T2/raw.gemini.json          # cloud, uploads audio
 uv run talk-autopsy draft <transcript>.json --out data/test-set/T2.draft.txt      # for proofreading
 uv run talk-autopsy ref-from-draft data/test-set/T2.draft.txt --out data/test-set/T2.ref.txt
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
@@ -49,7 +50,7 @@ after any change. Use the uv-managed Python 3.13, not the system `python`.
 - `talk_autopsy/segments.py` — `Transcript` / `Segment` / `Word`: the one JSON format every stage reads and writes; `assert_same_ids`
 - `talk_autopsy/ingest.py` — `extract_audio` (ffmpeg, optional cut), `probe` (duration), `parse_timecode`; `download` (yt-dlp) is a stage 1 stub
 - `talk_autopsy/glossary.py` — `Glossary`: a Markdown table per video (`T<n>.glossary.md`), format in the module docstring
-- `talk_autopsy/stt/` — `base.py` `Transcriber` protocol and `drop_wordless`; `faster_whisper.py` first engine (large-v3, int8, CPU; reads the WAV itself, see its docstring); `assemblyai.py` cloud engine (Universal-3.5 Pro, keyterms with `--glossary-prompt`)
+- `talk_autopsy/stt/` — `base.py` `Transcriber` protocol and `drop_wordless`; `faster_whisper.py` first engine (large-v3, int8, CPU; reads the WAV itself, see its docstring); `assemblyai.py` cloud engine (Universal-3.5 Pro, keyterms with `--glossary-prompt`); `gemini.py` cloud engine (Files API upload, verbatim JSON transcript; timestamps are model estimates, never for subtitles)
 - `talk_autopsy/metrics.py` — pure metric functions: `tokenize` (the one normalization), WER, term accuracy, false-edit rate, reading speed; timing drift is an interface only
 - `talk_autopsy/evaluation.py` — reads hypothesis/reference/glossary files, `evaluate`, the benchmark row and its append
 - `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import for hand-checked transcripts
