@@ -6,6 +6,18 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-09 — Gate 1 -> 2 passed: Gemini as the main engine
+
+Owner decision of 2026-11-09, given in advance in the session prompt of that
+day: if the stage 1 summary shows Gemini under the WER limit on T2, stage 1
+closes with Gemini as the main engine and stage 2 starts. The numbers: Gemini
+`gemini-3.8-flash` WER 2.34% on T2 (limit 15%) and 1.41% on T1; term accuracy
+93.5% / 99.2% without a glossary. Used as `gemini+align` (chunked Gemini plus
+forced alignment); faster-whisper large-v3 is the fallback. The engine
+freezes with the gate: speech recognition changes from here on go to the
+Backlog. Recorded by the assistant on the owner's instruction; the reference
+biases listed in the stage 1 summary stay attached to these numbers.
+
 ## 2026-11-09 — Gemini as the main engine (owner direction, pending the gate)
 
 The owner chose Gemini as the main speech recognition engine, on the free tier
