@@ -9,8 +9,9 @@ are returned as fractions (0.123), not percentages.
 Text normalization (shared by WER, term accuracy and false-edit rate) is
 `tokenize`: annotation markers such as `[inaudible]` are removed, punctuation is
 stripped from word edges but kept inside identifiers, whitespace is collapsed,
-and nothing is expanded (no numbers to words, no contractions, no spelling
-variants). WER lower-cases every token; term accuracy keeps the case so that
+the filler sounds uh, um, er, ah and hmm are removed (reference conventions in
+data/test-set/README.md), and nothing is expanded (no numbers to words, no
+contractions, no spelling variants). WER lower-cases every token; term accuracy keeps the case so that
 identifiers can be matched case-sensitively.
 """
 
@@ -32,6 +33,11 @@ _KEEP_LEADING = frozenset("@-./~$#")
 # Characters a token may keep at its end: C++, C#, src/, 50%.
 _KEEP_TRAILING = frozenset("+#/%")
 _LEADING_DOTS = re.compile(r"^\.{2,}")  # an ellipsis before a word is punctuation, not .env
+
+# Filler sounds that the reference conventions do not write. They are removed from
+# every text before scoring or alignment, so they never count as errors or
+# disagreements. "you know", "like", "so", "I mean" are words and stay.
+FILLERS = frozenset({"uh", "um", "er", "ah", "hmm"})
 
 _PREPARE = jiwer.Compose([
     jiwer.SubstituteRegexes({
@@ -70,7 +76,8 @@ def tokenize(text: str, lowercase: bool = True) -> list[str]:
        start with one of `@ - . / ~ $ #` (`-g`, `--steps`, `.env`, `/clear`) and
        end with one of `+ # / %` (`C++`, `src/`, `50%`).
     4. Pieces without a letter or digit (a lone dash, `...`) are dropped.
-    5. With `lowercase` (the default, used by WER) tokens are lower-cased.
+    5. Filler sounds (`FILLERS`: uh, um, er, ah, hmm; any case) are dropped.
+    6. With `lowercase` (the default, used by WER) tokens are lower-cased.
 
     Nothing is expanded or merged: `10` and `ten`, `open-source` and
     `open source`, `don't` and `do not` are different tokens.
@@ -79,9 +86,14 @@ def tokenize(text: str, lowercase: bool = True) -> list[str]:
     tokens = []
     for chunk in prepared.split():
         token = _strip_edges(chunk)
-        if any(ch.isalnum() for ch in token):
+        if any(ch.isalnum() for ch in token) and token.casefold() not in FILLERS:
             tokens.append(token.lower() if lowercase else token)
     return tokens
+
+
+def is_filler(word: str) -> bool:
+    """True if `word`, with edge punctuation stripped, is a filler sound (`FILLERS`)."""
+    return _strip_edges(_PREPARE(word)).casefold() in FILLERS
 
 
 def _joined(tokens: Sequence[str]) -> str:
@@ -174,16 +186,37 @@ def _token_matches(term_token: str, token: str) -> bool:
     return token == term_token if is_identifier(term_token) else token.casefold() == term_token.casefold()
 
 
+def plural_forms(word: str) -> list[str]:
+    """
+    Regular English plurals of `word`: `+s`, `+es`, and `y -> ies` after a
+    consonant (`diff` -> `diffs`, `box` -> `boxes`, `library` -> `libraries`).
+    No irregular plurals.
+    """
+    forms = [word + "s", word + "es"]
+    if len(word) > 1 and word[-1] in "yY" and word[-2].lower() not in "aeiou":
+        forms.append(word[:-1] + ("ies" if word[-1] == "y" else "IES"))
+    return forms
+
+
+def _last_token_matches(term_token: str, token: str) -> bool:
+    # The last word of a term may also be in a regular plural form: `pull request`
+    # matches `pull requests`. The case rule of the term applies to the plural too.
+    return _token_matches(term_token, token) or any(
+        _token_matches(plural, token) for plural in plural_forms(term_token))
+
+
 def _claim(term_tokens: list[str], tokens: list[str], claimed: list[bool]) -> int:
     """
     Count non-overlapping occurrences of `term_tokens` in `tokens` that use no
-    position claimed by another term, and claim the positions they use.
+    position claimed by another term, and claim the positions they use. The last
+    token of the term may be in a regular plural form (`plural_forms`).
     """
     count, i, n = 0, 0, len(term_tokens)
     while i + n <= len(tokens):
         window = range(i, i + n)
         if not any(claimed[j] for j in window) and all(
-            _token_matches(t, tokens[j]) for t, j in zip(term_tokens, window, strict=True)
+            (_last_token_matches if k == n - 1 else _token_matches)(t, tokens[j])
+            for k, (t, j) in enumerate(zip(term_tokens, window, strict=True))
         ):
             for j in window:
                 claimed[j] = True
@@ -209,7 +242,9 @@ def term_accuracy(reference: str, hypothesis: str, terms: Iterable[str]) -> Term
 
     Each term is tokenized like the texts (`tokenize`, case kept) and counted as a
     whole-token sequence: `npm` does not match inside `pnpm`, and `Claude Code`
-    matches only the two tokens in a row. Each token of a term is compared
+    matches only the two tokens in a row. The last token may also be in a regular
+    English plural (`plural_forms`): the glossary keeps the base form, and
+    `pull requests` counts for `pull request`. Each token of a term is compared
     case-sensitively if it is an identifier (`is_identifier`) and
     case-insensitively otherwise, so `GitHub` must be spelled `GitHub` while
     `subagent` may be `Subagent`.

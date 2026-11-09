@@ -218,3 +218,12 @@ def test_glossary_prompt_flag_needs_a_glossary_file(audio, tmp_path):
     result = runner.invoke(cli.app, ["transcribe", str(audio), "--out", str(tmp_path / "o.json"),
                                      "--glossary-prompt"])
     assert result.exit_code == 2 and "--glossary" in plain(result.output)
+
+
+def test_wordless_segments_are_dropped_and_ids_follow(fake_whisper, audio, monkeypatch):
+    dot = SimpleNamespace(start=63.0, end=64.0, text=" .", avg_logprob=-0.5, words=[])
+    monkeypatch.setattr(sys.modules[__name__], "SCRIPT", [SCRIPT[0], dot, SCRIPT[1]])
+    transcript = FasterWhisperTranscriber().transcribe(audio, None)
+    texts = [(s.id, s.text) for s in transcript.segments]
+    assert texts == [(1, "Open cloud code."), (2, "Then npm install.")]
+    assert transcript.meta["segments_dropped_wordless"] == 1

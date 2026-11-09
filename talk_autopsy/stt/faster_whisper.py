@@ -8,6 +8,10 @@ size 5, Silero VAD on, word timestamps, English. The only option is a glossary
 prompt (Whisper's `initial_prompt`), off by default: it is hypothesis A2 and is
 measured against the run without it.
 
+Segments whose text has no word (only `.`, typical at the end of the audio) are
+dropped before the transcript is written, and ids are assigned after dropping
+(reference conventions in data/test-set/README.md).
+
 Segment `confidence` is exp(avg_logprob). faster-whisper computes avg_logprob
 once per 30-second decoding window, so every segment decoded in the same window
 gets the same confidence; the per-word `probability` is the finer signal.
@@ -37,6 +41,7 @@ import numpy as np
 from talk_autopsy.glossary import Glossary
 from talk_autopsy.ingest import SAMPLE_RATE
 from talk_autopsy.segments import Segment, Transcript, Word
+from talk_autopsy.stt.base import drop_wordless
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +206,9 @@ class FasterWhisperTranscriber:
                             _mmss(info.duration), number, time.perf_counter() - started)
                 next_report = (piece.end // PROGRESS_EVERY_SECONDS + 1) * PROGRESS_EVERY_SECONDS
         transcribe_seconds = time.perf_counter() - started
+        segments, dropped = drop_wordless(segments)  # e.g. trailing "." segments; ids renumbered
+        if dropped:
+            logger.info("Dropped %d segment(s) with no word", dropped)
         realtime = info.duration / transcribe_seconds if transcribe_seconds > 0 else None
         logger.info("Transcribed %.1f s of audio in %.1f s (realtime factor %s; model load %.1f s)",
                     info.duration, transcribe_seconds, f"{realtime:.2f}" if realtime else "n/a", load_seconds)
@@ -220,6 +228,7 @@ class FasterWhisperTranscriber:
                 "glossary_prompt": self.glossary_prompt,
                 "initial_prompt": prompt,
                 "input": audio_path.name,
+                "segments_dropped_wordless": dropped,
                 "audio_seconds": round(info.duration, 3),
                 "audio_seconds_after_vad": round(getattr(info, "duration_after_vad", info.duration), 3),
                 "load_seconds": round(load_seconds, 1),

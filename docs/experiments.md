@@ -6,8 +6,9 @@ process are in [decisions.md](decisions.md).
 
 Entry format:
 
-- **ID:** `<stage>-<n>`, for example `S1-01` for the first speech recognition
-  hypothesis; a rerun of the same hypothesis keeps the ID with a suffix (`S1-01b`).
+- **ID:** the hypothesis name from the project plan: A1–A5, B1–B5, C1–C5,
+  D1–D4. A rerun of the same hypothesis gets a letter suffix (`A1b`); a
+  preparatory run that tests nothing gets `(setup)` (`A1 (setup)`).
 - **Hypothesis:** what is expected and why, written before the run.
 - **Run:** fragments, engine or prompt version, models, settings, date, commit.
 - **Numbers:** the metrics that the hypothesis is about, next to the baseline.
@@ -81,12 +82,6 @@ Ideas that come up during a stage and wait for a later one.
 - Segment confidence (A1): faster-whisper's `avg_logprob` is per 30-second
   window. For flagging doubtful segments for correction, use word probabilities
   (for example the minimum or mean per segment) instead.
-- Wordless segments (A1): T1 ends with two segments whose text is only `.`, at
-  the end of the audio. Decide in stage 1 whether the engine drops segments with
-  no word, which changes ids before any later stage sees them.
-- Glossary terms are counted as whole tokens, so a plural (`diffs`, `pull
-  requests`) does not match the singular term. Decide when the glossaries are
-  reviewed whether a term may list variants.
 
 - Server-side refusal fallback on the Claude calls (the docs recommend it for
   Sonnet 5.5 and Opus 5.5); decide when the correction stage is written.

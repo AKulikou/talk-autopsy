@@ -34,6 +34,22 @@ experiment to the next. T6 is a sealed hold-out.
 T3–T6 are not chosen yet; they will be selected deliberately to cover the cases
 above, not taken from whatever files are at hand.
 
+## Reference conventions
+
+How the reference transcripts are written. The rules marked *in code* are also
+applied by the metrics, so a hypothesis is not penalized for what the convention
+leaves out.
+
+| Case | Rule |
+|---|---|
+| Slash commands | written as typed: `/theme`, `/terminal-setup`, `/install-github-app` |
+| GitHub mention | `@claude` |
+| Fillers `uh`, `um`, `er`, `ah`, `hmm` | not written. *In code:* removed from every text by the metrics normalizer (`metrics.tokenize`, `metrics.FILLERS`) before scoring and before the three-engine alignment, so they never count as WER errors or disagreements |
+| `you know`, `like`, `so`, `I mean` | written: they are words |
+| Plurals of glossary terms | the glossary keeps the base form. *In code:* term matching also accepts the regular English plural (`-s`, `-es`, `y` -> `ies`) of the last word of a term (`diffs`, `pull requests`, `libraries`) |
+| Numbers | digits |
+| Hallucinated lines, segments with no word (only `.`) | removed. *In code:* the speech recognition engines drop wordless segments before writing a transcript; ids are assigned after dropping |
+
 ## File naming
 
 | File | Content | In the repository |

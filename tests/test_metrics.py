@@ -202,3 +202,45 @@ def test_reading_speed_per_cue_and_share_above_threshold():
 def test_reading_speed_rejects_bad_cues(cues):
     with pytest.raises(ValueError):
         reading_speed(cues)
+
+
+# --- reference conventions: fillers and plurals ----------------------------
+
+
+def test_filler_sounds_are_removed_in_any_case():
+    assert tokenize("Um, so uh I mean, er... Hmm. Ah, you know, like this") == [
+        "so", "i", "mean", "you", "know", "like", "this"]
+
+
+def test_fillers_never_count_as_wer_errors():
+    result = word_error_rate("open the terminal", "Um, open uh the terminal, hmm.")
+    assert result.wer == 0 and result.insertions == 0
+
+
+def test_is_filler_ignores_edge_punctuation():
+    assert metrics.is_filler("Um,") and metrics.is_filler("hmm...") and not metrics.is_filler("umbrella")
+
+
+@pytest.mark.parametrize("term, spoken", [
+    ("diff", "two diffs"),
+    ("pull request", "open pull requests"),
+    ("library", "three libraries"),
+    ("box", "the boxes"),
+])
+def test_regular_plural_of_the_last_word_matches_the_term(term, spoken):
+    result = term_accuracy(spoken, spoken, [term])
+    assert result.rows[0].expected == 1 and result.accuracy == 1.0
+
+
+def test_plural_is_accepted_only_on_the_last_word():
+    assert term_accuracy("pulls request", "pulls request", ["pull request"]).rows == []
+
+
+def test_plural_keeps_the_identifier_case_rule():
+    result = term_accuracy("two PRs", "two prs", ["PR"])
+    assert result.rows[0].found == 0
+
+
+def test_plural_forms():
+    assert metrics.plural_forms("library") == ["librarys", "libraryes", "libraries"]
+    assert "keies" not in metrics.plural_forms("key")
