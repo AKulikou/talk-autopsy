@@ -1,7 +1,7 @@
 """
 Command line: `cut`, `transcribe` (faster-whisper or a cloud engine), `align`,
-`srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval` (work now) and
-`run` (prints the plan).
+`fix`, `translate`, `srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`,
+`eval` and `run` (the pipeline, pipeline.py).
 
 Only argument parsing and printing live here; the stages are plain functions in
 the package, so a web UI can call them the same way later.
@@ -18,7 +18,17 @@ import typer
 
 from talk_autopsy import adjudicate as consensus_module
 from talk_autopsy import align as align_module
-from talk_autopsy import config, evaluation, ingest, proofread, subtitles
+from talk_autopsy import (
+    blocks,
+    config,
+    correct,
+    evaluation,
+    ingest,
+    pipeline,
+    proofread,
+    subtitles,
+    translate,
+)
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
 from talk_autopsy.segments import load_transcript, save_transcript
@@ -36,14 +46,15 @@ app = typer.Typer(
 
 # Pipeline order; `run --steps` takes any subset and keeps this order.
 STEPS: dict[str, str] = {
-    "stt": "speech recognition (faster-whisper large-v3, CPU) -> raw.json",
+    "stt": "speech recognition ({engine}) -> raw.json",
+    "align": "forced alignment of the words to the audio -> aligned.json",
     "fix": "Claude correction ({correction}) -> fixed.json",
     "translate": "Claude translation ({translation}) -> {lang}.json",
     "srt": "subtitles -> .{lang}.srt and .en.srt",
     "dub": "dubbed audio (edge-tts + ffmpeg) -> .{lang}.dub.m4a",
 }
 CLAUDE_STEPS = {"fix", "translate"}
-DEFAULT_STEPS = "stt,fix,translate,srt"
+DEFAULT_STEPS = "stt,align,fix,translate,srt"
 
 
 def parse_steps(value: str) -> list[str]:
@@ -189,6 +200,85 @@ def transcribe(
 ForceOption = Annotated[bool, typer.Option("--force", help="Overwrite OUT if it exists.")]
 
 
+def _stage_inputs(transcript: Path, glossary: Path | None, context: Path | None):
+    try:
+        source = load_transcript(transcript)
+        terms = load_glossary(glossary) if glossary is not None else parse_glossary("")
+    except (FileNotFoundError, ValueError, GlossaryError) as e:
+        _fail(str(e))
+    return source, terms, blocks.load_context(context)
+
+
+def _confirm_cost(estimate, max_cost: float) -> None:
+    typer.echo(f"Estimate: {estimate.line()}")
+    if estimate.usd > max_cost:
+        _fail(f"the estimate is above --max-cost {max_cost:.2f} USD; raise it to confirm")
+
+
+@app.command(name="fix")
+def fix_command(
+    transcript: Annotated[Path, typer.Argument(help="Raw or aligned transcript JSON.")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="Corrected transcript JSON to write.")],
+    glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the video.")] = None,
+    context: Annotated[Path | None, typer.Option(help="meta.json with title, description, chapters.")] = None,
+    model: Annotated[str | None, typer.Option(help="Claude model. Default: CORRECTION_MODEL.")] = None,
+    max_cost: Annotated[float, typer.Option(help="Stop if the estimate is above this (USD).")]
+    = config.COST_CONFIRMATION_USD,
+) -> None:
+    """Claude correction of TRANSCRIPT (correction-v1): prints the estimate, then corrects block by block."""
+    try:
+        config.require_api_key()
+    except ConfigurationError as e:
+        _fail(str(e))
+    source, terms, ctx = _stage_inputs(transcript, glossary, context)
+    model = model or config.CORRECTION_MODEL
+    _confirm_cost(correct.estimate(source, terms, ctx, model), max_cost)
+    _log_to_stderr()
+    try:
+        result = correct.correct(source, terms, ctx, model=model,
+                                 progress=lambda n, total: typer.echo(f"  block {n}/{total}", err=True))
+    except (RuntimeError, ValueError, ConfigurationError) as e:
+        _fail(str(e))
+    save_transcript(result, out)
+    c = result.meta["correction"]
+    typer.echo(f"Wrote {out}: {c['segments_changed']} of {len(result.segments)} segments changed, "
+               f"{len(c['edits'])} edits, {len(c['failed_blocks'])} failed blocks; {c['cost_usd']:.4f} USD "
+               f"({c['usage']['input_tokens']} in, {c['usage']['cache_creation_input_tokens']} cache write, "
+               f"{c['usage']['cache_read_input_tokens']} cache read, {c['usage']['output_tokens']} out)")
+
+
+@app.command(name="translate")
+def translate_command(
+    transcript: Annotated[Path, typer.Argument(help="Corrected transcript JSON.")],
+    out: Annotated[Path, typer.Option("--out", "-o", help="Translated transcript JSON to write.")],
+    lang: Annotated[str | None, typer.Option(help="Target language code. Default: TARGET_LANG.")] = None,
+    glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the video.")] = None,
+    context: Annotated[Path | None, typer.Option(help="meta.json with title, description, chapters.")] = None,
+    model: Annotated[str | None, typer.Option(help="Claude model. Default: TRANSLATION_MODEL.")] = None,
+    max_cost: Annotated[float, typer.Option(help="Stop if the estimate is above this (USD).")]
+    = config.COST_CONFIRMATION_USD,
+) -> None:
+    """Claude translation of TRANSCRIPT into --lang (translation-v1)."""
+    try:
+        config.require_api_key()
+        target_lang = config.check_lang(lang if lang is not None else config.TARGET_LANG)
+    except ConfigurationError as e:
+        _fail(str(e))
+    source, terms, ctx = _stage_inputs(transcript, glossary, context)
+    model = model or config.TRANSLATION_MODEL
+    _confirm_cost(translate.estimate(source, terms, target_lang, ctx, model), max_cost)
+    _log_to_stderr()
+    try:
+        result = translate.translate(source, terms, target_lang, model=model, context=ctx,
+                                     progress=lambda n, total: typer.echo(f"  block {n}/{total}", err=True))
+    except (RuntimeError, ValueError, ConfigurationError) as e:
+        _fail(str(e))
+    save_transcript(result, out)
+    tr = result.meta["translation"]
+    typer.echo(f"Wrote {out}: {len(result.segments)} segments in {target_lang}, "
+               f"{len(tr['failed_blocks'])} failed blocks; {tr['cost_usd']:.4f} USD")
+
+
 @app.command(name="srt")
 def srt_command(
     transcript: Annotated[Path, typer.Argument(help="Transcript JSON (aligned English or a translation).")],
@@ -277,13 +367,25 @@ def run(
     source: Annotated[str, typer.Argument(help="Video URL or local file.")],
     lang: Annotated[str | None, typer.Option(help="Target language code. Default: TARGET_LANG.")] = None,
     steps: Annotated[str, typer.Option(help=f"Comma-separated, any of: {', '.join(STEPS)}.")] = DEFAULT_STEPS,
+    engine: Annotated[str, typer.Option(help=f"Speech recognition: {' | '.join(pipeline.ENGINES)}.")]
+    = pipeline.DEFAULT_ENGINE,
+    glossary: Annotated[Path | None, typer.Option(help="Glossary Markdown table of the video.")] = None,
+    max_cost: Annotated[float, typer.Option(
+        help="Stop before the Claude steps if their estimate is above this (USD).")]
+    = config.COST_CONFIRMATION_USD,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Print the plan and stop.")] = False,
 ) -> None:
-    """Run the pipeline on SOURCE. Not implemented yet: prints the plan and stops."""
+    """Run the pipeline on SOURCE; every step writes its file in work/<video-id>/ and skips if up to date."""
     selected = parse_steps(steps)
     try:
         target_lang = config.check_lang(lang if lang is not None else config.TARGET_LANG)
     except ConfigurationError as e:
         raise typer.BadParameter(str(e), param_hint="--lang") from None
+    if engine not in pipeline.ENGINES:
+        raise typer.BadParameter(f"unknown engine {engine!r}; known: {', '.join(pipeline.ENGINES)}",
+                                 param_hint="--engine")
+    if "dub" in selected:
+        raise typer.BadParameter("dub arrives in stage 4", param_hint="--steps")
     if not is_url(source) and not Path(source).is_file():
         _fail(f"No such file: {source}")
 
@@ -291,19 +393,28 @@ def run(
     typer.echo(f"Target language: {target_lang}")
     typer.echo("Steps:")
     for number, name in enumerate(selected, start=1):
-        detail = STEPS[name].format(
-            correction=config.CORRECTION_MODEL, translation=config.TRANSLATION_MODEL, lang=target_lang
-        )
+        detail = STEPS[name].format(correction=config.CORRECTION_MODEL, translation=config.TRANSLATION_MODEL,
+                                    lang=target_lang, engine=engine)
         typer.echo(f"  {number}. {name:<10} {detail}")
-
-    if CLAUDE_STEPS & set(selected):
-        try:
-            config.require_api_key()  # fail before any work, not after speech recognition
-        except ConfigurationError as e:
-            _fail(str(e))
-    typer.secho("Not implemented yet: the stages arrive with stage 1 and later.",
-                fg=typer.colors.YELLOW, err=True)
-    raise typer.Exit(1)
+    settings = pipeline.RunSettings(source=Path(source), target_lang=target_lang, steps=selected,
+                                    engine=engine, glossary=glossary, max_cost_usd=max_cost)
+    try:
+        pipeline.check_keys(settings)  # fail before any work, not after speech recognition
+    except ConfigurationError as e:
+        _fail(str(e))
+    if dry_run:
+        return
+    if is_url(source):
+        _fail("Downloading a URL is not implemented yet; download the video and pass the file.")
+    _log_to_stderr()
+    try:
+        report = pipeline.run(settings, progress=_print_progress)
+    except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError, GlossaryError) as e:
+        _fail(str(e))
+    typer.echo(f"Done: {settings.work_dir}")
+    typer.echo("Cost report:")
+    for line in pipeline.cost_lines(report):
+        typer.echo(line)
 
 
 FRAGMENT_ID = re.compile(r"^T\d+$")

@@ -33,30 +33,31 @@ def test_cut_past_the_end_fails_cleanly(sine, tmp_path):
     assert "past the end" in result.output
 
 
-def test_run_prints_the_plan_and_stops(sine):
-    result = runner.invoke(cli.app, ["run", str(sine), "--lang", "ru"])
-    assert result.exit_code == 1
+def test_run_dry_run_prints_the_plan(sine):
+    result = runner.invoke(cli.app, ["run", str(sine), "--lang", "ru", "--dry-run"])
+    assert result.exit_code == 0, result.output
     assert "Target language: ru" in result.output
-    for step in ("stt", "fix", "translate", "srt"):
+    for step in ("stt", "align", "fix", "translate", "srt"):
         assert step in result.output
-    assert "Not implemented yet" in result.output
 
 
 def test_target_language_is_a_parameter(sine):
-    result = runner.invoke(cli.app, ["run", str(sine), "--lang", "de", "--steps", "translate,srt"])
+    args = ["run", str(sine), "--lang", "de", "--steps", "translate,srt", "--dry-run"]
+    result = runner.invoke(cli.app, args)
     assert "Target language: de" in result.output
     assert "-> de.json" in result.output and ".de.srt" in result.output
 
 
 def test_default_language_comes_from_config(sine, monkeypatch):
     monkeypatch.setattr(config, "TARGET_LANG", "uk")
-    result = runner.invoke(cli.app, ["run", str(sine), "--steps", "stt"])
+    result = runner.invoke(cli.app, ["run", str(sine), "--steps", "stt", "--dry-run"])
     assert "Target language: uk" in result.output
 
 
 @pytest.mark.parametrize("steps, expected", [
     ("srt,stt", ["stt", "srt"]),
     (" STT , fix ", ["stt", "fix"]),
+    ("align,stt", ["stt", "align"]),
     ("dub", ["dub"]),
 ])
 def test_steps_are_kept_in_pipeline_order(steps, expected):
@@ -68,6 +69,8 @@ def test_steps_are_kept_in_pipeline_order(steps, expected):
     (["--steps", "stt,stt"], "listed twice"),
     (["--steps", ","], "at least one step"),
     (["--lang", "russian"], "ISO 639"),
+    (["--engine", "vosk"], "unknown engine"),
+    (["--steps", "dub"], "stage 4"),
 ])
 def test_bad_arguments_are_usage_errors(sine, args, message):
     result = runner.invoke(cli.app, ["run", str(sine), *args])
@@ -81,9 +84,11 @@ def test_missing_local_file(tmp_path):
     assert "No such file" in result.output
 
 
-def test_url_source_is_accepted_without_a_download():
-    result = runner.invoke(cli.app, ["run", "https://example.com/watch?v=x", "--steps", "stt"])
-    assert "(URL)" in result.output and "Not implemented yet" in result.output
+def test_url_source_is_not_downloaded_yet():
+    args = ["run", "https://example.com/watch?v=x", "--steps", "stt", "--engine", "faster-whisper"]
+    result = runner.invoke(cli.app, args)
+    assert "(URL)" in result.output and result.exit_code == 1
+    assert "not implemented yet" in result.output
 
 
 def test_claude_steps_fail_fast_without_a_key(sine, monkeypatch):
@@ -93,7 +98,14 @@ def test_claude_steps_fail_fast_without_a_key(sine, monkeypatch):
     assert "ANTHROPIC_API_KEY is missing" in result.output
 
 
+def test_gemini_engine_fails_fast_without_its_key(sine, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    result = runner.invoke(cli.app, ["run", str(sine), "--steps", "stt", "--engine", "gemini+align"])
+    assert result.exit_code == 1 and "GEMINI_API_KEY is not set" in result.output
+
+
 def test_steps_without_claude_need_no_key(sine, monkeypatch):
     monkeypatch.setenv(config.API_KEY_ENV_VAR, "")
-    result = runner.invoke(cli.app, ["run", str(sine), "--steps", "stt,srt"])
-    assert "API_KEY" not in result.output and "Not implemented yet" in result.output
+    args = ["run", str(sine), "--steps", "stt,srt", "--engine", "faster-whisper", "--dry-run"]
+    result = runner.invoke(cli.app, args)
+    assert result.exit_code == 0 and "API_KEY" not in result.output
