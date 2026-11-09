@@ -202,6 +202,21 @@ def test_consensus_survives_the_json_round_trip():
     assert again == result
 
 
+def test_whisper_word_pieces_are_joined_back_to_the_written_word():
+    pieces = [Word(start=0, end=0.4, text="up"), Word(start=0.4, end=0.9, text="-level"),
+              Word(start=1.0, end=1.5, text="Q"), Word(start=1.5, end=1.9, text="&A.")]
+    segment = Segment(id=1, start=0, end=2, text="up-level Q&A.", words=pieces)
+    assert adj.rejoin_words(segment) == [("up-level", 0, 0.9), ("Q&A.", 1.0, 1.9)]
+    tokens = adj.backbone_tokens(Transcript(segments=[segment], language="en", source="x"))
+    assert [t.norm for t in tokens] == ["up-level", "q&a"]
+
+
+def test_word_pieces_that_do_not_rebuild_the_text_are_used_as_they_are():
+    pieces = [Word(start=0, end=0.4, text="up"), Word(start=0.4, end=0.9, text="level")]
+    segment = Segment(id=1, start=0, end=1, text="up-level", words=pieces)
+    assert adj.rejoin_words(segment) == [("up", 0, 0.4), ("level", 0.4, 0.9)]
+
+
 def test_backbone_without_word_timings_is_refused():
     no_words = Transcript(segments=[Segment(id=1, start=0, end=1, text="hello there")], language="en",
                           source="x")

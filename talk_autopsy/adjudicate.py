@@ -83,6 +83,31 @@ def _tokens_of_word(text: str, start: float | None = None, end: float | None = N
     return [Token(c.lower(), c, c, start, end) for c in cased]
 
 
+def rejoin_words(segment) -> list[tuple[str, float, float]]:
+    """
+    The segment's words as written in its text, with timings. faster-whisper
+    splits some written words into pieces (`up` + `-level`, `Q` + `&A.`) whose
+    spaces it drops; the pieces are joined back to each whitespace-separated word
+    of the segment text, from the first piece's start to the last one's end. If
+    the pieces do not rebuild the text exactly, the words are used as they are.
+    """
+    words = segment.words or []
+    as_is = [(w.text.strip(), w.start, w.end) for w in words]
+    joined, i = [], 0
+    for chunk in segment.text.split():
+        if i >= len(words):
+            return as_is
+        text, start, end = words[i].text.strip(), words[i].start, words[i].end
+        i += 1
+        while text != chunk and i < len(words) and chunk.startswith(text):
+            text, end = text + words[i].text.strip(), words[i].end
+            i += 1
+        if text != chunk:
+            return as_is
+        joined.append((text, start, end))
+    return joined if i == len(words) else as_is
+
+
 def backbone_tokens(transcript: Transcript) -> list[Token]:
     """Timed tokens of the backbone transcript; every segment must have word timings."""
     tokens: list[Token] = []
@@ -92,8 +117,8 @@ def backbone_tokens(transcript: Transcript) -> list[Token]:
                 raise AdjudicationError(f"backbone segment {segment.id} has text but no word timings; "
                                         "the backbone must be a transcript with words (faster-whisper)")
             continue
-        for word in segment.words:
-            tokens.extend(_tokens_of_word(word.text, word.start, word.end))
+        for text, start, end in rejoin_words(segment):
+            tokens.extend(_tokens_of_word(text, start, end))
     if not tokens:
         raise AdjudicationError("the backbone has no words")
     return tokens
