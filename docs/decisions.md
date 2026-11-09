@@ -6,6 +6,24 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-09 — reference transcripts by three-engine consensus, not proofreading
+
+The owner is not a native English speaker, so a reference proofread by ear from
+one engine's draft would carry the owner's own errors into every metric. The
+reference is built instead from what three independent engines agree on
+(faster-whisper large-v3 locally, AssemblyAI Universal-3.5 Pro, Gemini), and
+the owner decides only the spans where they disagree, each with a short clip and
+the competing variants. Sending the test-set audio to AssemblyAI and Google for
+this was approved by the owner. The drafts from the first Whisper run are
+superseded and not proofread.
+
+What it rules out: claiming that AssemblyAI or Gemini scores are unbiased. Both
+helped build the reference, so their WER against it is biased in their favour;
+the protocol (how often each engine's variant was chosen in the disputed spans)
+is the fairer comparison for them. Where two engines share the same error
+(on T2 both faster-whisper and AssemblyAI heard "Quadcode" for "Claude Code"),
+the majority pre-mark is wrong and only the owner's listening catches it.
+
 ## 2026-11-09 — T1 and T2 from the files at hand; T3–T6 selected deliberately
 
 T1 (a conference talk with a live demo, 9:27) and T2 (a talk with a strong regional accent, first 10:00 of 27:52) come from videos already on this machine, because

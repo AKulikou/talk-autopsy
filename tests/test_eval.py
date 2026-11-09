@@ -111,7 +111,7 @@ def test_missing_reference_points_to_ref_from_draft(test_set, tmp_path):
     hyp = tmp_path / "hyp.txt"
     hyp.write_text("x", encoding="utf-8")
     result = runner.invoke(cli.app, ["eval", "T8", "--hyp", str(hyp)])
-    assert result.exit_code == 1 and "ref-from-draft" in result.output
+    assert result.exit_code == 1 and "resolve T" in result.output
 
 
 def test_bad_fragment_id_is_rejected(test_set, tmp_path):

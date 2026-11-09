@@ -269,8 +269,9 @@ def eval_command(
         raise typer.BadParameter("--record needs --engine and --stage", param_hint="--record")
     ref_path = config.TEST_SET_DIR / f"{fragment}.ref.txt"
     if not ref_path.is_file():
-        _fail(f"No reference transcript {ref_path}. Proofread the draft, then run "
-              f"talk-autopsy ref-from-draft data/test-set/{fragment}.draft.txt --out {ref_path}")
+        _fail(f"No reference transcript {ref_path}. Build it with talk-autopsy adjudicate {fragment} "
+              f"..., decide the spans in data/test-set/{fragment}.adjudication.md, then run "
+              f"talk-autopsy resolve {fragment}")
     glossary_path = config.TEST_SET_DIR / f"{fragment}.glossary.md"
     try:
         reference = ref_path.read_text(encoding="utf-8")

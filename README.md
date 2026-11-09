@@ -29,7 +29,7 @@ comes with a number and the method behind it.
 
   | Metric | What it measures |
   |---|---|
-  | WER | word error rate of the English transcript against a reference checked by hand |
+  | WER | word error rate of the English transcript against a reference built from three engines' agreement, with every disagreement decided by ear |
   | Term accuracy | share of glossary terms that come out right in the transcript and the translation |
   | False-edit rate | share of correction edits that change words that were already right |
   | Blind translation score | 1–5 rating by a reader who does not know which system wrote it |
@@ -120,7 +120,7 @@ Claude stages behind it are not implemented yet.
 
 ```
 talk_autopsy/
-  cli.py                   command line: cut, transcribe, draft, ref-from-draft, eval, run
+  cli.py                   command line: cut, transcribe, adjudicate, resolve, eval, run, ...
   config.py                API key check, target language, models, prices, paths
   segments.py              Transcript / Segment / Word: the format every stage uses
   ingest.py                audio extraction and cut (ffmpeg), duration (ffprobe)
@@ -128,7 +128,8 @@ talk_autopsy/
   stt/                     speech recognition interface and engines (faster-whisper)
   metrics.py               WER, term accuracy, false-edit rate, reading speed
   evaluation.py            scoring a transcript file against the test set, benchmark rows
-  proofread.py             drafts for hand-checked reference transcripts
+  adjudicate.py            reference transcripts by three-engine consensus
+  proofread.py             draft export and import (superseded by adjudicate)
   correct.py               Claude correction (stage 2)
   translate.py             Claude translation (stage 2)
   subtitles.py             .srt output (stage 3)
@@ -161,7 +162,8 @@ Python 3.13 for every push.
 Status: **stage 0, foundation. Nothing has been measured yet.** The repository,
 the data format, the audio cut, the metrics, the first speech recognition engine
 and two of the six test fragments are in place; the reference transcripts are
-being checked by hand. The Claude stages, subtitles and dubbing are stubs.
+being built by consensus of three engines (faster-whisper, AssemblyAI, Gemini),
+with the owner deciding only the spans where they disagree. The Claude stages, subtitles and dubbing are stubs.
 
 | Stage | Content | Gate |
 |---|---|---|

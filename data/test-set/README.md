@@ -56,8 +56,10 @@ leaves out.
 |---|---|---|
 | `T<n>.source.mp4` | the original video or audio | no |
 | `T<n>.wav` | 16 kHz mono audio of the fragment (`talk-autopsy cut`) | no |
-| `T<n>.draft.txt` | speech recognition draft, `[mm:ss] text` per line, proofread while listening (`talk-autopsy draft`) | no |
-| `T<n>.ref.txt` | reference transcript, checked by hand (`talk-autopsy ref-from-draft`) | no |
+| `T<n>.draft.txt` | speech recognition draft from prompt 02; superseded by the adjudication, not proofread | no |
+| `T<n>.adjudication.md` | the spans where the three engines disagree, with clips, for the owner to decide (`talk-autopsy adjudicate`) | no |
+| `T<n>.ref.txt` | reference transcript: agreed words plus the owner's decisions (`talk-autopsy resolve`) | no |
+| `T<n>.ref.protocol.json` | where every word of the reference came from: consensus, an engine's variant, or typed (`talk-autopsy resolve`) | no |
 | `T<n>.glossary.md` | terms of the fragment, in the format of `talk_autopsy/glossary.py` | yes |
 
 Reference transcripts and media are not published, so the benchmark is

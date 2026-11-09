@@ -20,11 +20,135 @@ Limits (from CLAUDE.md): at most 3 runs per hypothesis; stage 1 at most 10
 test-set runs and $5; stage 2 at most 10 correction-prompt and 5 translation-prompt
 versions and $20; a cost estimate before every full-video run.
 
+## Methodology: reference transcripts
+
+WER and term accuracy are measured against a reference transcript per fragment.
+The owner is not a native English speaker, so the reference is not proofread by
+ear from one engine's draft. It is built by consensus of three independent
+engines plus human adjudication of their disagreements only
+([decisions.md](decisions.md), 2026-11-09):
+
+1. Three engines transcribe the fragment without any glossary prompt:
+   faster-whisper large-v3 (local, A1 (setup)), AssemblyAI Universal-3.5 Pro
+   (A3 (setup)) and Gemini `gemini-3.8-flash` (A4 (setup)).
+2. `talk-autopsy adjudicate` normalizes all three with the metrics tokenizer
+   (fillers uh/um/er/ah/hmm removed, case and edge punctuation ignored) and aligns
+   each cloud transcript to the faster-whisper backbone, the only one with
+   measured word timings (`difflib.SequenceMatcher`, autojunk off). Words all
+   three agree on are accepted. Disagreements become spans (merged when fewer
+   than 3 agreed words apart): `majority` (two agree, pre-marked) or `split`
+   (all differ, nothing pre-marked). Each listed span gets a clip of the
+   backbone time range padded by 2.5 s each side.
+3. The owner listens to the clips and ticks one variant per span or types the
+   right text (`data/test-set/T<n>.adjudication.md`); `talk-autopsy resolve`
+   composes the reference and a protocol of where every word came from.
+
+| | T2 | T1 |
+|---|---|---|
+| backbone words (normalized) | 2035 | 1179 |
+| unanimous words | 1796 (88.3%) | 1069 (90.7%) |
+| majority spans | 89 | 62 |
+| split spans | 25 | 11 |
+| clip audio | 10.7 min | 6.9 min |
+| majority spans where the odd one out is faster-whisper / AssemblyAI / Gemini | 25 / 45 / 19 | 53 / 4 / 5 |
+
+The clip total exceeds the speech in dispute (1.2 and 0.8 min) because every
+clip carries 5 s of padding; neighbouring clips overlap.
+
+**Caveats.**
+
+- **Bias in favour of A3 and A4.** AssemblyAI and Gemini helped create the
+  reference, so their WER against it is biased in their favour: every word on
+  which they agreed with one other engine was pre-marked as right. Their scores
+  are not comparable with an engine that took no part (faster-whisper with a
+  glossary prompt, VideoLingo, any later engine). The fairer comparison for
+  those two is the protocol (`T<n>.ref.protocol.json`): how often the owner
+  chose each engine's variant in the disputed spans.
+- **A shared error wins the vote.** Where two engines make the same mistake the
+  majority pre-mark is wrong. On T2 faster-whisper and AssemblyAI both wrote
+  "Quadcode" for "Claude Code" in 7 pre-marked spans. Only the owner's listening
+  catches these, which is why the majority blocks are skimmed, not trusted.
+- **Unanimous errors stay.** A word all three engines got wrong in the same way
+  is accepted without review. Its rate is unknown; it lowers every engine's WER
+  equally.
+- faster-whisper splits some written words into pieces (`up` + `-level`); the
+  alignment joins them back to the words of the segment text (13 joins on T2,
+  12 on T1). The T1 backbone still holds the two `.`-only segments from A1 (setup)
+  (the engine has dropped such segments since 4f378a5); they normalize to
+  nothing and do not enter the alignment.
+
 ## Summary
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
-| A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading |
+| A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
+| A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
+| A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### A4 (setup): Gemini transcripts of T2 and T1
+
+- **Hypothesis:** none. These transcripts are one of the three inputs of the
+  consensus reference; no quality claim is made here (see the bias caveat in the
+  methodology section).
+- **Run:** 2026-11-09, engine code at deefb6d. `google-genai` 3.0.0, model
+  `gemini-3.8-flash` (the most capable model on the free tier; `gemini-4-argon`
+  is paid only), WAV uploaded through the Files API, prompt for a verbatim
+  English transcript as a JSON array of `{start_seconds, end_seconds, text}`
+  (structured output), no glossary context, default thinking settings,
+  `max_output_tokens=32768`. Free tier. No quota rejection, so the
+  `gemini-3.6-flash` fallback never ran. Outputs `work/T<n>/raw.gemini.json`.
+- **Numbers:**
+
+  | | T2 | T1 |
+  |---|---|---|
+  | audio | 600.0 s | 566.9 s |
+  | failed calls (503 UNAVAILABLE, "high demand") | 1, plus one earlier run that failed on its only call (before retries existed) | 2, plus one earlier run that failed after 4 attempts |
+  | wall time, upload to answer, retry waits included | 446 s | 602 s |
+  | segments | 109 | 79 |
+  | segments whose estimated end is past the end of the audio | 8 (last ends at 640 s) | 0 |
+  | tokens: prompt / output / thinking | 15,218 / 7,148 / 0 | 14,390 / 4,783 / 0 |
+  | cost (free tier) | 0 USD | 0 USD |
+  | cost at paid prices ($0.75 / $3.75 per million, checked 2026-11-09) | 0.038 USD | 0.029 USD |
+  | normalized words | 2066 | 1206 |
+  | backbone words matched (agreement with faster-whisper) | 1940 of 2035 (95.3%) | 1083 of 1179 (91.9%) |
+
+  The prompt token counts imply about 25 audio tokens per second, not the 32 the
+  docs state. Gemini's timestamps are model estimates (`meta.timestamps`) and
+  are not used anywhere.
+- **Conclusion:** the engine produces a complete verbatim transcript of both
+  fragments. `gemini-3.8-flash` was often overloaded (503 on 8 of 10 calls today);
+  one generation takes about 6–7 minutes.
+- **Decision:** the transcripts go into the adjudication of T2 and T1. A4 (the
+  Gemini hypothesis) is measured against the finished reference, with the bias
+  caveat. Not recorded in `results/benchmark.csv`: no metric yet.
+
+### A3 (setup): AssemblyAI transcripts of T2 and T1
+
+- **Hypothesis:** none, as A4 (setup).
+- **Run:** 2026-11-09, engine code at 0505ba9. `assemblyai` SDK 1.8.2,
+  `speech_models=["universal-3-5-pro"]` (the model that ran is recorded and was
+  the one requested), `language_code="en"`, speaker labels off, no keyterms.
+  Segments are the service's sentences. Outputs `work/T<n>/raw.assemblyai.json`.
+- **Numbers:**
+
+  | | T2 | T1 |
+  |---|---|---|
+  | audio (billed duration; the API reports no separate billed field) | 600 s | 567 s |
+  | wall time, upload to result | 39.4 s | 35.3 s |
+  | segments (sentences) | 149 | 79 |
+  | cost at list price ($0.21 per hour, pricing page dated 2026-10-27) | 0.035 USD | 0.033 USD |
+  | normalized words | 1968 | 1203 |
+  | backbone words matched (agreement with faster-whisper) | 1869 of 2035 (91.8%) | 1089 of 1179 (92.4%) |
+
+  Both costs are drawn from the account's free credit.
+- **Conclusion:** the engine runs end to end, about 15x faster than real time.
+- **Decision:** the transcripts go into the adjudication; A3 is measured against
+  the finished reference, with the bias caveat. Not recorded in
+  `results/benchmark.csv`: no metric yet.
+
+Test-set runs in stage 1 so far: 6 of 10 (A1 (setup) x2, A3 (setup) x2,
+A4 (setup) x2; the failed Gemini attempt produced nothing and is not counted).
+Money: 0.07 USD at list price, all from free credit.
 
 ### A1 (setup): first faster-whisper run on T1 and T2
 
