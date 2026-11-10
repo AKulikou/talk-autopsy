@@ -135,6 +135,17 @@ non-native English accent). Its 10-minute window was cut blind on
    recorded whatever they are; a prompt change after seeing them starts a new
    version that T6 can no longer judge.
 
+Engines run and adjudication file prepared on 2026-11-10; owner adjudication
+pending. After the `pipeline-v2` tag: faster-whisper large-v3 (local, 8
+threads, backbone), AssemblyAI `universal-3-5-pro` without key terms (0.035
+USD), Gemini without a glossary. Gemini `gemini-3.8-flash` answered 503
+UNAVAILABLE ("high demand") on three attempts, so the third engine is the
+configured fallback model `gemini-3.6-flash` (free tier), noted at the top of
+`data/test-set/T6.adjudication.md`. `talk-autopsy adjudicate T6`: 2037
+backbone words, 92.8% unanimous, 65 majority and 21 split spans, 86 clips
+(7.8 min) in `work/T6/clips/`. No reference, glossary or pipeline run yet;
+nothing from the content is recorded outside `data/test-set/` and `work/T6/`.
+
 ## Freeze pipeline-v2
 
 Frozen on 2026-11-10 with the annotated git tag `pipeline-v2`. The freeze
