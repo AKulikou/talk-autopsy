@@ -23,8 +23,14 @@ term accuracy is measured from the output, so the warnings are evidence, not a
 gate. (Changed 2026-11-09 after the first T2 run rejected a block for exactly
 this; docs/experiments.md, 3.6.)
 
-Returns the same segment ids and times; word timings are dropped (they belong to
-the English words).
+**Sentence units** (default since 2026-11-10, `units=True`): the corrected
+segments are first regrouped into sentence units (units.py) and the units are
+translated, each as one `[id] text` line of the same prompt; the validator works
+per unit. The result's segments are the units: new ids, the unit's times, the
+English words with their timings (`words`, which the subtitles use to time the
+target text) and the covered segment ids (`source_ids`). With `units=False`
+(`translate --per-segment`) each segment is translated alone, the result has
+the input's ids and times, and word timings are dropped.
 """
 
 import logging
@@ -35,6 +41,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from talk_autopsy import blocks, config, metrics
+from talk_autopsy import units as units_module
 from talk_autopsy.core import claude_client
 from talk_autopsy.core.structured_call import InvalidResultError, Usage, request_structured
 from talk_autopsy.glossary import Glossary
@@ -150,9 +157,11 @@ def _user(block: blocks.Block) -> str:
 
 def estimate(transcript: Transcript, glossary: Glossary, target_lang: str,
              context: blocks.VideoContext | None = None, model: str | None = None,
-             version: str = PROMPT_VERSION) -> blocks.Estimate:
+             version: str = PROMPT_VERSION, units: bool = True) -> blocks.Estimate:
     model = model or config.translation_model()
     target_lang = config.check_lang(target_lang)
+    if units:
+        transcript = units_module.make_units(transcript)
     prefix_tokens = blocks.estimate_tokens(_prefix(load_prompt(version), glossary,
                                                    context or blocks.VideoContext(), target_lang))
     parts = blocks.make_blocks(transcript)
@@ -166,11 +175,17 @@ def estimate(transcript: Transcript, glossary: Glossary, target_lang: str,
 
 def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, model: str | None = None,
               context: blocks.VideoContext | None = None, version: str = PROMPT_VERSION,
-              progress=None, refusal_fallback: bool = False) -> Transcript:
-    """The translated transcript: same ids and times, texts in `target_lang`, usage in `meta.translation`."""
+              progress=None, refusal_fallback: bool = False, units: bool = True) -> Transcript:
+    """
+    The translated transcript, texts in `target_lang`, usage in `meta.translation`:
+    one segment per sentence unit (`units=True`), or the input's ids and times
+    (`units=False`).
+    """
     config.require_api_key()
     target_lang = config.check_lang(target_lang)
     model = model or config.translation_model()
+    if units:
+        transcript = units_module.make_units(transcript)
     prefix = _prefix(load_prompt(version), glossary, context or blocks.VideoContext(), target_lang)
     client = claude_client.get_client()
     texts: dict[int, str] = {}
@@ -202,8 +217,10 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
         if progress is not None:
             progress(block.number, len(parts))
 
-    segments = [Segment(id=s.id, start=s.start, end=s.end, text=texts.get(s.id, s.text), words=None,
-                        confidence=None) for s in transcript.segments]
+    # a unit keeps its English words: the subtitles time the target text by them
+    segments = [Segment(id=s.id, start=s.start, end=s.end, text=texts.get(s.id, s.text),
+                        words=s.words if units else None, confidence=None, source_ids=s.source_ids)
+                for s in transcript.segments]
     meta = blocks.stage_meta(transcript.meta, blocks.usage_cost(model, usage), time.perf_counter() - started)
     meta["translation"] = {
         "prompt_version": version,
@@ -214,6 +231,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
         "blocks": len(parts),
         "failed_blocks": failed,
         "warnings": warnings,
+        "units": transcript.meta.get("units") if units else None,
         "usage": usage.as_dict(),
         "cost_usd": blocks.usage_cost(model, usage),
         "input_source": transcript.source,

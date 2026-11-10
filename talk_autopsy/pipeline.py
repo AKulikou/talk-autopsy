@@ -10,7 +10,7 @@ gate and in B5, 2026-11-09):
       stt2       -> raw2.json       AssemblyAI again, the glossary as key terms
       align      -> aligned.json    forced alignment, only for model-estimated times (fallback)
       fix        -> fixed.json      Claude correction (correction-v2)
-      translate  -> <lang>.json     Claude translation (translation-v2)
+      translate  -> <lang>.json     Claude translation (translation-v2) of sentence units (units.py)
       srt        -> <video-id>.<lang>.srt/.ass and <video-id>.en.srt/.ass
 
 - **Engines and fallbacks.** `engine="assemblyai"` (default): if the first
@@ -52,7 +52,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from talk_autopsy import align as align_module
-from talk_autopsy import blocks, config, correct, glossary_auto, ingest, subtitles, translate
+from talk_autopsy import blocks, config, correct, glossary_auto, ingest, subtitles, translate, units
 from talk_autopsy.glossary import Glossary, load_glossary, to_markdown
 from talk_autopsy.segments import Transcript, load_transcript, save_transcript
 from talk_autopsy.stt.chunked import ProgressEvent, file_sha256
@@ -414,7 +414,8 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         glossary_now, glossary_hash = current_glossary()
         source_file = fixed if fixed.is_file() else need(english, "translate")
         inputs = {"input": file_sha256(source_file), "glossary": glossary_hash, "context": context_hash,
-                  "lang": lang, "model": settings.translation_model, "prompt": translate.PROMPT_VERSION}
+                  "lang": lang, "model": settings.translation_model, "prompt": translate.PROMPT_VERSION,
+                  "units": units.VERSION}
         skipped = up_to_date(translated, inputs)
         cost = 0.0
         if not skipped:

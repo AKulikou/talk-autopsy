@@ -2,9 +2,12 @@
 The one data format every stage reads and writes.
 
 A Transcript is a list of timed segments. Speech recognition creates the
-segments; correction and translation change only their text and return the same
-ids. Stages never renumber, merge or split segments, so any two files of one run
-can be compared segment by segment (assert_same_ids).
+segments; correction changes only their text and returns the same ids, so the
+recognition and correction files of one run can be compared segment by segment
+(assert_same_ids). Translation is the one exception: it works on sentence units
+(units.py), whose segments are regrouped recognition segments with new ids, the
+English words and their timings (`words`) and the covered segment ids
+(`source_ids`).
 """
 
 import json
@@ -32,6 +35,8 @@ class Segment(BaseModel):
     text: str
     words: list[Word] | None = None
     confidence: float | None = None
+    # only in a sentence unit (units.py): the ids of the recognition segments it covers
+    source_ids: list[int] | None = None
 
     @model_validator(mode="after")
     def _end_not_before_start(self) -> Self:

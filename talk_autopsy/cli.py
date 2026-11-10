@@ -318,8 +318,11 @@ def translate_command(
     = translate.PROMPT_VERSION,
     max_cost: Annotated[float, typer.Option(help="Stop if the estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
+    per_segment: Annotated[bool, typer.Option(
+        "--per-segment", help="Translate each segment alone (before 2026-11-10) instead of sentence units.")]
+    = False,
 ) -> None:
-    """Claude translation of TRANSCRIPT into --lang."""
+    """Claude translation of TRANSCRIPT into --lang, by sentence units (units.py) unless --per-segment."""
     if prompt not in translate.VERSIONS:
         raise typer.BadParameter(f"unknown prompt {prompt!r}; known: {', '.join(translate.VERSIONS)}",
                                  param_hint="--prompt")
@@ -330,16 +333,19 @@ def translate_command(
         _fail(str(e))
     source, terms, ctx = _stage_inputs(transcript, glossary, context)
     model = model or config.translation_model()
-    _confirm_cost(translate.estimate(source, terms, target_lang, ctx, model, version=prompt), max_cost)
+    _confirm_cost(translate.estimate(source, terms, target_lang, ctx, model, version=prompt,
+                                     units=not per_segment), max_cost)
     _log_to_stderr()
     try:
         result = translate.translate(source, terms, target_lang, model=model, context=ctx, version=prompt,
+                                     units=not per_segment,
                                      progress=lambda n, total: typer.echo(f"  block {n}/{total}", err=True))
     except (RuntimeError, ValueError, ConfigurationError) as e:
         _fail(str(e))
     save_transcript(result, out)
     tr = result.meta["translation"]
-    typer.echo(f"Wrote {out}: {len(result.segments)} segments in {target_lang}, "
+    kind = "segments" if per_segment else f"sentence units (from {len(source.segments)} segments)"
+    typer.echo(f"Wrote {out}: {len(result.segments)} {kind} in {target_lang}, "
                f"{len(tr['failed_blocks'])} failed blocks; {tr['cost_usd']:.4f} USD")
 
 

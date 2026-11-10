@@ -83,3 +83,35 @@ def test_a_dropped_kept_term_is_a_warning_not_a_rejection(fake_claude):
     assert result.segments[0].text == "Запустите его."
     assert result.meta["translation"]["warnings"] == ["segment 1: kept term 'Claude Code' is missing"]
     assert result.meta["translation"]["failed_blocks"] == []
+
+
+def _echo_ids(kwargs):
+    body = kwargs["messages"][0]["content"].split("Segments to translate:")[1]
+    lines = re.findall(r"^\[(\d+)\] (.*)$", body, re.M)
+    return response(TranslationAnswer(
+        segments=[SegmentText(id=int(i), text=f"перевод {i}") for i, _ in lines]))
+
+
+def test_translation_runs_on_sentence_units(fake_claude):
+    fake = fake_claude(_echo_ids)
+    t = Transcript(segments=[seg(1, "If you want to try it,"), seg(2, "this is your chance."),
+                             seg(3, "Next.")],
+                   language="en", source="fixed")
+    result = translate.translate(t, GLOSSARY, "ru")
+    sent = fake.requests[0]["messages"][0]["content"]
+    assert "[1] If you want to try it, this is your chance." in sent and "[2] Next." in sent
+    assert result.ids() == [1, 2]
+    assert [s.source_ids for s in result.segments] == [[1, 2], [3]]
+    assert [w.text for w in result.segments[0].words] == "If you want to try it, this is your chance.".split()
+    assert result.segments[0].start == 1.0 and result.segments[0].end == 2.5
+    units = result.meta["translation"]["units"]
+    assert units["segments"] == 3 and units["units"] == 2 and units["merged_units"] == 1
+
+
+def test_per_segment_translation_keeps_the_segment_ids(fake_claude):
+    fake_claude(_echo_ids)
+    t = Transcript(segments=[seg(1, "If you want to try it,"), seg(2, "this is your chance.")],
+                   language="en", source="fixed")
+    result = translate.translate(t, GLOSSARY, "ru", units=False)
+    assert result.ids() == [1, 2] and all(s.words is None and s.source_ids is None for s in result.segments)
+    assert result.meta["translation"]["units"] is None
