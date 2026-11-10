@@ -238,6 +238,94 @@ owner then moved the project to the paid tier (decisions, 2026-11-10).
   matches the reference) would be a new version (`audio-judge-v2`) and would
   need a new calibration before T6.
 
+### Post-hoc rescoring (2026-11-10)
+
+**This is a post-hoc change made after seeing the calibration result; the
+threshold was not changed and no new judge requests were made.**
+
+- **The 09b numbers, as they were:** agreement 79.0% (90 of 114), the
+  owner's 19 by ear 13 (68.4%), WER between the two T2 references 1.90%:
+  failed the rule (agreement >= 90% and WER <= 2%).
+- **Why a rescoring.** 14 of the 24 disagreements were repetitions and false
+  starts ("For for", "I wanted to I wanted to") that the judge writes, as its
+  prompt asks, and the T2 reference mostly omits; 5 more were formatting
+  (`Shift+Enter`, `3,000`). The reference convention on repetitions was never
+  written down, and the comparison did not normalise formatting.
+- **The rule added** (`data/test-set/README.md`, reference conventions,
+  marked "added 2026-11-10 after the judge calibration"): immediate
+  repetitions and restarts are written once; numbers without thousands
+  separators; key combinations as `Shift+Enter`. In code,
+  `judge.normalize_for_adjudication` canonicalises key combinations, removes
+  thousands separators, collapses an immediately repeated sequence of 1-4
+  words (case and punctuation ignored) until stable, then applies the
+  existing reference conventions in code (fillers). It is applied identically
+  to both sides of every comparison and to the judged spans' texts when a
+  reference is resolved from a judged file (`resolve --normalize-adjudication`);
+  for the WER both whole references pass through it. The metrics normaliser
+  (`metrics.tokenize`), `benchmark.csv` and `T2.ref.txt` are unchanged. The
+  new README rows are not passed to the judge's prompt (`read_conventions`
+  skips them), so `audio-judge-v1` stays exactly as calibrated.
+- **Rescored** (`talk-autopsy judge-compare T2 --normalize-adjudication`, from
+  the existing `work/T2/judge.jsonl`; `work/T2/judge.compare.normalized.json`):
+
+| Agreement with the decided T2 text | spans | 09b | rescored |
+|---|---|---|---|
+| **overall** | 114 | 90 (79.0%) | **94 (82.5%)** |
+| decided by the owner's ear (recorded list) | 19 | 13 (68.4%) | 14 (73.7%) |
+| decided by rule (inferred) | 30 | 23 (76.7%) | 26 (86.7%) |
+| decided with the majority pre-mark (inferred) | 60 | 51 (85.0%) | 51 (85.0%) |
+| other, by ear (inferred) | 5 | 3 (60.0%) | 3 (60.0%) |
+| majority spans (verdict) | 89 | 75 (84.3%) | 76 (85.4%) |
+| split spans (verdict) | 25 | 15 (60.0%) | 18 (72.0%) |
+
+- **WER between the two T2 references** after the normaliser on both:
+  **1.17%** (2043 words; 8 substitutions, 2 deletions, 14 insertions).
+- **Self-preference** is unchanged (the same choices): the judge chose the
+  Gemini engine's variant in 85 of 114 spans (74.6%; the owner's decisions 71,
+  62%); `none` 15 (13.2%).
+- **Decision (rule unchanged): failed.** 82.5% is below 90% (WER 1.17% is
+  within 2%), so the judge is still not accepted for T6; T6 is not judged, and
+  no T6 reference or glossary exists.
+
+**The 20 remaining disagreements, by class** (`term`: a differing token
+belongs to a T2 glossary term; `formatting`: spelling only; `word`: other
+words): term 2, word 18, formatting 0.
+
+| Span | Class | Decided | Judge's decision | Pattern |
+|---|---|---|---|---|
+| 0032 | term | at-mention | @-mention | spelling of a glossary term |
+| 0082 | term | stand-up | standup | spelling of a glossary term |
+| 0020 | word | these kind of free form coding assistants | ... freeform coding assistants in the | repetition across the span edge ("in the in the past") |
+| 0022 | word | (no words) | like what do I, | repetition across the span edge ("what do I what do I") |
+| 0028 | word | new lines. This is, you know, | ... you know, it | repetition across the span edge ("it it") |
+| 0033 | word | (no words) | in | repetition across the span edge ("in in") |
+| 0073 | word | (no words) | in all these | restart across the span edge ("in all these in all this") |
+| 0093 | word | (no words) | it | repetition across the span edge ("it it's") |
+| 0104 | word | wanted to include | wanted to I wanted to include | restart across the span edge ("I" is a context word) |
+| 0046 | word | So just asking | So just asking a question, asking | restart with other words |
+| 0084 | word | readout of everything I shipped. And | ... everything I've I shipped, and | restart with another word |
+| 0007 | word | Claude Code | Claude Code basically | word the reference omits |
+| 0043 | word | Claude Code | Claude Code and | word the reference omits |
+| 0062 | word | And Claude Code, | And in Claude Code, | word the reference omits |
+| 0081 | word | And | Yeah, and | word the reference omits |
+| 0015 | word | there are | There's | substitution |
+| 0038 | word | as | is | substitution |
+| 0048 | word | you're | you were | substitution |
+| 0092 | word | ... using an LLM | ... using a LLM | substitution |
+| 0106 | word | the | this | substitution |
+
+Pattern: 7 are repetitions or restarts that the span-level rule cannot see,
+because one copy sits in the context words outside the span; 2 more are
+restarts with changed words; 4 are words the judge hears and the reference
+omits; 5 are one-word substitutions; 2 are spellings of glossary terms. As an
+illustration only (not a decision input: the rule above is span-level, as
+specified), applying the normaliser to the context words plus the span on
+both sides lifts 3 more spans (0028, 0033, 0104) to agreement: 97 of 114,
+85.1%, still below 90%. The judge's own transcriptions (`heard`) show that
+it writes what it hears more completely than the reference does; whether the
+reference or the judge is right on the omitted words and the substitutions is
+not known without a listener.
+
 ## T6 protocol
 
 T6 is the sealed hold-out of stage 2 (a workshop with a live demo, a
@@ -277,6 +365,9 @@ nothing from the content is recorded outside `data/test-set/` and `work/T6/`.
 2026-11-10 (prompt 09b): the blind audio judge failed its T2 calibration
 (agreement 79.0% against the 90% rule), so T6 was not judged: 0 of 86 spans,
 no reference, no glossary.
+2026-11-10 (prompt 12, section A): rescored on T2 with the adjudication
+normaliser (Post-hoc rescoring above): 82.5%, still below 90%, so T6 is
+still not judged; no Gemini request was made.
 
 ## Freeze pipeline-v2
 
