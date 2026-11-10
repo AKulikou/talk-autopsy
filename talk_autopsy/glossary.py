@@ -16,6 +16,16 @@ the first table counts.
 Columns:
 - `term` (required): the English term as it should appear in the corrected transcript.
 - `keep` (required): yes = keep the term untranslated; no = translate it.
+- `policy` (optional, translation-v3, added 2026-11-10): how translation renders
+  the term. `keep`: Latin script as is (names, code, acronyms without a
+  Russian form); `translate`: the target language only; `both`: the
+  target-language rendering with the English term in brackets at its first
+  occurrence in the video, the rendering alone afterwards; `ui`: a button, menu
+  or setting as shown on screen, English with a target-language gloss in
+  brackets at the first occurrence. `both`, `translate` and `ui` need a
+  translation in a language column. Without the column (or with an empty cell)
+  the policy follows `keep` (`effective_policy`): keep yes -> keep, keep no
+  with a translation -> translate, otherwise unclassified.
 - any column named by a language code (`ru`, `de`, ...): the agreed translation;
   an empty cell means none agreed yet.
 - `notes` (optional): context for the model and for review.
@@ -32,6 +42,8 @@ from talk_autopsy.config import ConfigurationError, check_lang
 
 REQUIRED_COLUMNS = ("term", "keep")
 NOTES_COLUMN = "notes"
+POLICY_COLUMN = "policy"
+POLICIES = ("keep", "both", "translate", "ui")
 _YES = {"yes", "y", "true"}
 _NO = {"no", "n", "false"}
 _SEPARATOR_CELL = re.compile(r"^:?-{3,}:?$")
@@ -46,6 +58,15 @@ class GlossaryEntry(BaseModel):
     keep: bool
     translations: dict[str, str] = Field(default_factory=dict)  # language code -> agreed translation
     notes: str = ""
+    policy: str | None = None  # one of POLICIES when set explicitly (a policy column or the classifier)
+
+    def effective_policy(self) -> str | None:
+        """The explicit policy, else the one `keep` implies (see the module docstring); None: unclassified."""
+        if self.policy:
+            return self.policy
+        if self.keep:
+            return "keep"
+        return "translate" if self.translations else None
 
 
 class Glossary(BaseModel):
@@ -81,7 +102,7 @@ def parse_glossary(text: str) -> Glossary:
         raise GlossaryError(f"line {start + 1}: duplicate column names {header}")
     languages = {}
     for column in header:
-        if column in (*REQUIRED_COLUMNS, NOTES_COLUMN):
+        if column in (*REQUIRED_COLUMNS, NOTES_COLUMN, POLICY_COLUMN):
             continue
         try:
             languages[column] = check_lang(column)
@@ -111,11 +132,24 @@ def parse_glossary(text: str) -> Glossary:
         if key in seen:
             raise GlossaryError(f"line {number}: {term!r} is already defined on line {seen[key]}")
         seen[key] = number
+        translations = {languages[c]: row[c] for c in languages if row[c]}
+        policy = row.get(POLICY_COLUMN, "").strip().lower() or None
+        if policy is not None:
+            if policy not in POLICIES:
+                raise GlossaryError(f"line {number}: policy must be one of {', '.join(POLICIES)}, "
+                                    f"got {policy!r}")
+            if policy == "keep" and keep not in _YES:
+                raise GlossaryError(f"line {number}: policy keep needs keep yes")
+            if policy in ("both", "translate") and keep in _YES:
+                raise GlossaryError(f"line {number}: policy {policy} needs keep no")
+            if policy != "keep" and not translations:
+                raise GlossaryError(f"line {number}: policy {policy} needs a translation")
         entries.append(GlossaryEntry(
             term=term,
             keep=keep in _YES,
-            translations={languages[c]: row[c] for c in languages if row[c]},
+            translations=translations,
             notes=row.get(NOTES_COLUMN, ""),
+            policy=policy,
         ))
     return Glossary(entries=entries)
 
@@ -125,16 +159,22 @@ def load_glossary(path: Path) -> Glossary:
 
 
 def to_markdown(glossary: Glossary, languages: list[str] | None = None) -> str:
-    """The glossary as a table in the documented format (columns: term, keep, languages, notes)."""
+    """
+    The glossary as a table in the documented format (columns: term, keep,
+    languages, notes); a `policy` column after `keep` only when an entry has an
+    explicit policy, so a glossary without policies is written as before.
+    """
     langs = languages if languages is not None else glossary.languages()
+    with_policy = any(entry.policy for entry in glossary.entries)
+    policy_header = [POLICY_COLUMN] if with_policy else []
 
     def cell(text: str) -> str:
         return text.replace("|", "\\|")
 
-    rows = ["| " + " | ".join(["term", "keep", *langs, NOTES_COLUMN]) + " |",
-            "|" + "---|" * (len(langs) + 3)]
+    rows = ["| " + " | ".join(["term", "keep", *policy_header, *langs, NOTES_COLUMN]) + " |",
+            "|" + "---|" * (len(langs) + 3 + len(policy_header))]
     for entry in glossary.entries:
-        values = [entry.term, "yes" if entry.keep else "no",
+        values = [entry.term, "yes" if entry.keep else "no", *([entry.policy or ""] if with_policy else []),
                   *(entry.translations.get(lang, "") for lang in langs), entry.notes]
         rows.append("| " + " | ".join(cell(v) for v in values) + " |")
     return "\n".join(rows) + "\n"
