@@ -195,6 +195,9 @@ include upload.
   on the fast, accented talk and lower on the interview. Many fast cues are
   short sentences (AssemblyAI segments by sentence) that cannot linger
   because the next cue starts at once; cues never cross a segment boundary.
+- **Since 2026-11-10** the Russian files of both videos are the sentence-unit
+  translation with the new display rule (D1 (setup)); the files this table
+  describes are kept as `ru.v2seg.json` and `<name>.<lang>.v2seg.srt` / `.ass`.
 - **Outputs:** `work/T2.source/T2.source.ru.srt` / `.ass`,
   `T2.source.en.srt` / `.ass`; `work/real-01/real-01.ru.srt` / `.ass`,
   `real-01.en.srt` / `.ass`. The prompt-05 outputs of the Gemini run are in
@@ -249,6 +252,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| D1 (setup) | 2026-11-10 | none: sentence units before translation and display extended into pauses (subtitle-v2) | translation-v2 on units; T2 fragment, C1 input, T2.source, real-01 | T2 fragment Russian above 17 / 25 cps 74.7% / 25.3% -> 58.8% / 15.8%; on AssemblyAI input units = segments (149/149, 373/373, 428/426); Gemini input 109 -> 85 units; 0.547 USD | the C1 fragments become whole sentences; the extension does most of the reading-speed work; word timing raises speed variance in multi-cue segments | units frozen with the pipeline; display rule stays open |
 | C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | both above 4.0; v2 preferred; not fully blind | **C1 met; translation-v2 adopted** |
 | B2 (v2) | 2026-11-10 | correction-v2 edits distort meaning in < 5% of cases | owner checked `B2-review-v2.md` | T2 0 edits; T1 2 edits, 0 distort meaning | met on a tiny sample | correction-v2 frozen unchanged |
 | B1 (v2) | 2026-11-09 | correction-v2 with the auto-glossary keeps the realistic pipeline at >= 85% term accuracy without false edits or words moved between segments | `correction-v2`, Sonnet, on AssemblyAI + auto key terms, auto-glossary; T2, T1 | term accuracy T2 96.26% -> 96.26%, T1 98.33% -> 98.33%; WER T2 4.73% -> 4.73%, T1 0.58% -> 0.50%; false edits 0; edits 0 / 2; 0.108 USD | the realistic pipeline is at 96.3% / 98.3%; correction adds nothing measurable on this input | correction-v2 is the default; owner checks `B2-review-v2.md` |
@@ -292,6 +296,102 @@ For comparison, translation-v1 (compressed) on the Gemini segmentation had
 whose segment is short and whose next cue starts at once, so the cue cannot
 linger; cues never cross a segment boundary. Writing both files takes about
 2 s per fragment.
+
+### D1 (setup): sentence units and longer display (subtitle-v2)
+
+- **What and why:** two defects before the freeze. (1) Translating a
+  recognition segment that holds half a sentence gives a fragment (C1 blind,
+  items 3 and 5). (2) Cues left the screen 0.3 s after their last word, so
+  most short cues were read faster than 17 characters per second. Not a
+  scored hypothesis: no reference for reading speed or timing, numbers below
+  are descriptive.
+- **Change** (6eb76ea, 112580f): `units.py` regroups segments into sentence
+  units before translation — consecutive segments merge until the unit ends
+  with terminal punctuation or the pause after a segment exceeds 1.5 s; a
+  unit over 25 s is split into the fewest parts, each break at the best
+  boundary (sentence end, clause end, segment boundary, word) nearest the even
+  split point. Each unit keeps its English words with timings and its source
+  segment ids. Translation runs on units with the same prompt (translation-v2)
+  and the same per-unit validator; `translate --per-segment` keeps the old
+  path. Subtitles cut a translated unit's text into cues at sentence and
+  clause ends and time each cue by the English words it covers (the same share
+  of English words as of target characters, moved to an English sentence or
+  clause end within 3 words). Every cue (both languages) then stays on screen
+  into the following silence: up to +1.5 s, ending at least 0.1 s before the
+  next cue, never longer than 7 s, no overlap. Correction is unchanged and
+  segment-based; the English file is still cut from segments.
+- **Finding: on AssemblyAI input units equal segments.** AssemblyAI segments
+  are its sentences, and every one of them ends with terminal punctuation: T2
+  fragment 149 segments -> 149 units, T2.source 373 -> 373, real-01 426 ->
+  428 (two segments of about 28 s split, none merged). Merging happens on the
+  fallback engines' input: the Gemini + alignment transcript of the T2
+  fragment (the C1 input) has 24 of 109 segments without terminal punctuation,
+  109 -> 85 units, 21 merged. So on the main path the change in the numbers
+  below comes from the display extension and from word-based timing, not from
+  merging.
+- **The C1 fragments, re-translated on the C1 input** (Gemini + alignment,
+  correction-v1 English, reference glossary; `work/T2/T2.ru.v2u.json`, 0
+  failed blocks, 0.062 USD): items 3 and 5 are now whole sentences. Segments
+  12 + 13 ("...but if you don't have it yet, / yeah, this is your chance to
+  install it...") form one unit, and the Russian no longer starts with "то
+  это ваш шанс"; segments 21 + 22 (the IDE list and the people who use Vim)
+  form one unit. In that unit the idiom "pry Vim from their cold, dead hands"
+  came out as a calque, which the per-segment run had rendered by meaning
+  (Backlog).
+- **T2 fragment, realistic input** (AssemblyAI + auto key terms,
+  correction-v2, auto-glossary; `translate` on units ->
+  `work/T2/T2.v2u.ru.json`, 149 units, 0 failed blocks, 0.071 USD; subtitles
+  `work/T2/T2.v2u.ru.srt` / `.ass`, `T2.v2u.en.srt` / `.ass`):
+
+  | Russian cues | v2 per segment, 0.3 s linger (`T2.v2.ru.srt`, 2026-11-09) | v2 per segment, new display | **v2 units, new display** |
+  |---|---|---|---|
+  | cues | 166 | 166 | 165 |
+  | above 17 cps | 74.7% | 58.4% | **58.8%** |
+  | above 25 cps | 25.3% | 16.9% | **15.8%** |
+  | max cps | 66.1 | 70.8 | 70.8 |
+  | shorter than 1 s / longer than 7 s | 9 / 0 | 12 / 0 | 11 / 0 |
+
+  English (correction-v2, cut from segments): above 17 cps 83.7% -> 68.0%,
+  above 25 cps 26.7% -> 18.6%, 172 cues. The middle column is the same
+  per-segment translation laid out with the new display rule (no API call),
+  to separate the two changes: the extension does almost all of the work
+  here. The fastest cues are one-word sentences that AssemblyAI times very
+  short (Russian "Отлично." on 0.11 s) with the next cue right behind them;
+  extension cannot help them (Backlog: short sentence cues). The maximum rose
+  because the gap before the next cue is now 0.1 s instead of 0.04 s.
+- **Word timing against character timing.** Inside a segment that needs
+  several cues, the old path gave each cue time in proportion to its
+  characters, so all cues of a segment had the same reading speed. Word
+  timing follows the speaker: a cue appears when its English words are said
+  and pauses fall between cues, but the reading speed varies from cue to cue,
+  so more cues cross the thresholds. On real-01 the Russian cues of multi-cue
+  segments go from 28.5% / 2.8% (above 17 / 25 cps, per segment, old layout)
+  to 40.2% / 8.7% with units; single-cue segments are unchanged (58.7% /
+  20.3% against 57.2% / 20.3%). Variants tried without an API call: mapping
+  by English characters instead of English word count lowers the share above
+  25 cps by 0 to 1.3 points; no snapping by 0 to 1.0 points. Not adopted
+  before the freeze (subtitle layout is not frozen; Backlog).
+- **Whole videos** (`run ... --steps translate,srt`: correction output
+  reused, no speech recognition call; the per-segment outputs are kept as
+  `ru.v2seg.json` and `<name>.<lang>.v2seg.srt` / `.ass`):
+
+  | | T2.source before (per segment, 0.3 s linger) | T2.source after (units, new display) | real-01 before | real-01 after |
+  |---|---|---|---|---|
+  | units / segments | — | 373 / 373 | — | 428 / 426 |
+  | Russian cues | 422 | 425 | 591 | 587 |
+  | Russian above 17 / 25 cps | 76.8% / 22.5% | **62.4% / 17.6%** | 50.9% / 13.7% | **49.2% / 14.8%** |
+  | English above 17 / 25 cps | 84.2% / 22.3% | 66.0% / 15.8% | 66.0% / 15.6% | 56.0% / 14.1% |
+  | translation failed blocks / warnings | 0 / 3 | 0 / 3 | 0 / 3 | 0 / 2 |
+  | translation time / cost | 108 s / 0.183 USD | 109 s / 0.184 USD | 144 s / 0.231 USD | 144 s / 0.230 USD |
+
+  On real-01 the Russian share above 25 cps rose by 1.1 points: the interview
+  has many multi-cue segments, where word timing costs more than the extension
+  gains (per segment with the new display it would be 44.3% / 12.0%).
+- **Cost of this entry:** 0.547 USD Claude (T2 fragment 0.071, C1 input
+  0.062, T2.source 0.184, real-01 0.230); no speech recognition.
+- **Decision:** sentence units go into the freeze (they decide the text that
+  is translated); the display rule and the timing of cues are subtitle layout
+  and stay open.
 
 ### B2 (v2): the owner's check of correction-v2's edits
 
@@ -1043,7 +1143,18 @@ Ideas that come up during a stage and wait for a later one.
   many cues are one short sentence that cannot linger; 45 Russian cues of
   real-01 are shorter than 1 s. Joining consecutive short segments into one
   cue (still never splitting a segment) would lower the reading speed
-  without cutting text; measure in stage 3 (D-hypotheses).
+  without cutting text; measure in stage 3 (D-hypotheses). Still the
+  fastest cues after D1 (setup): sentence units do not merge them, since
+  each ends a sentence (T2: "Great." on 0.11 s at 70.8 cps).
+- Cue timing inside a unit (D1 (setup), 2026-11-10): mapping a target cue to
+  the English by character share instead of word count lowered the share
+  above 25 cps by up to 1.3 points; snapping to English clause ends costs up
+  to 1.0 point. A display-time rule that evens reading speed across the
+  cues of one unit (within the span its English words allow) may do more.
+  Subtitle layout, not frozen.
+- Idiom calque in a unit (D1 (setup)): "pry Vim from their cold, dead hands"
+  came out word for word in the sentence-unit translation of the C1 input,
+  by meaning in the per-segment one. One sample; watch in the T6 run.
 - Translation warnings for kept terms (operational runs): translation-v2
   dropped "[removed]", "commit", "tokens" in a few segments (3 warnings per
   video). With no compression rule left, check whether these are pronoun

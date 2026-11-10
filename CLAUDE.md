@@ -14,8 +14,9 @@ input (URL/file) -> ffmpeg audio.wav (+ audio.flac for upload) + meta.json
   -> auto-glossary (Haiku, from raw.json + context), merged with the user's glossary -> glossary.md
   -> AssemblyAI with the glossary as key terms -> raw2.json
   -> Claude correction (correction-v2; terms, names, accent-distorted words) -> fixed.json
-  -> Claude translation (translation-v2; blocks of 5 min with context, no meaning compression) -> <lang>.json
-  -> subtitles .srt + .ass (target language + corrected English) | later: TTS dub (edge-tts + ffmpeg)
+  -> sentence units (segments merged to sentence ends, split above 25 s; units.py)
+  -> Claude translation (translation-v2 on units; blocks of 5 min with context, no meaning compression) -> <lang>.json
+  -> subtitles .srt + .ass (target language timed by the English words + corrected English) | later: TTS dub
 ```
 
 The research question is measurement, not features: every stage is benchmarked on
@@ -66,7 +67,8 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 ## Layout
 
 - `talk_autopsy/config.py` — `load_environment` (reads `.env`; called only by entry points: the CLI's `main`, later the web UI), API key check (`require_api_key`), optional cloud STT keys (`require_key`), settings as functions read on call (`target_lang()`, `correction_model()`, ...), `check_lang`, model IDs, prices for the cost estimate, paths. Importing any module reads neither `.env` nor a secret
-- `talk_autopsy/segments.py` — `Transcript` / `Segment` / `Word`: the one JSON format every stage reads and writes; `assert_same_ids`
+- `talk_autopsy/segments.py` — `Transcript` / `Segment` / `Word`: the one JSON format every stage reads and writes; `assert_same_ids`; `Segment.source_ids` only in sentence units
+- `talk_autopsy/units.py` — sentence units (`sentence-units-v1`): segments merged until terminal punctuation or a pause over 1.5 s, split above 25 s at the best boundary near the even split; each unit keeps its English words and the covered segment ids
 - `talk_autopsy/ingest.py` — `extract_audio` (ffmpeg, optional cut), `probe` (duration), `parse_timecode`; `download` (yt-dlp) is a stage 1 stub
 - `talk_autopsy/glossary.py` — `Glossary`: a Markdown table per video (`T<n>.glossary.md`), format in the module docstring
 - `talk_autopsy/stt/` — `base.py` `Transcriber` protocol and `drop_wordless`; `faster_whisper.py` first engine (large-v3, int8, CPU, `cpu_threads`; reads the WAV itself, see its docstring); `assemblyai.py` cloud engine (Universal-3.5 Pro, keyterms with `--glossary-prompt`); `gemini.py` cloud engine (Files API upload, verbatim JSON transcript; timestamps are model estimates, never for subtitles; typed errors `GeminiUnavailable` / `GeminiQuotaExhausted`); `chunked.py` long audio through Gemini (chunks cut at silences, per-chunk cache, model fallback list, faster-whisper for a failed chunk, quota error stops, `ProgressEvent`s)
@@ -77,8 +79,8 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import; superseded by `adjudicate.py` for the test set (`draft`, `ref-from-draft` still work)
 - `talk_autopsy/blocks.py` — what correction and translation share: 5-minute blocks with 3 read-only context segments, video context from `meta.json`, token and cost estimates, stage meta
 - `talk_autopsy/glossary_auto.py` — auto-glossary (`glossary-auto-v1`, helper model): terms, `keep`, suggested translation, `heard_as` mis-recognitions, evidence rule; `coverage` against a reference glossary; `merge` with a user glossary (user wins, drafted translations become "suggested" notes)
-- `talk_autopsy/correct.py` — Claude correction (`correction-v2` default, `correction-v1`), validator (incl. 70% words kept in order, no runs of words from a neighbouring segment), failed blocks keep their text and are listed; `translate.py` — Claude translation (`translation-v2` default: no meaning compression; `translation-v1`), `target_lang` a parameter; prompts in `talk_autopsy/prompts/<version>.md`
-- `talk_autopsy/subtitles.py` — SRT and `.ass` writer: up to 3 x 48 characters, 1-7 s, breaks at sentence/clause ends, never inside a glossary term; `.ass` 1920x1080, Arial 42, outline, bottom centre; reading speed reported (shares above 17 and 25 cps), never enforced
+- `talk_autopsy/correct.py` — Claude correction (`correction-v2` default, `correction-v1`), validator (incl. 70% words kept in order, no runs of words from a neighbouring segment), failed blocks keep their text and are listed; `translate.py` — Claude translation (`translation-v2` default: no meaning compression; `translation-v1`) of sentence units by default (`units=False` / `--per-segment`: each segment alone), `target_lang` a parameter; prompts in `talk_autopsy/prompts/<version>.md`
+- `talk_autopsy/subtitles.py` — SRT and `.ass` writer: up to 3 x 48 characters, at most 7 s, breaks at sentence/clause ends, never inside a glossary term; a translated unit's cues timed by the English words they cover; every cue extended into the following pause (up to +1.5 s, 0.1 s before the next cue, at most 7 s); `.ass` 1920x1080, Arial 42, outline, bottom centre; reading speed reported (shares above 17 and 25 cps), never enforced
 - `talk_autopsy/pipeline.py` — `run`: stt (AssemblyAI on `audio.flac`; fallback chunked Gemini, then faster-whisper), glossary, stt2 (key terms), align (model-estimated times only), fix, translate, srt in `work/<video-id>/`; stamp files to skip unchanged steps, key checks first, cost estimate and limit, Claude and speech recognition cost report, fallbacks listed, progress events
 - `talk_autopsy/core/structured_call.py` also has `refusal_fallback` (`fallbacks: "default"` through the beta endpoint); `run` turns it on for Sonnet calls
 - `talk_autopsy/tts/edge.py` (stage 4) — stub with input -> output in the docstring
@@ -108,8 +110,10 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - Production quality: explicit error handling, no silent fallbacks that fabricate
   data (a cut past the end of a file is an error, not a shorter file).
 - Prefer structured outputs (`core/structured_call.py`) over parsing free text.
-- Stages never renumber, merge or split segments; correction and translation
-  return the same ids (`segments.assert_same_ids`).
+- Stages never renumber, merge or split segments; correction returns the same
+  ids (`segments.assert_same_ids`). The one exception is translation, which
+  works on sentence units (`units.py`): new ids, each unit listing the segment
+  ids it covers (`source_ids`) and keeping the English word timings.
 - Keep core logic free of CLI I/O so a web UI can wrap it later.
 - Stage modules get the client as `claude_client.get_client()` (through the
   module), so the test fixture can replace it.
