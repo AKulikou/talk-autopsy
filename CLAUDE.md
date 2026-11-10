@@ -49,7 +49,7 @@ uv run talk-autopsy adjudicate T2 --backbone work/T2/raw.whisper-large-v3.json -
 uv run talk-autopsy resolve T2                    # after ticking data/test-set/T2.adjudication.md -> T2.ref.txt + protocol
 uv run talk-autopsy judge T6 --resume [--spent-before <usd>] [--plan-after <n>]  # blind audio judge (JUDGE_MODEL gemini-4-carbon, paid, $3 session budget): work/T6/judge.jsonl + T6.adjudication.judged.md; counts and cost only
 uv run talk-autopsy resolve T6 --adjudication data/test-set/T6.adjudication.judged.md   # reference from the judge's decisions
-uv run talk-autopsy judge-compare T2              # judge vs the decided T2 spans (prints span texts: never on a sealed fragment)
+uv run talk-autopsy judge-compare T2 [--normalize-adjudication]  # judge vs the decided T2 spans + WER between references (prints span texts; refuses T6)
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
 uv run talk-autopsy run <source> --lang ru [--context <text-or-file>] [--glossary <md>]
                                            # the pipeline (default steps stt,glossary,stt2,align,fix,translate,srt; engine assemblyai);
@@ -178,7 +178,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   AssemblyAI two passes, glossary-auto-v1, correction-v2, sentence units, translation-v2;
   a change to a frozen part needs a new tag and a new hold-out. T6: three engines run and
   `data/test-set/T6.adjudication.md` prepared; the owner withdrew from adjudication and the blind
-  audio judge failed its T2 calibration (79.0% < 90%), so T6's reference waits for an owner decision;
+  audio judge failed its T2 calibration (79.0% < 90%; 82.5% after a post-hoc rescoring), so T6's reference waits for an owner decision;
   then the tagged pipeline on T6 once; then the external audit.
 - **Stage 3:** the CLI tool with subtitles; external audit; v1.0.
 - **Stage 4:** dubbed audio track.
@@ -187,7 +187,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 ## Known issues
 
 - Gemini's free tier allows 20 requests per day per project for `gemini-3.8-flash` (429 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, measured 2026-11-10; not in the docs). The project is on the paid tier since 2026-11-10 (EUR 5 monthly cap); the audio judge costs about $0.0026 per span with `gemini-4-carbon`.
-- The blind audio judge (`audio-judge-v1`) failed its T2 calibration on 2026-11-10 (agreement 79.0% against the 90% rule; it keeps repetitions the reference drops), so T6 has no reference yet (docs/experiments.md, Methodology: blind audio judge).
+- The blind audio judge (`audio-judge-v1`) failed its T2 calibration on 2026-11-10 (agreement 79.0% against the 90% rule; it keeps repetitions the reference drops); a post-hoc rescoring with the repetition convention made explicit (`judge.normalize_for_adjudication`, both sides) gave 82.5%, still a fail, so T6 has no reference yet (docs/experiments.md, Methodology: blind audio judge).
 - T1's reference was decided by a Claude model without listening; it is secondary evidence for the Claude stages.
 - Gemini's free tier: 503 "high demand" is frequent and the daily quota can run out within one long talk (2026-11-09: on the third chunk). The chunked engine falls back per chunk on 503 and stops on quota; `run --gemini-cache-only` finishes a video with faster-whisper for the missing chunks.
 - Forced alignment places word starts 130–230 ms later than faster-whisper does; which is closer to the truth is not measured (no hand-labelled onsets yet).

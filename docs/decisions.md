@@ -6,6 +6,39 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-10 — Audio judge: repetition convention made explicit, post-hoc rescoring (still failed)
+
+Context: the blind audio judge failed its T2 calibration in prompt 09b
+(agreement 79.0% against the 90% rule; WER between the two T2 references
+1.90% against 2%). Of the 24 disagreements, 14 were repetitions and false
+starts the judge writes and the T2 reference omits, 5 were formatting
+(`Shift+Enter`, `3,000`), 5 one-word substitutions. The reference convention
+on repetitions had never been written down.
+
+Decision: the convention is made explicit (`data/test-set/README.md`:
+immediate repetitions and restarts written once, no thousands separators, key
+combinations as `Shift+Enter`, each row marked as added after the
+calibration) and applied in code by one deterministic function,
+`judge.normalize_for_adjudication`, symmetrically to both sides of every
+comparison and to the judged spans when a reference is built from a judged
+file. The existing T2 judge output was rescored with no new requests and the
+threshold unchanged. **This is a post-hoc methodology change, made after
+seeing the result; the external audit will see it.** Both results are
+published side by side (experiments, Post-hoc rescoring): 79.0% before,
+82.5% after (owner's 19 by ear: 14), WER 1.17%. The rule still fails, so the
+judge is not accepted for T6 and T6 is not judged.
+
+Not adopted: the planned two-reference scoring of T6 (judge reference and an
+engine-majority reference, the gate conclusion accepted only if both give the
+same side of 85%) belonged to the T6 reference step, which did not run; it
+is not in the T6 protocol. The judge's prompt (`audio-judge-v1`) is unchanged,
+and the README rows added after the calibration are kept out of it. The
+metrics normaliser and `benchmark.csv` are unchanged.
+
+What it rules out: a further rule fitted to the remaining T2 disagreements
+(7 of the 20 are repetitions split by the span edge; even counted, agreement
+would be 85.1%). T6's reference needs another route; owner decision.
+
 ## 2026-11-10 — Paid Gemini tier for the audio judge
 
 Context: the blind audio judge (evaluation tooling, `judge.py`) needs one
