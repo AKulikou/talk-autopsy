@@ -147,6 +147,28 @@ To watch with VLC: open the video, then Subtitle -> Add Subtitle File... and
 pick the `.ass` file (it fits three lines in a smaller font); the `.srt` works
 in any player.
 
+A YouTube link or playlist works the same way, with no separate downloader:
+
+```bash
+uv run talk-autopsy doctor        # ffmpeg, a JavaScript runtime for YouTube, yt-dlp age, keys (names only)
+uv run talk-autopsy run "https://www.youtube.com/watch?v=..." --domain web3 --output mp4-burned
+# -> output/<upload-date> <title>/<title>.ru.mp4: Russian subtitles drawn into the picture (for a TV);
+#    <title>.mp4 + <title>.srt next to it for players that load same-named subtitles
+uv run talk-autopsy run "https://www.youtube.com/playlist?list=..." --domain web3 --max-videos 5 --output all
+# -> one folder per video under output/<playlist title>/; finished videos are skipped,
+#    and the run stops before a video that would cross --max-total-cost (default 10 USD)
+```
+
+`--output` takes `srt`, `ass`, `bilingual` (English small on top, Russian
+below), `mp4-soft` (MP4 with Russian and English subtitle tracks) and
+`mp4-burned`, or `all`. The video's title, description and chapter titles are
+the context for the auto-glossary. `--domain web3` adds `glossaries/web3.md`
+(smart contracts and their testing) and, if present, your personal additions in
+`glossaries/local/web3.md` (git-ignored). YouTube needs a JavaScript runtime:
+if `doctor` reports none, install Deno (`winget install DenoLand.Deno`).
+YouTube download is for personal use; you are responsible for complying with
+YouTube's terms of service.
+
 ## Project structure
 
 ```

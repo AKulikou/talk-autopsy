@@ -25,7 +25,8 @@ ENVIRON_METHODS = {"get", "pop", "setdefault"}
 # Reads whose name is a function parameter, so the scan cannot resolve it. Each is
 # checked another way: require_key accepts only OPTIONAL_KEYS (tested below);
 # _setting's callers pass literals, which the scan sees as reads.
-DYNAMIC_READS_ALLOWED = {("config.py", "require_key"), ("config.py", "_setting")}
+DYNAMIC_READS_ALLOWED = {("config.py", "require_key"), ("config.py", "_setting"),
+                         ("config.py", "key_is_set")}
 
 
 def _is_environ(node: ast.AST) -> bool:

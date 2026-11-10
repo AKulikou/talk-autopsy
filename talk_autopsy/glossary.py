@@ -138,3 +138,38 @@ def to_markdown(glossary: Glossary, languages: list[str] | None = None) -> str:
                   *(entry.translations.get(lang, "") for lang in langs), entry.notes]
         rows.append("| " + " | ".join(cell(v) for v in values) + " |")
     return "\n".join(rows) + "\n"
+
+
+# --- combining user glossaries (--glossary, --domain, glossaries/local/) -----------------
+
+
+def combine(glossaries: list[Glossary]) -> Glossary:
+    """
+    One user glossary from several, in priority order: an entry from an earlier
+    glossary wins over a later one with the same term (case-insensitive).
+    """
+    combined = Glossary()
+    for glossary in glossaries:
+        for entry in glossary.entries:
+            if combined.find(entry.term) is None:
+                combined.entries.append(entry)
+    return combined
+
+
+def domain_paths(domain: str, glossaries_dir: Path, local_dir: Path) -> list[Path]:
+    """
+    `--domain <name>` -> glossaries/<name>.md, then glossaries/local/<name>.md
+    if it exists (personal additions such as people's names, git-ignored).
+    GlossaryError if the domain glossary does not exist.
+    """
+    name = domain.strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name):
+        raise GlossaryError(f"domain {domain!r}: use letters, digits, - and _")
+    main = Path(glossaries_dir) / f"{name}.md"
+    if not main.is_file():
+        folder = Path(glossaries_dir)
+        known = sorted(p.stem for p in folder.glob("*.md")) if folder.is_dir() else []
+        raise GlossaryError(f"no domain glossary {main}; known domains: {', '.join(known) or 'none'}")
+    local = Path(local_dir) / f"{name}.md"
+    return [main, local] if local.is_file() else [main]
+

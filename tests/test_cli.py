@@ -84,11 +84,13 @@ def test_missing_local_file(tmp_path):
     assert "No such file" in result.output
 
 
-def test_url_source_is_not_downloaded_yet():
-    args = ["run", "https://example.com/watch?v=x", "--steps", "stt", "--engine", "faster-whisper"]
+def test_url_source_stops_without_a_javascript_runtime(monkeypatch):
+    from talk_autopsy import youtube
+    monkeypatch.setattr(youtube, "find_js_runtimes", lambda classes=None: [])
+    args = ["run", "https://www.youtube.com/watch?v=x", "--steps", "stt", "--engine", "faster-whisper"]
     result = runner.invoke(cli.app, args)
     assert "(URL)" in result.output and result.exit_code == 1
-    assert "not implemented yet" in result.output
+    assert "winget install DenoLand.Deno" in result.output
 
 
 def test_claude_steps_fail_fast_without_a_key(sine, monkeypatch):
@@ -119,6 +121,7 @@ def test_run_name_reaches_the_pipeline(sine, monkeypatch):
         seen["name"] = settings.name
         return pipeline.RunReport()
     monkeypatch.setattr(pipeline, "run", fake_run)
+    monkeypatch.setattr(cli, "_write_outputs", lambda *args, **kwargs: [])
     result = runner.invoke(cli.app, ["run", str(sine), "--name", "real-01", "--steps", "srt"])
     assert result.exit_code == 0, result.output
     assert seen["name"] == "real-01"  # not the last step name printed in the plan

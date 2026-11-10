@@ -92,6 +92,13 @@ OPTIONAL_KEYS: dict[str, str] = {
 }
 
 
+def key_is_set(name: str) -> bool:
+    """True if the secret `name` (one of SECRET_ENV_VARS) is set and not empty; never returns the value."""
+    if name not in SECRET_ENV_VARS:
+        raise ValueError(f"unknown secret {name!r}; known: {', '.join(SECRET_ENV_VARS)}")
+    return bool(os.getenv(name, "").strip())
+
+
 def require_key(name: str) -> str:
     """
     The value of the optional key `name` (one of OPTIONAL_KEYS), or
@@ -267,3 +274,26 @@ WORK_DIR = PROJECT_ROOT / "work"  # per-run intermediate files (audio.wav, raw.j
 RESULTS_DIR = PROJECT_ROOT / "results"
 BENCHMARK_CSV = RESULTS_DIR / "benchmark.csv"
 LOGS_DIR = PROJECT_ROOT / "logs"
+
+# --- Outputs, glossaries, YouTube -------------------------------------------
+
+GLOSSARIES_DIR = PROJECT_ROOT / "glossaries"  # reusable domain glossaries (glossaries/<domain>.md)
+LOCAL_GLOSSARIES_DIR = GLOSSARIES_DIR / "local"  # personal additions (names), git-ignored
+
+
+def output_dir() -> Path:
+    """OUTPUT_DIR (a relative path is under the project root); default output/ (git-ignored)."""
+    path = Path(_setting("OUTPUT_DIR", "output"))
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+# Estimates for a video before it is downloaded (per hour of video), from the
+# operational runs of 2026-11-09/10 (docs/experiments.md, Operational runs):
+# Claude 0.67-0.82 USD per hour spent (the higher is used), AssemblyAI two passes
+# 0.47 USD per hour at list price, wall time 9.1-9.8 min per hour of video
+# without download or burn-in (the higher, rounded up, is used).
+RUN_CLAUDE_USD_PER_HOUR = 0.82
+RUN_STT_USD_PER_HOUR = 0.47
+RUN_MINUTES_PER_HOUR = 10.0
+PLAYLIST_MAX_COST_USD = 10.00  # default cap for a whole playlist (Claude + speech recognition estimate)
+YT_DLP_MAX_AGE_DAYS = 30  # doctor warns when the installed yt-dlp is older (YouTube changes often)

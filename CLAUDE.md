@@ -51,10 +51,14 @@ uv run talk-autopsy judge T6 --resume [--spent-before <usd>] [--plan-after <n>] 
 uv run talk-autopsy resolve T6 --adjudication data/test-set/T6.adjudication.judged.md   # reference from the judge's decisions
 uv run talk-autopsy judge-compare T2 [--normalize-adjudication]  # judge vs the decided T2 spans + WER between references (prints span texts; refuses T6)
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
+uv run talk-autopsy doctor                         # ffmpeg, JavaScript runtime for YouTube, yt-dlp age, key names
+uv run talk-autopsy run <youtube-url> --domain web3 --output mp4-burned   # download (<=1080p) + pipeline + outputs
+uv run talk-autopsy run <playlist-url> --max-videos N [--max-total-cost 10]  # one by one, finished ones skipped
 uv run talk-autopsy run <source> --lang ru [--context <text-or-file>] [--glossary <md>]
                                            # the pipeline (default steps stt,glossary,stt2,align,fix,translate,srt; engine assemblyai);
                                            # work/<video-id>/, skips steps that are up to date; --dry-run prints the plan;
                                            # --engine gemini+align|faster-whisper|gemini; --gemini-cache-only: no Gemini call
+                                           # --output srt,ass(default)|bilingual|mp4-soft|mp4-burned|all -> OUTPUT_DIR/<name>/
 ```
 
 `fix`, `translate` and `eval` are the experiment commands: no refusal fallback, one
@@ -72,7 +76,10 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/config.py` — `load_environment` (reads `.env`; called only by entry points: the CLI's `main`, later the web UI), API key check (`require_api_key`), optional cloud STT keys (`require_key`), settings as functions read on call (`target_lang()`, `correction_model()`, ...), `check_lang`, model IDs, prices for the cost estimate, paths. Importing any module reads neither `.env` nor a secret
 - `talk_autopsy/segments.py` — `Transcript` / `Segment` / `Word`: the one JSON format every stage reads and writes; `assert_same_ids`; `Segment.source_ids` only in sentence units
 - `talk_autopsy/units.py` — sentence units (`sentence-units-v1`): segments merged until terminal punctuation or a pause over 1.5 s, split above 25 s at the best boundary near the even split; each unit keeps its English words and the covered segment ids
-- `talk_autopsy/ingest.py` — `extract_audio` (ffmpeg, optional cut), `probe` (duration), `parse_timecode`; `download` (yt-dlp) is a stage 1 stub
+- `talk_autopsy/ingest.py` — `extract_audio` (ffmpeg, optional cut), `probe` (duration), `parse_timecode`; its `download` stub is superseded by `youtube.py` (ingest.py is left unchanged: its audio functions are frozen)
+- `talk_autopsy/youtube.py` — YouTube links and playlists through yt-dlp as a library (`yt-dlp[default]`, incl. the `yt-dlp-ejs` challenge solver; a JavaScript runtime must be installed, never installed automatically): metadata without download, estimate, MP4 up to 1080p (H.264 preferred) + the author's English captions (saved, not used), `meta.json`, Windows-safe `<upload-date> <title>` folders, playlist plan (order, done markers, caps), `doctor` checks
+- `talk_autopsy/outputs.py` — output formats after the srt step: `<stem>.srt` (named like the video, for players that auto-load), `.en.srt`, `.ass`, `bilingual.ass` (English small on top), `.subs.mp4` (mov_text tracks, no re-encode), `.<lang>.mp4` (burned in with libx264, for TVs; 0.18x real time measured)
+- `glossaries/` — reusable domain glossaries (`web3.md`; `--domain web3`); `glossaries/local/` git-ignored personal additions (names)
 - `talk_autopsy/glossary.py` — `Glossary`: a Markdown table per video (`T<n>.glossary.md`), format in the module docstring
 - `talk_autopsy/stt/` — `base.py` `Transcriber` protocol and `drop_wordless`; `faster_whisper.py` first engine (large-v3, int8, CPU, `cpu_threads`; reads the WAV itself, see its docstring); `assemblyai.py` cloud engine (Universal-3.5 Pro, keyterms with `--glossary-prompt`); `gemini.py` cloud engine (Files API upload, verbatim JSON transcript; timestamps are model estimates, never for subtitles; typed errors `GeminiUnavailable` / `GeminiQuotaExhausted`); `chunked.py` long audio through Gemini (chunks cut at silences, per-chunk cache, model fallback list, faster-whisper for a failed chunk, quota error stops, `ProgressEvent`s)
 - `talk_autopsy/align.py` — forced alignment (wav2vec2 base 960h from torchaudio, Viterbi in numpy, block by block with garbage states); `AlignedTranscriber` = the `gemini+align` engine; `start_differences` for timing comparisons. torch is the optional `align` extra; tests use a stub emitter

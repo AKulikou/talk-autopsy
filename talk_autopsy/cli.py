@@ -28,13 +28,22 @@ from talk_autopsy import (
     ingest,
     judge,
     metrics,
+    outputs,
     pipeline,
     proofread,
     subtitles,
     translate,
+    youtube,
 )
 from talk_autopsy.config import ConfigurationError
-from talk_autopsy.glossary import GlossaryError, load_glossary, parse_glossary
+from talk_autopsy.glossary import (
+    GlossaryError,
+    combine,
+    domain_paths,
+    load_glossary,
+    parse_glossary,
+    to_markdown,
+)
 from talk_autopsy.segments import load_transcript, save_transcript
 from talk_autopsy.stt import assemblyai
 from talk_autopsy.stt.assemblyai import AssemblyAITranscriber
@@ -431,25 +440,93 @@ def ref_from_draft(
     typer.echo(f"Wrote {out}: {len(reference.split())} words, {paragraphs} paragraphs")
 
 
+def _user_glossary_paths(glossary: Path | None, domain: str | None) -> list[Path]:
+    """--glossary first (it wins), then the domain glossary, then its local additions; all parsed now."""
+    paths = [glossary] if glossary else []
+    if domain:
+        paths += domain_paths(domain, config.GLOSSARIES_DIR, config.LOCAL_GLOSSARIES_DIR)
+    for path in paths:
+        if not Path(path).is_file():
+            raise GlossaryError(f"no glossary file {path}")
+        load_glossary(path)
+    return paths
+
+
+def _run_glossary(paths: list[Path], work_dir: Path) -> Path | None:
+    """The user glossary of a run: one file as given, several combined into work/<id>/user-glossary.md."""
+    if not paths:
+        return None
+    if len(paths) == 1:
+        return paths[0]
+    combined = combine([load_glossary(p) for p in paths])
+    work_dir.mkdir(parents=True, exist_ok=True)
+    out = work_dir / "user-glossary.md"
+    sources = ", ".join(Path(p).name for p in paths)
+    out.write_text(f"<!-- user glossary of this run: {sources}, earlier files win -->" + chr(10) * 2
+                   + to_markdown(combined), encoding="utf-8", newline=chr(10))
+    return out
+
+
+def _print_report(report) -> None:
+    typer.echo("Cost report:")
+    for line in pipeline.cost_lines(report):
+        typer.echo(line)
+    for name, r in report.subtitles.items():
+        typer.echo(f"  {name}: {r['cues']} cues, {r['share_above_17_cps'] * 100:.1f}% above 17 cps, "
+                   f"{r['share_above_25_cps'] * 100:.1f}% above 25 cps")
+
+
+def _write_outputs(settings, formats: list[str], dest: Path, stem: str, video: Path,
+                   duration: float | None) -> list:
+    if "mp4-burned" in formats and duration:
+        typer.echo(f"Burn-in: about {outputs.burn_seconds(duration) / 60:.0f} min of encoding "
+                   f"({outputs.BURN_SPEED:.2f}x real time measured on the owner's laptop; a slower machine "
+                   "may take 0.5-1x)")
+    lang = settings.target_lang
+    translated_path = settings.work_dir / f"{lang}.json"
+    translated = (load_transcript(translated_path) if "bilingual" in formats and translated_path.is_file()
+                  else None)
+    glossary_file = settings.work_dir / "glossary.md"
+    run_glossary = load_glossary(glossary_file) if glossary_file.is_file() else None
+    written = outputs.write_outputs(settings.work_dir, settings.video_id, lang, dest, stem, formats,
+                                    video=video, glossary=run_glossary, translated=translated,
+                                    progress=typer.echo)
+    typer.echo(f"Outputs in {dest}:")
+    for w in written:
+        typer.echo(f"  {w.format:<11} {w.path.name}")
+    return written
+
+
 @app.command()
 def run(
-    source: Annotated[str, typer.Argument(help="Video URL or local file.")],
+    source: Annotated[str, typer.Argument(help="YouTube video or playlist URL, or a local file.")],
     lang: Annotated[str | None, typer.Option(help="Target language code. Default: TARGET_LANG.")] = None,
     steps: Annotated[str, typer.Option(help=f"Comma-separated, any of: {', '.join(STEPS)}.")] = DEFAULT_STEPS,
     engine: Annotated[str, typer.Option(help=f"Speech recognition: {' | '.join(pipeline.ENGINES)}.")]
     = pipeline.DEFAULT_ENGINE,
     glossary: Annotated[Path | None, typer.Option(
         help="Your glossary (Markdown table); merged with the auto-glossary, your entries win.")] = None,
+    domain: Annotated[str | None, typer.Option(
+        help="Domain glossary glossaries/<DOMAIN>.md (+ glossaries/local/<DOMAIN>.md), e.g. web3; "
+             "merged after --glossary.")] = None,
     context: Annotated[str | None, typer.Option(
         help="Video title, description, chapter titles: text, or a file holding it. "
-             "A local file's name is not context.")] = None,
+             "A local file's name is not context; for a YouTube link it is taken from the video.")] = None,
+    output: Annotated[str, typer.Option(
+        help=f"Comma-separated outputs: {', '.join(outputs.FORMATS)}, or all. mp4-burned is for TVs.")]
+    = outputs.DEFAULT,
     max_cost: Annotated[float, typer.Option(
-        help="Stop before the Claude steps if their estimate is above this (USD).")]
+        help="Stop before the Claude steps of a video if their estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
+    max_videos: Annotated[int | None, typer.Option(min=1, help="Playlist: at most N videos.")] = None,
+    max_total_cost: Annotated[float, typer.Option(
+        help="Playlist: stop before a video that would take the estimated total (Claude + speech "
+             "recognition) past this (USD).")] = config.PLAYLIST_MAX_COST_USD,
     name: Annotated[str | None, typer.Option(
         help="Name of the run: work/<name>/ and <name>.<lang>.srt. Default: the file name.")]
     = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Print the plan and stop.")] = False,
+    dry_run: Annotated[bool, typer.Option(
+        "--dry-run", help="Print the plan (and a link's metadata) and stop.")] = False,
     gemini_cache_only: Annotated[bool, typer.Option(
         "--gemini-cache-only",
         help="No Gemini call: reuse cached Gemini chunks, transcribe the rest with faster-whisper "
@@ -458,6 +535,8 @@ def run(
     """
     Run the pipeline on SOURCE; every step writes its file in work/<video-id>/ and skips if up to date.
     Default: AssemblyAI, auto-glossary, AssemblyAI with key terms, correction, translation, subtitles.
+    A YouTube link is downloaded first (up to 1080p) into OUTPUT_DIR/<date> <title>/, where the outputs
+    go; a local file's outputs go to OUTPUT_DIR/<file name>/.
     """
     selected = parse_steps(steps)
     try:
@@ -469,8 +548,16 @@ def run(
                                  param_hint="--engine")
     if "dub" in selected:
         raise typer.BadParameter("dub arrives in stage 4", param_hint="--steps")
+    try:
+        formats = outputs.parse_outputs(output)
+    except ValueError as e:
+        raise typer.BadParameter(str(e), param_hint="--output") from None
     if not is_url(source) and not Path(source).is_file():
         _fail(f"No such file: {source}")
+    try:
+        glossary_paths = _user_glossary_paths(glossary, domain)
+    except GlossaryError as e:
+        _fail(str(e))
 
     typer.echo(f"Source: {source} ({'URL' if is_url(source) else 'local file'})")
     typer.echo(f"Target language: {target_lang}")
@@ -480,30 +567,127 @@ def run(
                                     translation=f"{translate.PROMPT_VERSION}, {config.translation_model()}",
                                     helper=config.helper_model(), lang=target_lang, engine=engine)
         typer.echo(f"  {number}. {step_name:<10} {detail}")
-    settings = pipeline.RunSettings(source=Path(source), target_lang=target_lang, steps=selected,
-                                    engine=engine, glossary=glossary, max_cost_usd=max_cost,
-                                    context=glossary_auto.read_context(context), name=name or "",
-                                    gemini_cache_only=gemini_cache_only)
-    try:
-        pipeline.check_keys(settings)  # fail before any work, not after speech recognition
+    typer.echo(f"Outputs: {', '.join(formats)}")
+    if glossary_paths:
+        typer.echo(f"User glossary: {', '.join(str(p) for p in glossary_paths)} (earlier files win)")
+    extra_context = glossary_auto.read_context(context)
+
+    def settings_for(video_source: Path, run_name: str, video_context: str):
+        settings = pipeline.RunSettings(source=video_source, target_lang=target_lang, steps=selected,
+                                        engine=engine, max_cost_usd=max_cost, context=video_context,
+                                        name=run_name, gemini_cache_only=gemini_cache_only)
+        if not dry_run:
+            settings.glossary = _run_glossary(glossary_paths, settings.work_dir)
+        return settings
+
+    local = None if is_url(source) else settings_for(Path(source), name or "", extra_context)
+    try:  # fail before any work, not after speech recognition
+        pipeline.check_keys(local or pipeline.RunSettings(source=Path(source), target_lang=target_lang,
+                                                          steps=selected, engine=engine))
     except ConfigurationError as e:
         _fail(str(e))
+
+    if local is None:
+        _run_youtube(source, settings_for, extra_context, formats, max_cost, max_videos, max_total_cost,
+                     dry_run)
+        return
     if dry_run:
         return
-    if is_url(source):
-        _fail("Downloading a URL is not implemented yet; download the video and pass the file.")
+    _log_to_stderr()
+    try:
+        report = pipeline.run(local, progress=_print_progress)
+        typer.echo(f"Done: {local.work_dir}")
+        _print_report(report)
+        stem = youtube.safe_name(Path(source).stem)
+        _write_outputs(local, formats, config.output_dir() / stem, stem, Path(source),
+                       ingest.probe(Path(source)) if "mp4-burned" in formats else None)
+    except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError, GlossaryError) as e:
+        _fail(str(e))
+
+
+def _run_youtube(url: str, settings_for, extra_context: str, formats: list[str], max_cost: float,
+                 max_videos: int | None, max_total_cost: float, dry_run: bool) -> None:
+    """A YouTube video or playlist: tools check, metadata and estimate, download, pipeline, outputs."""
+    try:
+        runtimes = youtube.require_youtube_tools()
+        info = youtube.fetch(url, runtimes)
+    except youtube.YouTubeError as e:
+        _fail(str(e))
+    if isinstance(info, youtube.PlaylistInfo):
+        parent = config.output_dir() / youtube.safe_name(info.title)
+        plan = youtube.plan_playlist(info, parent, max_videos, max_total_cost, max_cost)
+        typer.echo(f"Playlist: {info.title} ({len(info.entries)} videos) -> {parent}")
+        for video in info.entries[:max_videos] if max_videos else info.entries:
+            mark = ("done, skipped" if video in plan.skipped_done else
+                    "over the cap, not run" if video in plan.over_cap else "to run")
+            typer.echo(f"  {video.title[:60]:<60} {youtube.estimate(video.duration).line()} [{mark}]")
+        typer.echo(f"Total estimate for the {len(plan.todo)} videos to run: "
+                   f"about {plan.estimate_usd:.2f} USD "
+                   f"(cap {max_total_cost:.2f} USD)")
+        if plan.over_cap:
+            typer.echo(f"Stopping before {len(plan.over_cap)} videos: the next would cross the cap "
+                       "(raise --max-total-cost or --max-cost) or has no duration to estimate.")
+        if dry_run:
+            return
+        for number, video in enumerate(plan.todo, start=1):
+            typer.echo(f"--- video {number} of {len(plan.todo)}: {video.title}")
+            _youtube_video(video, parent, runtimes, settings_for, extra_context, formats, max_cost, dry_run)
+        return
+    _youtube_video(info, config.output_dir(), runtimes, settings_for, extra_context, formats, max_cost,
+                   dry_run)
+
+
+def _youtube_video(video, parent: Path, runtimes: list[str], settings_for, extra_context: str,
+                   formats: list[str], max_cost: float, dry_run: bool) -> None:
+    try:
+        if not video.description and not video.upload_date:  # a playlist's flat entry: full metadata
+            video = youtube.fetch_video(video.url, runtimes)
+    except youtube.YouTubeError as e:
+        _fail(str(e))
+    folder = parent / youtube.video_folder_name(video)
+    e = youtube.estimate(video.duration)
+    typer.echo(f"Video: {video.title}" + (f" ({video.channel})" if video.channel else ""))
+    typer.echo(f"  {e.line()}")
+    typer.echo(f"  author's captions: {', '.join(video.author_captions) or 'none'}; "
+               f"chapters: {len(video.chapters)}")
+    typer.echo(f"  folder: {folder}")
+    if e.claude_usd > max_cost:
+        _fail(f"the Claude estimate {e.claude_usd:.2f} USD is above --max-cost {max_cost:.2f} USD")
+    if dry_run:
+        return
+    try:
+        download = youtube.download(video, folder, runtimes)
+    except youtube.YouTubeError as err:
+        _fail(str(err))
+    typer.echo(f"Downloaded {download.video.name}"
+               + (f" + {len(download.captions)} caption file(s)" if download.captions else ""))
+    context = video.context() + (chr(10) * 2 + extra_context if extra_context else "")
+    settings = settings_for(download.video, f"yt-{youtube.safe_name(video.id, 40)}", context)
     _log_to_stderr()
     try:
         report = pipeline.run(settings, progress=_print_progress)
-    except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError, GlossaryError) as e:
-        _fail(str(e))
-    typer.echo(f"Done: {settings.work_dir}")
-    typer.echo("Cost report:")
-    for line in pipeline.cost_lines(report):
-        typer.echo(line)
-    for name, r in report.subtitles.items():
-        typer.echo(f"  {name}: {r['cues']} cues, {r['share_above_17_cps'] * 100:.1f}% above 17 cps, "
-                   f"{r['share_above_25_cps'] * 100:.1f}% above 25 cps")
+        _print_report(report)
+        written = _write_outputs(settings, formats, folder, youtube.video_file_stem(video), download.video,
+                                 video.duration)
+    except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError, GlossaryError) as err:
+        _fail(str(err))
+    youtube.mark_done(folder, [w.path.name for w in written],
+                      {"claude_usd": report.cost_usd, "stt_usd": report.stt_cost_usd})
+
+
+@app.command()
+def doctor() -> None:
+    """Check what the tool needs here: ffmpeg, a JavaScript runtime for YouTube, yt-dlp, API keys (names)."""
+    checks = youtube.doctor()
+    failed = False
+    for c in checks:
+        status = "ok" if c.ok else ("MISSING" if c.required else "warning")
+        typer.echo(f"  {status:<8} {c.name}: {c.detail}")
+        if not c.ok:
+            typer.echo(f"           fix: {c.fix}")
+            failed = failed or c.required
+    if failed:
+        raise typer.Exit(code=1)
 
 
 FRAGMENT_ID = re.compile(r"^T\d+$")

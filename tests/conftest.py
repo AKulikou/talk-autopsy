@@ -121,6 +121,12 @@ def placeholder_secrets(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def output_dir_in_tmp(monkeypatch, tmp_path):
+    """Outputs of a test run never land in the project's output/ folder."""
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path / "output"))
+
+
+@pytest.fixture(autouse=True)
 def no_real_client(monkeypatch):
     """A module that calls get_client() without being patched fails loudly
     instead of reaching the real API."""

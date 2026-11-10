@@ -7,6 +7,9 @@ env/
 logs/
 *.log
 work/
+output/
+# Personal glossary additions (names of people) stay local
+glossaries/local/
 # results/ is ignored except the benchmark table: ignore the contents, not the
 # directory, so the exception below can re-include the file.
 results/*
