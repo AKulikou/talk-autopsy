@@ -249,6 +249,8 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | both above 4.0; v2 preferred; not fully blind | **C1 met; translation-v2 adopted** |
+| B2 (v2) | 2026-11-10 | correction-v2 edits distort meaning in < 5% of cases | owner checked `B2-review-v2.md` | T2 0 edits; T1 2 edits, 0 distort meaning | met on a tiny sample | correction-v2 frozen unchanged |
 | B1 (v2) | 2026-11-09 | correction-v2 with the auto-glossary keeps the realistic pipeline at >= 85% term accuracy without false edits or words moved between segments | `correction-v2`, Sonnet, on AssemblyAI + auto key terms, auto-glossary; T2, T1 | term accuracy T2 96.26% -> 96.26%, T1 98.33% -> 98.33%; WER T2 4.73% -> 4.73%, T1 0.58% -> 0.50%; false edits 0; edits 0 / 2; 0.108 USD | the realistic pipeline is at 96.3% / 98.3%; correction adds nothing measurable on this input | correction-v2 is the default; owner checks `B2-review-v2.md` |
 | B5 | 2026-11-09 | a glossary drafted by Haiku from the first transcript covers >= 70% of the reference glossary | `glossary-auto-v1`, `claude-haiku-5-5`, raw AssemblyAI T2/T1, no context; two runs; then AssemblyAI with the auto terms | coverage T2 74.4% / 79.5%, T1 56.8% / 62.2%; STT terms with auto terms T2 96.3%, T1 98.3% (reference glossary: 99.1% / 100%); 0.0096 USD Claude, 0.084 USD AssemblyAI | met on T2, not on T1; the second pass keeps most of the keyterm gain | auto-glossary is the pipeline's glossary step |
 | C1 | 2026-11-09 | translation-v1 subtitles score >= 4.0 with the owner | owner rated 20 random T2 segments (one system, not yet blind) | mean 3.85; 5 x8, 4 x4, 3 x5, 2 x3 | under the target; all three 2s lose meaning through the compression rule | translation-v2 without meaning compression (decisions); blind comparison next |
@@ -291,7 +293,21 @@ whose segment is short and whose next cue starts at once, so the cue cannot
 linger; cues never cross a segment boundary. Writing both files takes about
 2 s per fragment.
 
-### C1 (blind): translation-v1 against translation-v2 — file waiting for the owner
+### B2 (v2): the owner's check of correction-v2's edits
+
+- **Hypothesis:** fewer than 5% of correction-v2's edits distort the meaning of
+  what was said (as B2 for v1).
+- **Run:** the owner reviewed `work/T2/B2-review-v2.md`: the edits correction-v2
+  made in B1 (v2) on the realistic input (AssemblyAI + auto key terms).
+- **Numbers:** T2 — 0 edits, nothing to review. T1 — 2 edits (`@claud` ->
+  `@Claude`, `Claude codes` -> `Claude Codes`); the owner confirmed that
+  neither distorts meaning. `@Claude` against the convention `@claude` is a
+  spelling difference, not a change of meaning.
+- **Conclusion:** 0 of 2 distort meaning; the criterion is met on a very small
+  sample (2 edits, on the fragment whose reference a Claude model decided).
+- **Decision:** recorded; correction-v2 goes into the freeze unchanged.
+
+### C1 (blind): translation-v1 against translation-v2
 
 - **Hypothesis:** translation-v2 (no meaning compression) scores higher with
   the owner than translation-v1 and reaches the stage 2 target (mean >= 4.0)
@@ -336,7 +352,33 @@ linger; cues never cross a segment boundary. Writing both files takes about
   translations of these 20 segments, so a remembered wording can unblind a
   segment; segments where X and Y are identical score the same by
   construction.
-- **Numbers, conclusion, decision:** after the owner's scores.
+- **Rating (2026-11-10):** the owner filled the blind pairwise file for items
+  1–15 and stopped there, judging both versions good. The remaining 5 items
+  are not rated: the assistant did not rate them, since Claude would be rating
+  Claude's own output.
+- **Numbers** (unblinded with `C1-blind.key.json` after the scores):
+
+  | | translation-v1 | translation-v2 |
+  |---|---|---|
+  | pairs rated | 15 | 15 |
+  | mean | 4.40 | **4.67** |
+  | better in the pair | 3 | 8 |
+  | ties | 4 | 4 |
+
+  v2's two weak items, 3 and 5 (segments 13 and 21, both rated 3), are
+  sentence fragments cut at a segment boundary: the segment holds half a
+  sentence and its translation reads as a fragment.
+- **Caveats:** not fully blind — the owner had rated the v1 texts the day
+  before, so a remembered wording can unblind an item. The same v1 texts
+  scored 3.85 rated alone and 4.40 in pairs, so absolute scores drift by about
+  one point between sessions: pairwise rating is for choosing between
+  versions, single rating for "is it good enough". 15 items, one fragment,
+  one rater.
+- **Conclusion:** both versions are above the 4.0 target; v2 wins more pairs
+  than it loses (8 to 3). **C1 is met.**
+- **Decision:** translation-v2 adopted (decisions, 2026-11-10). The fragment
+  defect is fixed below the prompt: translation runs on sentence units
+  (D1 (setup)).
 
 ### B1 (v2): correction-v2 on the realistic input
 
@@ -986,6 +1028,8 @@ Ideas that come up during a stage and wait for a later one.
   ("[removed]", T2 segment 2) although the prompt asks for job
   titles by meaning (C1 blind run, 2026-11-09). Revisit after the owner's
   blind scores; a third translation prompt version is within the limit of 5.
+  The owner scored that item 5 for both versions (C1 blind, 2026-11-10); no
+  prompt change before the freeze.
 
 - Rejected answers are not saved (operational runs, 2026-11-09): when a block
   fails validation twice only the problem list is logged, so the cause had to

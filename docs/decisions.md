@@ -6,6 +6,18 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-10 — translation-v2 adopted
+
+Owner's blind pairwise comparison C1 (`work/T2/C1-blind.md`, segments 1–15 of
+20; experiments, "C1 (blind)"): translation-v1 mean 4.40, translation-v2 mean
+**4.67** over 15 pairs; v2 better in 8, v1 in 3, ties 4. Both are above the
+stage 2 target of 4.0, so the C1 criterion is met, and v2 is the better of the
+two. `translation-v2` stays the default and is the version frozen for T6.
+
+What it rules out: returning to the compression rule of v1. What is left open:
+v2's two weak items were sentence fragments cut at segment boundaries; they are
+addressed in the subtitle and unit layer (sentence units), not in the prompt.
+
 ## 2026-11-09 — Refusal fallback on in `run`, off in experiments
 
 Owner instruction of 2026-11-09 (session prompt 06), revising the entry "no
