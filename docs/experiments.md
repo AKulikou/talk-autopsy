@@ -113,6 +113,71 @@ for AssemblyAI and Gemini, whose WER is biased in their favour:
 | AssemblyAI | 30 (26%) | 60 (82%) |
 | typed (no engine had it) | 29 (25%) | 1 (1%) |
 
+## Methodology: blind audio judge
+
+Written 2026-11-10, before any judge result on T2 or T6.
+
+**Why.** The owner (not a native speaker) has withdrawn from adjudicating
+reference spans: not an expert, and reading the variants before
+listening biases what one hears (T2 span `them` -> `Vim`). The assistant
+cannot adjudicate either: it cannot hear audio, and Claude is the corrector
+the T6 run scores. Spans are now decided by a blind audio judge.
+
+**Method** (`talk_autopsy/judge.py`, `audio-judge-v1`; evaluation tooling,
+not part of the frozen pipeline). Gemini `gemini-3.8-flash` (the most capable
+free-tier model on 2026-11-10; `gemini-4-argon` is paid only), one request per
+majority or split span with the span's clip inline. The structured answer has
+three fields in this order: `heard`, a verbatim transcription of the whole
+clip written before the options; `choice`, the number of the matching option
+or `none`; `final_text`, the marked part as it should be written. The prompt
+asks for the transcription before it lists any option. The options are the
+engines' variants, deduplicated by their normalized tokens, shuffled with a
+per-span seed and numbered with no engine names or vote counts. The prompt
+says that every option may be wrong and that agreeing with the majority is
+not a goal. The backbone's context words before and after the span locate the
+marked part. The reference conventions of `data/test-set/README.md` are given
+as writing rules; `final_text` is cleaned by the rules applied in code
+(fillers removed). No glossary is given, on T2 or T6. Output: `work/<ID>/judge.jsonl`
+(resumable span by span) and `data/test-set/<ID>.adjudication.judged.md`
+(the judge's ticks; the original file is not changed), resolved with
+`talk-autopsy resolve <ID> --adjudication <judged file>`.
+
+Measured per run: the share of spans where the judge chose the variant that
+came from the Gemini engine (self-preference: the judge is a Gemini model
+too), the share of `none`, and the share where `heard` already contains the
+chosen text.
+
+**Calibration on T2** (all 114 spans; `talk-autopsy judge-compare T2`). A span
+agrees when the judge's text and the decided text are equal after the metrics
+normalization. Agreement is reported overall, by verdict (89 majority, 25
+split) and by how the span was decided. The owner's list of the 19 spans he
+decided by ear was not recorded (prompt 05 gave counts only), so the classes
+are inferred from each decision's pattern (`judge.classify_decision`, with
+the T2 glossary): **majority** 74 (decided with the pre-marked text),
+**rule** 32 (the product-name rule, a spelling convention, or a glossary
+term), **ear** 8 (a majority overruled, or a split decided, with other words
+and no rule). The 19 by-ear decisions are therefore approximated by these 8
+spans; the other 11 sit among the majority or rule classes and cannot be
+told apart. Also reported: the WER between `T2.ref.txt` and a reference
+resolved from the judged file (into a temporary path; `T2.ref.txt` is not
+changed), and the judge's Gemini share next to the owner's on the same spans
+(71 of 114, 62%, `T2.ref.protocol.json`).
+
+**Decision rule.** The judge is accepted for T6 if, on T2, overall agreement
+is at least 90% and the WER between the two T2 references is at most 2%.
+Otherwise the disagreement pattern is logged here and T6 is not judged.
+
+**Status 2026-11-10: not run.** The free tier allows 20 requests per day per
+project for `gemini-3.8-flash` (HTTP 429, quota
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, value 20; the docs do
+not publish it). The day's earlier calls had used it up before the first T2
+span was judged, and the model also answered 503 "high demand" to most calls.
+At 20 requests a day, T2 (114 spans) and T6 (86) need at least 10 days of
+quota, more if 503 answers count against it (not measured). Each day after
+the reset (midnight Pacific): `uv run talk-autopsy judge T2 --resume` until
+114 of 114, then `judge-compare T2`, `resolve T2 --adjudication
+data/test-set/T2.adjudication.judged.md --out <temporary path>` and the WER.
+
 ## T6 protocol
 
 T6 is the sealed hold-out of stage 2 (a workshop with a live demo, a
@@ -130,6 +195,10 @@ non-native English accent). Its 10-minute window was cut blind on
    owner adjudicates every span, the assistant decides none (T1's
    assistant-decided reference is the reason). Its glossary is made the same
    way as T2's, by the owner.
+   *Changed 2026-11-10 (prompt 09a):* the owner has withdrawn from
+   adjudication; the spans are decided by the blind audio judge if it passes its
+   T2 calibration (Methodology: blind audio judge), and the glossary is drafted
+   by Gemini from the reference (`talk-autopsy glossary-ref`), not by Claude.
 3. **One run.** The frozen pipeline (`talk-autopsy run` with the tagged code,
    the auto-glossary and no hand glossary) runs on T6 once. Its numbers are
    recorded whatever they are; a prompt change after seeing them starts a new

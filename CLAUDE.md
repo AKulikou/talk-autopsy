@@ -185,6 +185,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 
 ## Known issues
 
+- Gemini's free tier allows 20 requests per day per project for `gemini-3.8-flash` (429 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, measured 2026-11-10; not in the docs). The blind audio judge (one request per span) therefore judges at most about 20 spans a day; rerun `judge <ID> --resume` after the reset (midnight Pacific).
 - T1's reference was decided by a Claude model without listening; it is secondary evidence for the Claude stages.
 - Gemini's free tier: 503 "high demand" is frequent and the daily quota can run out within one long talk (2026-11-09: on the third chunk). The chunked engine falls back per chunk on 503 and stops on quota; `run --gemini-cache-only` finishes a video with faster-whisper for the missing chunks.
 - Forced alignment places word starts 130–230 ms later than faster-whisper does; which is closer to the truth is not measured (no hand-labelled onsets yet).
