@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 from talk_autopsy import metrics
 from talk_autopsy.glossary import Glossary, GlossaryEntry, to_markdown
-from talk_autopsy.judge import GeminiCaller, JudgeError
+from talk_autopsy.judge import GeminiCaller, JudgeError, tokens_of
 
 PROMPT_VERSION = "ref-glossary-v1"
 MIN_TERMS, MAX_TERMS = 20, 60
@@ -73,6 +73,7 @@ class Extraction:
     dropped_over_limit: int
     model: str
     tokens: dict
+    cost_usd: float  # every response of the call, by the judge's price table
 
 
 def select_terms(reference: str, proposed: list[dict]) -> tuple[list[GlossaryEntry], int, int]:
@@ -90,10 +91,10 @@ def select_terms(reference: str, proposed: list[dict]) -> tuple[list[GlossaryEnt
     return present[:MAX_TERMS], len(entries) - len(present), max(0, len(present) - MAX_TERMS)
 
 
-def extract(reference: str, model: str, sleep=time.sleep) -> Extraction:
+def extract(reference: str, model: str, sleep=time.sleep, thinking_level: str | None = None) -> Extraction:
     import json
 
-    caller = GeminiCaller(model, pace_seconds=0.0, sleep=sleep)
+    caller = GeminiCaller(model, pace_seconds=0.0, sleep=sleep, thinking_level=thinking_level)
     response = caller.generate([PROMPT.format(reference=reference)], SCHEMA)
     try:
         data = json.loads(response.text or "")
@@ -103,10 +104,8 @@ def extract(reference: str, model: str, sleep=time.sleep) -> Extraction:
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         raise JudgeError(f"the glossary answer is malformed ({type(e).__name__})") from None
     entries, absent, over = select_terms(reference, [p for p in proposed if isinstance(p, dict)])
-    usage = response.usage_metadata
     return Extraction(Glossary(entries=entries), len(entries) + absent + over, absent, over, model,
-                      {"prompt": usage.prompt_token_count or 0, "output": usage.candidates_token_count or 0,
-                       "thinking": getattr(usage, "thoughts_token_count", 0) or 0})
+                      tokens_of(response.usage_metadata), round(caller.spent_usd, 6))
 
 
 def glossary_file(fragment: str, extraction: Extraction, date: str) -> str:

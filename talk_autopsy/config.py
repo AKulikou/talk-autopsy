@@ -141,6 +141,43 @@ def gemini_models() -> list[str]:
     return list(dict.fromkeys(listed or [gemini_model(), gemini_fallback_model()]))
 
 
+# Blind audio judge and reference glossary (judge.py, ref_glossary.py; evaluation tooling)
+# on the paid tier since 2026-11-10 (decisions). The judge must not be the STT engine's
+# model. gemini-3.1-pro-preview answered 404 for this key on 2026-11-10 (absent from its
+# model list) and gemini-2.5-pro routes to gemini-3.8-flash from 2026-12-01, so the judge
+# is the pricing page's "most capable reasoning model". Thinking cannot be turned off for
+# Gemini 4 models; "low" is the lowest level (aistudio.google.com/docs/thinking, 2026-11-10).
+DEFAULT_JUDGE_MODEL = "gemini-4-carbon"
+DEFAULT_JUDGE_THINKING_LEVEL = "low"
+JUDGE_BUDGET_USD = 3.00  # Gemini spend per session by the judge's own counter
+JUDGE_ASSUMED_COST_PER_SPAN = 0.01  # the estimate before any span of a run is measured
+JUDGE_REESTIMATE_AFTER = 10  # spans; then the projected total is checked against the budget
+
+
+def judge_model() -> str:
+    return _setting("JUDGE_MODEL", DEFAULT_JUDGE_MODEL)
+
+
+def judge_thinking_level() -> str:
+    return _setting("JUDGE_THINKING_LEVEL", DEFAULT_JUDGE_THINKING_LEVEL).lower()
+
+
+# Gemini paid Standard tier, USD per million tokens: (input, output). Output includes
+# thinking tokens; audio input is billed at the input price (no separate audio price is
+# listed for these models). Checked on 2026-11-10 at GEMINI_PRICING_SOURCE.
+# gemini-4-carbon and gemini-4-argon double to (4.00, 20.00) from 2026-12-01;
+# gemini-3.8-flash doubles from 2027-01-01. Update this table before a run after those dates.
+GEMINI_PRICING_CHECKED = "2026-11-10"
+GEMINI_PRICING_SOURCE = ("https://ai.google.dev/gemini-api/docs/pricing "
+                         "(served from aistudio.google.com/docs/pricing)")
+GEMINI_PRICING_PER_MTOK: dict[str, tuple[float, float]] = {
+    "gemini-4-carbon": (2.00, 10.00),
+    "gemini-4-argon": (2.00, 10.00),
+    "gemini-2.5-pro": (1.25, 10.00),  # prompts up to 200k tokens
+    "gemini-3.8-flash": (0.75, 3.75),
+}
+
+
 # --- Target language -------------------------------------------------------
 
 # ISO 639-1 (or 639-3) code. The core never assumes a language: every stage takes

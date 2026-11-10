@@ -37,9 +37,18 @@ the chosen text (consistency between steps 1 and 3).
 
 The run is resumable span by span: every judged span is appended to
 judge.jsonl at once, and a rerun with `resume` skips the spans already there.
-A daily quota error stops the run (`JudgeQuotaStop`); a server error or a
-per-minute rate limit is retried after 20, 60 and 120 s, then the span is
-left for the next run.
+Resume is keyed by span and model: records of another model (the free-tier
+pilot of 09a) are moved to `judge.free-pilot.jsonl` and never reused. A daily
+quota, billing or spend-cap error stops the run (`JudgeQuotaStop`); a server
+error or a per-minute rate limit is retried after 20, 60 and 120 s, then the
+span is left for the next run.
+
+Cost (paid tier): every record has `cost_usd`, from the response's usage
+metadata (input, output and thinking tokens; thinking is billed as output) and
+`config.GEMINI_PRICING_PER_MTOK`. With a budget the run stops before a span
+that would likely cross it, and after `config.JUDGE_REESTIMATE_AFTER` spans it
+stops if the measured mean cost projects past the budget for the rest of the
+run plus `plan_after` spans of later work.
 
 Calibration against decided spans (`compare`, `classify_decisions`) is in this
 module too; see docs/experiments.md, Methodology: blind audio judge.
@@ -78,7 +87,42 @@ class JudgeError(RuntimeError):
 
 
 class JudgeQuotaStop(JudgeError):
-    """The daily quota is used up; the run stopped and can be resumed after the reset."""
+    """The daily quota or the spend cap is used up; the run stopped and can be resumed later."""
+
+
+def is_spend_cap(error: Exception) -> bool:
+    """
+    True for a client error that names a spend cap or used-up credits (the AI
+    Studio project's monthly spend cap on the paid tier): no retry helps until
+    the owner raises the cap or the month turns.
+    """
+    code = getattr(error, "code", None)
+    text = f"{error} {getattr(error, 'message', '') or ''} {getattr(error, 'details', '') or ''}".lower()
+    return (code is not None and 400 <= int(code) < 500
+            and any(word in text for word in ("spend cap", "spending cap", "spend limit", "spending limit",
+                                              "credits are depleted", "prepayment credits")))
+
+
+def price_of(model: str) -> tuple[float, float]:
+    """(input, output) USD per million tokens, or JudgeError: a run is never uncounted."""
+    try:
+        return config.GEMINI_PRICING_PER_MTOK[model]
+    except KeyError:
+        raise JudgeError(f"no price for {model} in config.GEMINI_PRICING_PER_MTOK; add it from "
+                         f"{config.GEMINI_PRICING_SOURCE} before a paid run") from None
+
+
+def tokens_of(usage) -> dict:
+    """Input, output and thinking tokens from a response's usage metadata (missing counts are 0)."""
+    return {"prompt": getattr(usage, "prompt_token_count", 0) or 0,
+            "output": getattr(usage, "candidates_token_count", 0) or 0,
+            "thinking": getattr(usage, "thoughts_token_count", 0) or 0}
+
+
+def cost_usd(model: str, tokens: dict) -> float:
+    """List-price cost of one response: input at the input price, output and thinking at the output price."""
+    price_in, price_out = price_of(model)
+    return (tokens["prompt"] * price_in + (tokens["output"] + tokens["thinking"]) * price_out) / 1_000_000
 
 
 # --- options, seed, prompt ---------------------------------------------------
@@ -247,6 +291,8 @@ class RunSummary:
     judged_now: int = 0
     failed: list[int] = field(default_factory=list)  # spans left for the next run
     stopped: str = ""  # why the run stopped early, if it did
+    spent_usd: float = 0.0  # this run, every response received
+    moved_to_pilot: int = 0  # records of another model moved out of judge.jsonl
 
     @property
     def done(self) -> int:
@@ -290,13 +336,15 @@ def decision_of(options: list[ShownOption], answer: Answer) -> dict:
 class GeminiCaller:
     """Structured generate_content calls with pacing and retries (the judge, the reference glossary)."""
 
-    def __init__(self, model: str, pace_seconds: float, sleep: Callable[[float], None] = time.sleep):
+    def __init__(self, model: str, pace_seconds: float, sleep: Callable[[float], None] = time.sleep,
+                 thinking_level: str | None = None):
         from talk_autopsy.stt import gemini
 
         self.gemini = gemini
         self.model = model
         self.pace_seconds = pace_seconds
         self.sleep = sleep
+        self.thinking_level = thinking_level  # None: the model's default
         key = config.require_key("GEMINI_API_KEY")
         genai = importlib.import_module("google.genai")
         self.types = importlib.import_module("google.genai.types")
@@ -304,6 +352,8 @@ class GeminiCaller:
         self.client = genai.Client(api_key=key)
         self.last_start = None
         self.attempts, self.latency = 0, 0.0
+        price_of(model)  # an unpriced model fails before the first call
+        self.spent_usd = 0.0  # every response received, the rejected ones too (they are billed)
 
     def _pace(self) -> None:
         if self.last_start is not None:
@@ -318,17 +368,20 @@ class GeminiCaller:
     def generate(self, contents: list, schema: dict):
         """One structured request; `contents` as for generate_content (parts and text)."""
         types, errors, gemini = self.types, self.errors, self.gemini
+        settings = {"response_mime_type": "application/json", "response_json_schema": schema,
+                    "max_output_tokens": MAX_OUTPUT_TOKENS}
+        if self.thinking_level:
+            settings["thinking_config"] = types.ThinkingConfig(thinking_level=self.thinking_level)
         for attempt, wait in enumerate((*RETRY_WAIT_SECONDS, None), start=1):
             self._pace()
             self.attempts, started = attempt, time.perf_counter()
             try:
                 response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=contents,
-                    config=types.GenerateContentConfig(response_mime_type="application/json",
-                                                       response_json_schema=schema,
-                                                       max_output_tokens=MAX_OUTPUT_TOKENS))
+                    model=self.model, contents=contents, config=types.GenerateContentConfig(**settings))
             except errors.APIError as e:
+                if is_spend_cap(e):
+                    raise JudgeQuotaStop(f"Gemini {self.model}: {gemini._describe(e)} (the project's spend "
+                                         "cap is reached)") from e
                 if gemini.is_daily_quota_or_billing(e):
                     raise JudgeQuotaStop(f"Gemini {self.model}: {gemini._describe(e)} (daily quota used up "
                                          "or billing required)") from e
@@ -339,6 +392,7 @@ class GeminiCaller:
                                attempt, wait)
                 self.sleep(wait)
                 continue
+            self.spent_usd += cost_usd(self.model, tokens_of(getattr(response, "usage_metadata", None)))
             candidates = response.candidates or []
             if not candidates:
                 raise JudgeError("no answer (blocked or empty)")
@@ -357,7 +411,7 @@ def judge_span(caller: GeminiCaller, fragment: str, span: Span, clip: Path, conv
     response = caller.generate([caller.audio_part(clip.read_bytes()), prompt], answer_schema(len(options)))
     answer = parse_answer(response.text, len(options))
     decision = decision_of(options, answer)
-    usage = response.usage_metadata
+    tokens = tokens_of(response.usage_metadata)
     chosen = decision["text"]
     return {
         "span": span.number, "verdict": span.verdict, "judge": JUDGE_VERSION, "model": caller.model,
@@ -369,32 +423,62 @@ def judge_span(caller: GeminiCaller, fragment: str, span: Span, clip: Path, conv
         "final_text": clean_text(answer.final_text), "decision": decision,
         "heard_contains_chosen": contains_tokens(answer.heard, chosen) if chosen else None,
         "latency_seconds": round(caller.latency, 2), "attempts": caller.attempts,
-        "tokens": {"prompt": usage.prompt_token_count or 0, "output": usage.candidates_token_count or 0,
-                   "thinking": getattr(usage, "thoughts_token_count", 0) or 0},
+        "thinking_level": caller.thinking_level, "tokens": tokens,
+        "cost_usd": round(cost_usd(caller.model, tokens), 6),
         "date": time.strftime("%Y-%m-%d"),
     }
+
+
+def pilot_path(out: Path) -> Path:
+    """Where records of another model go: judge.jsonl -> judge.free-pilot.jsonl."""
+    return out.with_name(f"{out.stem}.free-pilot{out.suffix}")
+
+
+def set_aside_other_models(out: Path, model: str) -> int:
+    """
+    Move the records of `out` judged by another model to the pilot file (appended),
+    keeping only `model`'s records in `out`. Returns how many were moved.
+    """
+    records = load_records(out)
+    other = [r for r in records if r.get("model") != model]
+    if not other:
+        return 0
+    with pilot_path(out).open("a", encoding="utf-8", newline="\n") as pilot:
+        for record in other:
+            pilot.write(json.dumps(record, ensure_ascii=False) + "\n")
+    kept = [r for r in records if r.get("model") == model]
+    out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in kept), encoding="utf-8",
+                   newline="\n")
+    return len(other)
 
 
 def run(fragment: str, consensus: Consensus, clip_dir: Path, conventions: list[str], out: Path,
         model: str, limit: int | None = None, resume: bool = False, pace_seconds: float = PACE_SECONDS,
         progress: Callable[[str], None] | None = None,
-        sleep: Callable[[float], None] = time.sleep) -> RunSummary:
+        sleep: Callable[[float], None] = time.sleep, thinking_level: str | None = None,
+        budget_usd: float | None = None, spent_before_usd: float = 0.0, plan_after: int = 0) -> RunSummary:
     """
-    Judge every majority and split span not yet in `out` (judge.jsonl). Appends
-    one line per judged span. Raises JudgeQuotaStop only after recording what
-    was done; the summary says how many spans remain.
+    Judge every majority and split span not yet judged by `model` in `out`
+    (judge.jsonl). Appends one line per judged span. Records of another model
+    are first moved to the pilot file. Raises JudgeQuotaStop only after
+    recording what was done; the summary says how many spans remain.
+
+    Budget (optional): `spent_before_usd` is what the session spent before this
+    run; the run stops before a span that would likely take the total past
+    `budget_usd`, and after `config.JUDGE_REESTIMATE_AFTER` spans if the mean
+    cost so far projects past it for the rest of this run plus `plan_after` spans.
     """
     progress = progress or (lambda message: None)
+    moved = set_aside_other_models(out, model) if out.is_file() else 0
+    if moved:
+        progress(f"{moved} records of another model moved to {pilot_path(out).name}; not reused")
     records = load_records(out)
     if records and not resume:
         raise JudgeError(f"{out} exists with {len(records)} judged spans; pass --resume to continue it")
-    models = {r["model"] for r in records}
-    if models and models != {model}:
-        raise JudgeError(f"{out} was judged with {', '.join(sorted(models))}; "
-                         "resume it with the same --model")
     spans = judgeable(consensus)
     done = {r["span"] for r in records}
-    summary = RunSummary(total=len(spans), done_before=len(done & {s.number for s in spans}))
+    summary = RunSummary(total=len(spans), done_before=len(done & {s.number for s in spans}),
+                         moved_to_pilot=moved)
     todo = [s for s in spans if s.number not in done]
     if limit is not None:
         todo = todo[:limit]
@@ -404,11 +488,23 @@ def run(fragment: str, consensus: Consensus, clip_dir: Path, conventions: list[s
                          f"rerun talk-autopsy adjudicate {fragment}")
     if not todo:
         return summary
-    caller = GeminiCaller(model, pace_seconds, sleep)
+    caller = GeminiCaller(model, pace_seconds, sleep, thinking_level)
+    measured = [r["cost_usd"] for r in records if r.get("cost_usd") is not None]
+    per_span = sum(measured) / len(measured) if measured else config.JUDGE_ASSUMED_COST_PER_SPAN
+    basis = f"measured mean of {len(measured)} spans" if measured else "assumed"
+    progress(f"Estimate: {len(todo)} spans x ${per_span:.4f} ({basis}) = ${len(todo) * per_span:.2f}"
+             + (f"; {plan_after} more spans planned after this run" if plan_after else "")
+             + (f"; budget ${budget_usd:.2f}, spent before ${spent_before_usd:.4f}" if budget_usd is not None
+                else ""))
     out.parent.mkdir(parents=True, exist_ok=True)
     consecutive = 0
     with out.open("a", encoding="utf-8", newline="\n") as file:
-        for span in todo:
+        for index, span in enumerate(todo):
+            stop = _budget_stop(summary, caller, budget_usd, spent_before_usd, per_span,
+                                len(todo) - index + plan_after)
+            if stop:
+                summary.stopped = stop
+                break
             clip = clip_dir / adjudicate.clip_name(span)
             try:
                 record = judge_span(caller, fragment, span, clip, conventions)
@@ -436,8 +532,35 @@ def run(fragment: str, consensus: Consensus, clip_dir: Path, conventions: list[s
             file.write(json.dumps(record, ensure_ascii=False) + "\n")
             file.flush()
             summary.judged_now += 1
-            progress(f"span {span.number:04d} judged ({summary.done} of {summary.total})")
+            summary.spent_usd = caller.spent_usd
+            progress(f"span {span.number:04d} judged ({summary.done} of {summary.total}); "
+                     f"${record['cost_usd']:.4f}, run ${caller.spent_usd:.4f}, "
+                     f"session ${spent_before_usd + caller.spent_usd:.4f}")
+            if summary.judged_now == config.JUDGE_REESTIMATE_AFTER:
+                mean = caller.spent_usd / summary.judged_now
+                rest = len(todo) - index - 1 + plan_after
+                progress(f"Re-estimate after {summary.judged_now} spans: mean ${mean:.4f} per span; "
+                         f"{rest} spans left -> projected session total "
+                         f"${spent_before_usd + caller.spent_usd + mean * rest:.2f}")
+    summary.spent_usd = caller.spent_usd
     return summary
+
+
+def _budget_stop(summary: RunSummary, caller: GeminiCaller, budget_usd: float | None, spent_before_usd: float,
+                 assumed_per_span: float, spans_left: int) -> str:
+    """Why the run must stop before the next span ("" to go on); see `run`."""
+    if budget_usd is None:
+        return ""
+    total = spent_before_usd + caller.spent_usd
+    if total >= budget_usd:
+        return f"budget reached: ${total:.4f} of ${budget_usd:.2f}"
+    mean = caller.spent_usd / summary.judged_now if summary.judged_now else assumed_per_span
+    if summary.judged_now >= config.JUDGE_REESTIMATE_AFTER and total + mean * spans_left > budget_usd:
+        return (f"projected total ${total + mean * spans_left:.2f} for the {spans_left} spans left "
+                f"(mean ${mean:.4f}) exceeds the budget ${budget_usd:.2f}")
+    if total + mean > budget_usd:
+        return f"the next span (about ${mean:.4f}) would take ${total:.4f} past the budget ${budget_usd:.2f}"
+    return ""
 
 
 def _short(error: Exception) -> str:
@@ -500,6 +623,7 @@ def run_stats(records: list[dict]) -> dict:
         "heard_first_share": round(sum(1 for r in records if r["heard_first"]) / n, 4),
         "by_verdict": {v: sum(1 for r in records if r["verdict"] == v) for v in ("majority", "split")},
         "tokens": {k: sum(r["tokens"][k] for r in records) for k in ("prompt", "output", "thinking")},
+        "cost_usd": round(sum(r.get("cost_usd") or 0.0 for r in records), 4),
         "latency_seconds_mean": round(sum(r["latency_seconds"] for r in records) / n, 2),
     }
 

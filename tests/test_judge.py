@@ -107,6 +107,10 @@ def fake_genai(monkeypatch):
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
+    class ThinkingConfig:
+        def __init__(self, thinking_level):
+            self.thinking_level = thinking_level
+
     class Part:
         @staticmethod
         def from_bytes(data, mime_type):
@@ -116,6 +120,7 @@ def fake_genai(monkeypatch):
     genai.Client = Client
     types = ModuleType("google.genai.types")
     types.GenerateContentConfig = Config
+    types.ThinkingConfig = ThinkingConfig
     types.FinishReason = FinishReason
     types.Part = Part
     errors = ModuleType("google.genai.errors")
@@ -279,8 +284,6 @@ def test_resume_after_an_interruption_judges_only_the_rest(fake_genai, clips, tm
     assert (summary.done_before, summary.judged_now, summary.remaining) == (1, 1, 0)
     assert [r["span"] for r in judge.load_records(out)] == [1, 2]
     assert len(fake_genai.calls) == 2
-    with pytest.raises(judge.JudgeError, match="same --model"):
-        judge.run("T9", result, clip_dir, CONVENTIONS, out, "other-model", resume=True, pace_seconds=0)
 
 
 def test_daily_quota_stops_the_run_and_keeps_what_was_judged(fake_genai, clips, tmp_path):
@@ -291,6 +294,98 @@ def test_daily_quota_stops_the_run_and_keeps_what_was_judged(fake_genai, clips, 
     assert summary.stopped and "daily quota" in summary.stopped
     assert (summary.done, summary.remaining) == (1, 1)
     assert len(judge.load_records(out)) == 1
+
+
+def test_cost_is_computed_from_usage_metadata_with_thinking_as_output(fake_genai, clips, tmp_path):
+    carbon_in, carbon_out = config.GEMINI_PRICING_PER_MTOK["gemini-4-carbon"]
+    tokens = {"prompt": 1000, "output": 100, "thinking": 400}
+    expected = (1000 * carbon_in + 500 * carbon_out) / 1e6
+    assert judge.cost_usd("gemini-4-carbon", tokens) == pytest.approx(expected)
+    assert judge.tokens_of(SimpleNamespace(prompt_token_count=5, candidates_token_count=None)) == {
+        "prompt": 5, "output": 0, "thinking": 0}
+    result, clip_dir = clips
+    out = tmp_path / "judge.jsonl"
+    fake_genai.answers = [pick("Claude"), pick("build")]
+    summary = run(result, clip_dir, out, thinking_level="low")
+    flash_in, flash_out = config.GEMINI_PRICING_PER_MTOK["gemini-3.8-flash"]
+    per_span = (300 * flash_in + (40 + 100) * flash_out) / 1e6  # the fake's usage metadata
+    records = judge.load_records(out)
+    assert [r["cost_usd"] for r in records] == [pytest.approx(per_span)] * 2
+    assert records[0]["thinking_level"] == "low"
+    assert summary.spent_usd == pytest.approx(2 * per_span)
+    assert judge.run_stats(records)["cost_usd"] == pytest.approx(2 * per_span, abs=1e-4)
+    assert fake_genai.calls[0].config["thinking_config"].thinking_level == "low"
+
+
+def test_an_unpriced_model_fails_before_any_call(fake_genai, clips, tmp_path):
+    result, clip_dir = clips
+    with pytest.raises(judge.JudgeError, match="no price"):
+        judge.run("T9", result, clip_dir, CONVENTIONS, tmp_path / "judge.jsonl", "unpriced-model",
+                  pace_seconds=0, sleep=lambda s: None)
+    assert fake_genai.calls == []
+
+
+def test_a_rejected_answer_is_still_counted_as_spent(fake_genai, clips, tmp_path):
+    result, clip_dir = clips
+    cut = answer("we open", "1", finish=FinishReason.MAX_TOKENS)
+    fake_genai.answers = [cut, pick("Claude"), pick("build")]
+    summary = run(result, clip_dir, tmp_path / "judge.jsonl")
+    recorded = sum(r["cost_usd"] for r in judge.load_records(tmp_path / "judge.jsonl"))
+    assert summary.spent_usd == pytest.approx(recorded * 3 / 2)
+
+
+def test_the_run_stops_before_a_span_that_would_cross_the_budget(fake_genai, clips, tmp_path, monkeypatch):
+    result, clip_dir = clips
+    out = tmp_path / "judge.jsonl"
+    monkeypatch.setattr(config, "JUDGE_ASSUMED_COST_PER_SPAN", 0.0005)
+    fake_genai.answers = [pick("Claude"), pick("build")]
+    summary = run(result, clip_dir, out, budget_usd=0.001)  # one span costs 0.00075 at the fake's usage
+    assert summary.stopped.startswith("the next span") and (summary.done, summary.remaining) == (1, 1)
+    assert len(fake_genai.calls) == 1 and len(judge.load_records(out)) == 1
+    again = run(result, clip_dir, out, resume=True, budget_usd=3.0, spent_before_usd=3.0)
+    assert again.stopped.startswith("budget reached") and again.judged_now == 0
+    assert len(fake_genai.calls) == 1
+
+
+def test_the_reestimate_stops_when_the_projection_exceeds_the_budget(fake_genai, clips, tmp_path,
+                                                                      monkeypatch):
+    result, clip_dir = clips
+    monkeypatch.setattr(config, "JUDGE_REESTIMATE_AFTER", 1)
+    messages = []
+    fake_genai.answers = [pick("Claude"), pick("build")]
+    summary = run(result, clip_dir, tmp_path / "judge.jsonl", budget_usd=0.05, plan_after=100,
+                  progress=messages.append)
+    assert summary.stopped.startswith("projected total") and summary.judged_now == 1
+    assert messages[0].startswith("Estimate: 2 spans") and any("Re-estimate after 1" in m for m in messages)
+
+
+def test_a_spend_cap_error_stops_the_run_and_keeps_the_progress(fake_genai, clips, tmp_path):
+    result, clip_dir = clips
+    out = tmp_path / "judge.jsonl"
+    cap = ClientError(429, "RESOURCE_EXHAUSTED", "Your project has exceeded its monthly spending cap.")
+    fake_genai.answers = [pick("Claude"), cap]
+    summary = run(result, clip_dir, out)
+    assert "spend cap" in summary.stopped and (summary.done, summary.remaining) == (1, 1)
+    assert len(fake_genai.calls) == 2  # no retry after a spend-cap error
+    assert [r["span"] for r in judge.load_records(out)] == [1]
+    assert judge.is_spend_cap(cap) and not judge.is_spend_cap(ClientError(429, "RESOURCE_EXHAUSTED", "rate"))
+
+
+def test_pilot_records_of_another_model_are_moved_aside_and_not_reused(fake_genai, clips, tmp_path):
+    result, clip_dir = clips
+    out = tmp_path / "judge.jsonl"
+    fake_genai.answers = [pick("Claude")]
+    run(result, clip_dir, out, limit=1)  # the free-tier pilot: span 1 by gemini-3.8-flash
+    fake_genai.answers = [pick("Claude"), pick("build")]
+    summary = judge.run("T9", result, clip_dir, CONVENTIONS, out, "gemini-4-carbon", pace_seconds=0,
+                        sleep=lambda s: None)
+    assert summary.moved_to_pilot == 1 and summary.done_before == 0 and summary.judged_now == 2
+    assert [(r["span"], r["model"]) for r in judge.load_records(out)] == [(1, "gemini-4-carbon"),
+                                                                          (2, "gemini-4-carbon")]
+    pilot = judge.load_records(judge.pilot_path(out))
+    assert judge.pilot_path(out).name == "judge.free-pilot.jsonl"
+    assert [(r["span"], r["model"]) for r in pilot] == [(1, "gemini-3.8-flash")]
+    assert [c.model for c in fake_genai.calls] == ["gemini-3.8-flash", "gemini-4-carbon", "gemini-4-carbon"]
 
 
 def test_server_errors_are_retried_then_the_span_is_left_for_later(fake_genai, clips, tmp_path):
@@ -425,6 +520,21 @@ def test_cli_judge_writes_the_log_and_the_judged_copy(fake_genai, clips, tmp_pat
     compared = runner.invoke(cli.app, ["judge-compare", "T9"])
     assert compared.exit_code == 1  # the original split is undecided: nothing to compare against
     assert "0 options ticked" in compared.output
+    assert "Judge gemini-4-carbon, thinking level low" in first.output
+    assert "Spent in this run: $" in first.output
+    assert fake_genai.calls[0].model == "gemini-4-carbon"
+    assert fake_genai.calls[0].config["thinking_config"].thinking_level == "low"
+
+
+def test_cli_judge_refuses_the_stt_engines_model(tmp_path, monkeypatch, clips):
+    result, _ = clips
+    monkeypatch.setattr(config, "TEST_SET_DIR", tmp_path)
+    monkeypatch.setattr(config, "WORK_DIR", tmp_path)
+    (tmp_path / "T9").mkdir()
+    (tmp_path / "T9" / "consensus.json").write_text(adj.consensus_to_json(result), encoding="utf-8")
+    (tmp_path / "T9.adjudication.md").write_text("# x\n", encoding="utf-8")
+    refused = runner.invoke(cli.app, ["judge", "T9", "--model", config.gemini_model()])
+    assert refused.exit_code == 1 and "STT engine" in refused.output
 
 
 # --- reference glossary by Gemini ------------------------------------------------

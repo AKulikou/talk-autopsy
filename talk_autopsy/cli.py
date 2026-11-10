@@ -685,16 +685,23 @@ def _judged_path(fragment: str) -> Path:
 def judge_command(
     fragment: Annotated[str, typer.Argument(help="Test-set fragment ID, e.g. T2.")],
     model: Annotated[str | None, typer.Option(
-        help="Gemini model. Default: GEMINI_MODEL (gemini-3.8-flash).")] = None,
+        help="Gemini model. Default: JUDGE_MODEL (gemini-4-carbon); never the STT engine's model.")] = None,
     limit: Annotated[int | None, typer.Option(min=1, help="Judge at most N spans in this run.")] = None,
     resume: Annotated[bool, typer.Option("--resume", help="Continue work/<FRAGMENT>/judge.jsonl.")] = False,
     pace: Annotated[float, typer.Option(min=0.0, help="Seconds between request starts.")] = (
         judge.PACE_SECONDS),
+    budget: Annotated[float, typer.Option(
+        min=0.0, help="Session budget in USD (the run's own counter).")] = config.JUDGE_BUDGET_USD,
+    spent_before: Annotated[float, typer.Option(
+        min=0.0, help="USD the session spent before this run.")] = 0.0,
+    plan_after: Annotated[int, typer.Option(
+        min=0, help="Spans of later work in the same budget, for the projection (e.g. T6 after T2).")] = 0,
 ) -> None:
     """
     Blind audio judge: Gemini listens to every majority and split span's clip, transcribes it,
     then picks one of the shuffled unlabeled variants or types its own text. Writes
-    work/<FRAGMENT>/judge.jsonl and data/test-set/<FRAGMENT>.adjudication.judged.md. Prints counts only.
+    work/<FRAGMENT>/judge.jsonl and data/test-set/<FRAGMENT>.adjudication.judged.md. Prints counts
+    and cost only.
     """
     import datetime
 
@@ -704,13 +711,19 @@ def judge_command(
     for path in (adjudication, consensus_file):
         if not path.is_file():
             _fail(f"No {path}; run talk-autopsy adjudicate {fragment} first")
-    model = model or config.gemini_model()
+    model = model or config.judge_model()
+    if model in config.gemini_models():
+        _fail(f"{model} is the Gemini STT engine's model; the judge must be a different model")
+    thinking = config.judge_thinking_level()
+    typer.echo(f"Judge {model}, thinking level {thinking}")
     out = config.WORK_DIR / fragment / "judge.jsonl"
     try:
         result = consensus_module.consensus_from_json(consensus_file.read_text(encoding="utf-8"))
         conventions = judge.read_conventions((config.TEST_SET_DIR / "README.md").read_text(encoding="utf-8"))
         summary = judge.run(fragment, result, config.WORK_DIR / fragment / "clips", conventions, out, model,
-                            limit=limit, resume=resume, pace_seconds=pace, progress=typer.echo)
+                            limit=limit, resume=resume, pace_seconds=pace, progress=typer.echo,
+                            thinking_level=thinking, budget_usd=budget, spent_before_usd=spent_before,
+                            plan_after=plan_after)
         records = judge.load_records(out)
     except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError) as e:
         _fail(str(e))
@@ -729,6 +742,9 @@ def judge_command(
             typer.echo(f"  heard contains the chosen text: {stats['consistent']} of "
                        f"{stats['consistency_checked']} ({stats['consistency_share']:.1%})")
         typer.echo(f"  heard written before choice: {stats['heard_first_share']:.1%}")
+        typer.echo(f"  cost of the recorded spans: ${stats['cost_usd']:.4f}")
+    session = spent_before + summary.spent_usd
+    typer.echo(f"Spent in this run: ${summary.spent_usd:.4f} (session ${session:.4f} of ${budget:.2f})")
     typer.echo(f"Wrote {out} and {judged}")
     if summary.failed:
         typer.echo(f"  {len(summary.failed)} spans failed twice and are left for the next run")
@@ -785,7 +801,7 @@ def judge_compare_command(
 def glossary_ref_command(
     fragment: Annotated[str, typer.Argument(help="Test-set fragment ID with a reference, e.g. T6.")],
     model: Annotated[str | None, typer.Option(
-        help="Gemini model. Default: GEMINI_MODEL (gemini-3.8-flash).")] = None,
+        help="Gemini model. Default: JUDGE_MODEL (gemini-4-carbon).")] = None,
     force: ForceOption = False,
 ) -> None:
     """
@@ -805,7 +821,8 @@ def glossary_ref_command(
         _fail(f"{out} exists. Pass --force to overwrite it.")
     try:
         extraction = ref_glossary.extract(reference.read_text(encoding="utf-8"),
-                                          model or config.gemini_model())
+                                          model or config.judge_model(),
+                                          thinking_level=config.judge_thinking_level())
     except (ValueError, RuntimeError, ConfigurationError) as e:
         _fail(str(e))
     out.write_text(ref_glossary.glossary_file(fragment, extraction, datetime.date.today().isoformat()),
@@ -814,6 +831,8 @@ def glossary_ref_command(
     typer.echo(f"Wrote {out}: {kept} terms ({extraction.proposed} proposed by {extraction.model}, "
                f"{extraction.dropped_absent} not in the reference, {extraction.dropped_over_limit} over "
                f"the limit of {ref_glossary.MAX_TERMS})")
+    typer.echo(f"  cost ${extraction.cost_usd:.4f} ({extraction.tokens['prompt']} input, "
+               f"{extraction.tokens['output']} output, {extraction.tokens['thinking']} thinking tokens)")
     if kept < ref_glossary.MIN_TERMS:
         typer.echo(f"  fewer than {ref_glossary.MIN_TERMS} terms")
 
