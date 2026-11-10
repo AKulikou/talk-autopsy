@@ -112,6 +112,11 @@ after any change. Use the uv-managed Python 3.13, not the system `python`.
   module), so the test fixture can replace it.
 - Code, comments, docstrings, docs and commit messages in English.
 - Realistic estimates for time and cost; no number in the docs that was not measured.
+- Tests never touch the network or a real secret: pytest-socket (`--disable-socket`, in
+  `pyproject.toml`) makes opening an internet socket or a DNS lookup raise, so a test
+  that would reach a service fails instead; use the fakes in `tests/conftest.py`. Every
+  secret in `config.SECRET_ENV_VARS` is a placeholder inside a test, and importing a module
+  reads neither `.env` nor a secret (only entry points call `config.load_environment()`).
 
 ## Commits
 

@@ -43,6 +43,10 @@ module-root = ""
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# No network in tests (pytest-socket): creating an internet socket raises, so a test
+# cannot reach a real service even by mistake; Unix sockets stay allowed for libraries
+# that use them locally. Tests use the fakes in tests/conftest.py instead.
+addopts = "--disable-socket --allow-unix-socket"
 
 [tool.ruff]
 target-version = "py313"
@@ -62,6 +66,7 @@ select = [
 [dependency-groups]
 dev = [
     "pytest>=9.2.0",
+    "pytest-socket>=0.8.1",
     "ruff>=0.17.4",
 ]
 
