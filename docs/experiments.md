@@ -233,7 +233,44 @@ include upload.
   not been backed up yet); its AssemblyAI pass (up to 0.098 USD) is counted
   as spent in the session total.
 
-## Stage 1 summary
+### stress-01: the frozen pipeline on an accented interview (2026-11-10, not scored)
+
+An interview, 29:50 (`data/test-set/source-video-2.mp4`): a guest with a
+regional accent and an interviewer who speaks fast with a light regional accent.
+`talk-autopsy run data/test-set/source-video-2.mp4 --name stress-01 --lang ru`
+from the tagged code (`pipeline-v2`), no `--context`, no user glossary.
+Outputs `work/stress-01/stress-01.ru.srt` / `.ass`, `stress-01.en.srt` / `.ass`.
+
+| | stress-01 |
+|---|---|
+| duration | 29:50 (1790 s) |
+| stt (extract audio, FLAC, AssemblyAI) | 42.8 s, 335 segments |
+| glossary (Haiku) | 22.2 s, **32 terms**, 5 with corrected mis-recognitions (`Claude Code` <- "Cloth Code", `OpenClaw` <- "OpenCLaw", `MenuGen` <- "menu gen", `vibe coding` <- "vibecoding" and two more forms, `agentic engineering` <- "agentic engineer") |
+| stt2 (AssemblyAI + 32 key terms) | 36.3 s, 346 segments |
+| align | pass-through |
+| fix (correction-v2, 6 blocks) | 71.8 s, 1 segment changed, 0 failed blocks |
+| translate (translation-v2, 346 units from 346 segments, 6 blocks) | 120.1 s, 0 failed blocks, 0 warnings |
+| srt + ass | 3.1 s |
+| **total wall time** | **296.5 s (4.9 min): 9.9 min per hour of video** |
+| AssemblyAI (list price, two passes) | 0.234 USD = **0.47 USD per hour** |
+| Claude estimate / spent | 0.604 / 0.361 USD = **0.73 USD per hour** |
+| Russian cues: above 17 / 25 cps | **51.3% / 14.8%** (446 cues; max 58.0 cps; 20 shorter than 1 s) |
+| English cues: above 17 / 25 cps | 63.3% / 15.3% (450 cues; max 48.1 cps; 24 shorter than 1 s) |
+| fallbacks used | none (AssemblyAI answered both passes; no refusal fallback served) |
+
+- **Where the fast cues are.** No speaker labels (a v1.1 idea), so the turns
+  cannot be told apart; the English speech rate of each unit stands in.
+  Russian cues of units spoken at more than 3.5 English words per second:
+  284 cues, 66.5% above 17 cps and 20.8% above 25 cps; at 2.5–3.5 words per
+  second: 124 cues, 29.0% / 4.0%; below 2.5: 38 cues, 10.5% / 5.3%. Questions
+  (units ending in "?", likely the interviewer's turns; not checked by ear) are not faster than the
+  rest: 47 cues, 46.8% / 14.9%.
+- **Visibly wrong.** The two fastest Russian cues (58.0 and 43.5 cps) last
+  0.22 s and 0.16 s: the first clause of a unit cut into several cues, mapped
+  by word share onto a single short English word. Word timing gives such a
+  cue no more time than that word (Backlog, cue timing inside a unit). The
+  rest of the top are one-sentence units that AssemblyAI times at 6–10 words
+  per second ("Thank you.", "And so on.").
 
 Speech recognition on T1 (native speaker, 9:27) and T2 (strong accent, 10:00),
 scored 2026-11-09 against the resolved references with the reviewed glossaries
@@ -1179,6 +1216,15 @@ Ideas that come up during a stage and wait for a later one.
   to 1.0 point. A display-time rule that evens reading speed across the
   cues of one unit (within the span its English words allow) may do more.
   Subtitle layout, not frozen.
+- Very short cues from word timing (stress-01, 2026-11-10): a clause that
+  opens a unit can map onto one short English word and get 0.16–0.22 s on
+  screen (the two fastest Russian cues of stress-01, 58.0 and 43.5 cps). A
+  minimum share of the unit's time per cue, or spreading the time of a unit
+  in proportion to characters within the span its English words allow,
+  would fix it. Subtitle layout, not frozen.
+- Speaker labels (stress-01): the interview's fast cues cannot be attributed
+  to a speaker without diarization; AssemblyAI's speaker labels are off.
+  v1.1 idea, not implemented.
 - Idiom calque in a unit (D1 (setup)): "pry Vim from their cold, dead hands"
   came out word for word in the sentence-unit translation of the C1 input,
   by meaning in the per-segment one. One sample; watch in the T6 run.
