@@ -49,7 +49,7 @@ def test_target_language_is_a_parameter(sine):
 
 
 def test_default_language_comes_from_config(sine, monkeypatch):
-    monkeypatch.setattr(config, "TARGET_LANG", "uk")
+    monkeypatch.setenv("TARGET_LANG", "uk")
     result = runner.invoke(cli.app, ["run", str(sine), "--steps", "stt", "--dry-run"])
     assert "Target language: uk" in result.output
 

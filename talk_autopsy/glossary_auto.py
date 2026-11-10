@@ -5,7 +5,7 @@ without anyone writing a glossary by hand.
 
     raw.json (+ optional context text) -> glossary.auto.md
 
-One structured call to the helper model (`config.HELPER_MODEL`, Haiku) with the
+One structured call to the helper model (`config.helper_model()`, Haiku) with the
 whole transcript as plain text, one segment per line, and the context (video
 title, description, chapter titles) if the owner has any. For a local file the
 file name is not context. The prompt is `prompts/glossary-auto-v1.md`.
@@ -146,7 +146,7 @@ def _user(text: str, context: str) -> str:
 
 def estimate(transcript: Transcript, target_lang: str, context: str = "", model: str | None = None,
              version: str = PROMPT_VERSION) -> blocks.Estimate:
-    model = model or config.HELPER_MODEL
+    model = model or config.helper_model()
     input_tokens = blocks.estimate_tokens(_system(load_prompt(version), target_lang)
                                           + _user(transcript_text(transcript), context))
     return blocks.Estimate(1, input_tokens, OUTPUT_TOKENS_ESTIMATE,
@@ -194,7 +194,7 @@ def generate(transcript: Transcript, target_lang: str, context: str = "", *, mod
     """Draft the glossary of `transcript` (one call to the helper model)."""
     config.require_api_key()
     target_lang = config.check_lang(target_lang)
-    model = model or config.HELPER_MODEL
+    model = model or config.helper_model()
     text = transcript_text(transcript)
     if not text:
         raise ValueError(f"{transcript.source}: the transcript has no text")

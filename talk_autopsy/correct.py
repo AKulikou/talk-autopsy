@@ -217,7 +217,7 @@ def _user(block: blocks.Block) -> str:
 def estimate(transcript: Transcript, glossary: Glossary, context: blocks.VideoContext,
              model: str | None = None, version: str = PROMPT_VERSION) -> blocks.Estimate:
     """Cost estimate before a run, from character counts and config prices (no API call)."""
-    model = model or config.CORRECTION_MODEL
+    model = model or config.correction_model()
     prefix_tokens = blocks.estimate_tokens(_prefix(load_prompt(version), glossary, context))
     parts = blocks.make_blocks(transcript)
     input_tokens = output_tokens = 0
@@ -240,7 +240,7 @@ def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoCon
     config.require_api_key()
     if isinstance(context, str):
         context = blocks.VideoContext(title=context)
-    model = model or config.CORRECTION_MODEL
+    model = model or config.correction_model()
     prompt = load_prompt(version)
     prefix = _prefix(prompt, glossary, context)
     client = claude_client.get_client()

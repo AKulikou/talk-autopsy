@@ -151,7 +151,7 @@ def _user(block: blocks.Block) -> str:
 def estimate(transcript: Transcript, glossary: Glossary, target_lang: str,
              context: blocks.VideoContext | None = None, model: str | None = None,
              version: str = PROMPT_VERSION) -> blocks.Estimate:
-    model = model or config.TRANSLATION_MODEL
+    model = model or config.translation_model()
     target_lang = config.check_lang(target_lang)
     prefix_tokens = blocks.estimate_tokens(_prefix(load_prompt(version), glossary,
                                                    context or blocks.VideoContext(), target_lang))
@@ -170,7 +170,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     """The translated transcript: same ids and times, texts in `target_lang`, usage in `meta.translation`."""
     config.require_api_key()
     target_lang = config.check_lang(target_lang)
-    model = model or config.TRANSLATION_MODEL
+    model = model or config.translation_model()
     prefix = _prefix(load_prompt(version), glossary, context or blocks.VideoContext(), target_lang)
     client = claude_client.get_client()
     texts: dict[int, str] = {}

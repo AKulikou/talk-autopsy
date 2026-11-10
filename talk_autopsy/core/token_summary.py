@@ -13,9 +13,9 @@ from talk_autopsy.config import (
     CACHE_READ_MULTIPLIER,
     CACHE_READ_MULTIPLIER_BY_MODEL,
     CACHE_WRITE_MULTIPLIER,
-    CORRECTION_MODEL,
     MODEL_PRICING_PER_MTOK,
     WEB_SEARCH_PRICE,
+    correction_model,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,10 +44,10 @@ def estimate_cost(
     cache_read_input_tokens: int = 0,
 ) -> float | None:
     """
-    Estimated cost in USD for the given model (default: CORRECTION_MODEL),
+    Estimated cost in USD for the given model (default: config.correction_model()),
     or None if the model's pricing is not configured.
     """
-    model = model or CORRECTION_MODEL
+    model = model or correction_model()
     pricing = MODEL_PRICING_PER_MTOK.get(model)
     if pricing is None:
         return None
@@ -65,7 +65,7 @@ def call_cost(result: dict) -> float | None:
     cost = estimate_cost(
         result["input_tokens"],
         result["output_tokens"],
-        result.get("model", CORRECTION_MODEL),
+        result.get("model") or correction_model(),
         result.get("cache_creation_input_tokens", 0),
         result.get("cache_read_input_tokens", 0),
     )
@@ -91,7 +91,7 @@ def log_token_summary(results: list[dict]) -> None:
     """
     Log one total line; the per-call breakdown goes to DEBUG.
     Failed calls count when their tokens are known (rejected attempts are billed).
-    Each result may name its "model"; otherwise CORRECTION_MODEL is assumed.
+    Each result may name its "model"; otherwise config.correction_model() is assumed.
     """
     billed = [r for r in results if "input_tokens" in r]
     if not billed:
@@ -100,7 +100,7 @@ def log_token_summary(results: list[dict]) -> None:
 
     costs = []
     for result in billed:
-        model = result.get("model", CORRECTION_MODEL)
+        model = result.get("model") or correction_model()
         cost = call_cost(result)
         costs.append(cost)
         searches = f", {result['web_searches']} web searches" if result.get("web_searches") else ""
@@ -115,7 +115,7 @@ def log_token_summary(results: list[dict]) -> None:
     cache_read = sum(r.get("cache_read_input_tokens", 0) for r in billed)
     total_output = sum(r["output_tokens"] for r in billed)
     total_cost = None if None in costs else sum(costs)
-    models = sorted({r.get("model", CORRECTION_MODEL) for r in billed})
+    models = sorted({r.get("model") or correction_model() for r in billed})
     read_share = f", {cache_read / all_input:.0%} of input read from cache" if all_input else ""
     logger.info(
         f"Tokens: {all_input} in{read_share} / {total_output} out, {format_cost(total_cost)} "

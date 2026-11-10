@@ -189,7 +189,7 @@ class ChunkedGeminiTranscriber:
                  whisper_factory: Callable[[], object] | None = None,
                  chunk_seconds: float = CHUNK_SECONDS, search_seconds: float = SEARCH_SECONDS,
                  cache_only: bool = False):
-        self.models = list(models or config.GEMINI_MODELS)
+        self.models = list(models or config.gemini_models())
         if not self.models:
             raise ValueError("the Gemini model list is empty")
         self.glossary_prompt = glossary_prompt

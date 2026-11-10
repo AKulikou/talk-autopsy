@@ -80,9 +80,9 @@ class RunSettings:
     context: str = ""  # video title, description, chapter titles; a local file's name is not context
     work_root: Path = config.WORK_DIR
     max_cost_usd: float = config.COST_CONFIRMATION_USD
-    correction_model: str = field(default_factory=lambda: config.CORRECTION_MODEL)
-    translation_model: str = field(default_factory=lambda: config.TRANSLATION_MODEL)
-    helper_model: str = field(default_factory=lambda: config.HELPER_MODEL)
+    correction_model: str = field(default_factory=config.correction_model)
+    translation_model: str = field(default_factory=config.translation_model)
+    helper_model: str = field(default_factory=config.helper_model)
     gemini_cache_only: bool = False  # no Gemini call; uncached chunks go to faster-whisper
     refusal_fallback: bool = True
     name: str = ""  # work/<name>/ and <name>.<lang>.srt; default: the source file's stem

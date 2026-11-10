@@ -137,7 +137,7 @@ def make_engine(engine: str, model: str | None, glossary_prompt: bool, threads: 
     if engine == "gemini":
         return GeminiTranscriber(model=model, glossary_prompt=glossary_prompt)
     if engine == "gemini+align":
-        models = [model, *[m for m in config.GEMINI_MODELS if m != model]] if model else None
+        models = [model, *[m for m in config.gemini_models() if m != model]] if model else None
         inner = ChunkedGeminiTranscriber(models=models, glossary_prompt=glossary_prompt, cache_dir=cache_dir,
                                          progress=_print_progress)
         return align_module.AlignedTranscriber(inner, "gemini+align", progress=_print_progress)
@@ -239,7 +239,7 @@ def fix_command(
     except ConfigurationError as e:
         _fail(str(e))
     source, terms, ctx = _stage_inputs(transcript, glossary, context)
-    model = model or config.CORRECTION_MODEL
+    model = model or config.correction_model()
     _confirm_cost(correct.estimate(source, terms, ctx, model, version=prompt), max_cost)
     _log_to_stderr()
     try:
@@ -272,13 +272,13 @@ def glossary_auto_command(
     """Draft the glossary of a video from its first transcript (glossary-auto-v1, helper model)."""
     try:
         config.require_api_key()
-        target_lang = config.check_lang(lang if lang is not None else config.TARGET_LANG)
+        target_lang = config.check_lang(lang if lang is not None else config.target_lang())
         source = load_transcript(transcript)
         reference = load_glossary(compare) if compare is not None else None
     except (ConfigurationError, FileNotFoundError, ValueError, GlossaryError) as e:
         _fail(str(e))
     context_text = glossary_auto.read_context(context)
-    model = model or config.HELPER_MODEL
+    model = model or config.helper_model()
     _confirm_cost(glossary_auto.estimate(source, target_lang, context_text, model), max_cost)
     _log_to_stderr()
     try:
@@ -325,11 +325,11 @@ def translate_command(
                                  param_hint="--prompt")
     try:
         config.require_api_key()
-        target_lang = config.check_lang(lang if lang is not None else config.TARGET_LANG)
+        target_lang = config.check_lang(lang if lang is not None else config.target_lang())
     except ConfigurationError as e:
         _fail(str(e))
     source, terms, ctx = _stage_inputs(transcript, glossary, context)
-    model = model or config.TRANSLATION_MODEL
+    model = model or config.translation_model()
     _confirm_cost(translate.estimate(source, terms, target_lang, ctx, model, version=prompt), max_cost)
     _log_to_stderr()
     try:
@@ -452,7 +452,7 @@ def run(
     """
     selected = parse_steps(steps)
     try:
-        target_lang = config.check_lang(lang if lang is not None else config.TARGET_LANG)
+        target_lang = config.check_lang(lang if lang is not None else config.target_lang())
     except ConfigurationError as e:
         raise typer.BadParameter(str(e), param_hint="--lang") from None
     if engine not in pipeline.ENGINES:
@@ -467,9 +467,9 @@ def run(
     typer.echo(f"Target language: {target_lang}")
     typer.echo("Steps:")
     for number, step_name in enumerate(selected, start=1):
-        detail = STEPS[step_name].format(correction=f"{correct.PROMPT_VERSION}, {config.CORRECTION_MODEL}",
-                                    translation=f"{translate.PROMPT_VERSION}, {config.TRANSLATION_MODEL}",
-                                    helper=config.HELPER_MODEL, lang=target_lang, engine=engine)
+        detail = STEPS[step_name].format(correction=f"{correct.PROMPT_VERSION}, {config.correction_model()}",
+                                    translation=f"{translate.PROMPT_VERSION}, {config.translation_model()}",
+                                    helper=config.helper_model(), lang=target_lang, engine=engine)
         typer.echo(f"  {number}. {step_name:<10} {detail}")
     settings = pipeline.RunSettings(source=Path(source), target_lang=target_lang, steps=selected,
                                     engine=engine, glossary=glossary, max_cost_usd=max_cost,
@@ -665,3 +665,12 @@ def resolve_command(
     typer.echo(f"  typed by the owner: {t['typed_words']} words in {t['spans_typed']} spans")
     typer.echo(f"  majority spans kept / changed: {t['majority_kept']} / {t['majority_changed']}")
     typer.echo(f"Wrote {protocol_path}")
+
+
+def main() -> None:
+    """
+    The entry point of `talk-autopsy` and `python -m talk_autopsy`: load .env, then
+    run the CLI. Tests invoke `app` directly, so they never read a local .env.
+    """
+    config.load_environment()
+    app()

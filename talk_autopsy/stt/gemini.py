@@ -207,11 +207,11 @@ class GeminiTranscriber:
         engine, A4). Off for the chunked engine, which retries a per-minute 429 on
         the same model after RETRY_WAIT_SECONDS and chooses the next model itself.
         """
-        self.model = model or config.GEMINI_MODEL
-        self.fallback_model = fallback_model or config.GEMINI_FALLBACK_MODEL
+        self.model = model or config.gemini_model()
+        self.fallback_model = fallback_model or config.gemini_fallback_model()
         self.quota_fallback = quota_fallback
         self.glossary_prompt = glossary_prompt
-        self.tier = tier or config.GEMINI_TIER
+        self.tier = tier or config.gemini_tier()
         if self.tier not in ("free", "paid"):
             raise ValueError(f"GEMINI_TIER must be free or paid, got {self.tier!r}")
         self.name = f"gemini {self.model}"

@@ -5,6 +5,11 @@ Everything a run may vary comes from .env, so an experiment can compare variants
 of one code version without editing it. A variable already set in the environment
 wins over .env, so CI and servers can pass settings without touching the file.
 
+Importing this module (or any other) reads nothing: .env is loaded only by an
+entry point (`load_environment`, called by the CLI's `main`; the web UI will do
+the same), and every setting is a function that reads the environment when it
+is called. Tests import the package without ever seeing a local .env.
+
 The API key is checked when a Claude stage is about to run (require_api_key),
 not at import: cutting audio and speech recognition run without a key.
 """
@@ -15,7 +20,19 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()  # override=False: the real environment wins
+
+def load_environment(dotenv_path: Path | None = None) -> bool:
+    """
+    Load .env (default: the one in the project root) into the process
+    environment; a variable already set in the environment wins. Call it only
+    from an entry point, before the first setting is read. True if a file was read.
+    """
+    return load_dotenv(dotenv_path or PROJECT_ROOT / ".env", override=False)
+
+
+def _setting(name: str, default: str) -> str:
+    """An environment variable, stripped; empty or unset means `default`."""
+    return os.getenv(name, "").strip() or default
 
 
 class ConfigurationError(RuntimeError):
@@ -82,14 +99,29 @@ def require_key(name: str) -> str:
 # recorded); paid records the estimate at list prices.
 DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-3.6-flash"
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
-GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "").strip() or DEFAULT_GEMINI_FALLBACK_MODEL
-GEMINI_TIER = os.getenv("GEMINI_TIER", "").strip().lower() or "free"
-# Model order of the chunked engine (stt/chunked.py): each chunk tries these in turn, then
-# faster-whisper. Comma-separated in .env; default: GEMINI_MODEL, then GEMINI_FALLBACK_MODEL.
-GEMINI_MODELS = list(dict.fromkeys(
-    [m.strip() for m in os.getenv("GEMINI_MODELS", "").split(",") if m.strip()]
-    or [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]))
+
+
+def gemini_model() -> str:
+    return _setting("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+
+
+def gemini_fallback_model() -> str:
+    return _setting("GEMINI_FALLBACK_MODEL", DEFAULT_GEMINI_FALLBACK_MODEL)
+
+
+def gemini_tier() -> str:
+    return _setting("GEMINI_TIER", "free").lower()
+
+
+def gemini_models() -> list[str]:
+    """
+    Model order of the chunked engine (stt/chunked.py): each chunk tries these in turn,
+    then faster-whisper. Comma-separated GEMINI_MODELS in .env; default: gemini_model(),
+    then gemini_fallback_model().
+    """
+    listed = [m.strip() for m in os.getenv("GEMINI_MODELS", "").split(",") if m.strip()]
+    return list(dict.fromkeys(listed or [gemini_model(), gemini_fallback_model()]))
+
 
 # --- Target language -------------------------------------------------------
 
@@ -108,7 +140,10 @@ def check_lang(code: str) -> str:
     return normalized
 
 
-TARGET_LANG = os.getenv("TARGET_LANG", "").strip() or DEFAULT_TARGET_LANG
+def target_lang() -> str:
+    """TARGET_LANG from the environment, else the default (not yet checked: see check_lang)."""
+    return _setting("TARGET_LANG", DEFAULT_TARGET_LANG)
+
 
 # --- Models ----------------------------------------------------------------
 
@@ -119,9 +154,19 @@ DEFAULT_CORRECTION_MODEL = "claude-sonnet-5-5"
 DEFAULT_TRANSLATION_MODEL = "claude-sonnet-5-5"
 DEFAULT_HELPER_MODEL = "claude-haiku-5-5"
 
-CORRECTION_MODEL = os.getenv("CORRECTION_MODEL", "").strip() or DEFAULT_CORRECTION_MODEL
-TRANSLATION_MODEL = os.getenv("TRANSLATION_MODEL", "").strip() or DEFAULT_TRANSLATION_MODEL
-HELPER_MODEL = os.getenv("HELPER_MODEL", "").strip() or DEFAULT_HELPER_MODEL
+
+
+def correction_model() -> str:
+    return _setting("CORRECTION_MODEL", DEFAULT_CORRECTION_MODEL)
+
+
+def translation_model() -> str:
+    return _setting("TRANSLATION_MODEL", DEFAULT_TRANSLATION_MODEL)
+
+
+def helper_model() -> str:
+    return _setting("HELPER_MODEL", DEFAULT_HELPER_MODEL)
+
 
 # Per-call output limit; a truncated response is treated as an error.
 MAX_TOKENS = 16000

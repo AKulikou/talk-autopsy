@@ -63,7 +63,7 @@ after any change. Use the uv-managed Python 3.13, not the system `python`.
 
 ## Layout
 
-- `talk_autopsy/config.py` — API key check (`require_api_key`), optional cloud STT keys (`require_key`), `TARGET_LANG` and `check_lang`, model IDs, prices for the cost estimate, paths
+- `talk_autopsy/config.py` — `load_environment` (reads `.env`; called only by entry points: the CLI's `main`, later the web UI), API key check (`require_api_key`), optional cloud STT keys (`require_key`), settings as functions read on call (`target_lang()`, `correction_model()`, ...), `check_lang`, model IDs, prices for the cost estimate, paths. Importing any module reads neither `.env` nor a secret
 - `talk_autopsy/segments.py` — `Transcript` / `Segment` / `Word`: the one JSON format every stage reads and writes; `assert_same_ids`
 - `talk_autopsy/ingest.py` — `extract_audio` (ffmpeg, optional cut), `probe` (duration), `parse_timecode`; `download` (yt-dlp) is a stage 1 stub
 - `talk_autopsy/glossary.py` — `Glossary`: a Markdown table per video (`T<n>.glossary.md`), format in the module docstring
