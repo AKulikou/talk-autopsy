@@ -13,8 +13,9 @@ import pytest
 from typer.testing import CliRunner
 
 from talk_autopsy import adjudicate as adj
-from talk_autopsy import cli, config, judge
+from talk_autopsy import cli, config, judge, ref_glossary
 from talk_autopsy.adjudicate import Choice, Option, Span, build_consensus, parse_choices, resolve
+from talk_autopsy.glossary import load_glossary
 from talk_autopsy.segments import Segment, Transcript, Word
 
 runner = CliRunner()
@@ -424,3 +425,43 @@ def test_cli_judge_writes_the_log_and_the_judged_copy(fake_genai, clips, tmp_pat
     compared = runner.invoke(cli.app, ["judge-compare", "T9"])
     assert compared.exit_code == 1  # the original split is undecided: nothing to compare against
     assert "0 options ticked" in compared.output
+
+
+# --- reference glossary by Gemini ------------------------------------------------
+
+REFERENCE = "We open Claude Code and run npm install. Then GitHub Actions run the pull requests."
+
+
+def test_glossary_terms_must_occur_in_the_reference():
+    proposed = [{"term": "Claude Code", "keep": True, "notes": "product"},
+                {"term": "claude code", "keep": True, "notes": "duplicate"},
+                {"term": "Claude", "keep": True, "notes": "only inside Claude Code"},
+                {"term": "pull request", "keep": False, "notes": "plural in the text"},
+                {"term": "Kubernetes", "keep": True, "notes": "not spoken"},
+                {"term": "  ", "keep": True, "notes": ""}]
+    entries, absent, over = ref_glossary.select_terms(REFERENCE, proposed)
+    assert [e.term for e in entries] == ["Claude Code", "pull request"]
+    assert (absent, over) == (2, 0)
+
+
+def test_glossary_is_capped(monkeypatch):
+    monkeypatch.setattr(ref_glossary, "MAX_TERMS", 1)
+    entries, absent, over = ref_glossary.select_terms(REFERENCE, [{"term": "npm", "keep": True},
+                                                                  {"term": "GitHub", "keep": True}])
+    assert [e.term for e in entries] == ["npm"] and over == 1
+
+
+def test_cli_glossary_ref_writes_the_glossary_and_prints_counts(fake_genai, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "TEST_SET_DIR", tmp_path)
+    (tmp_path / "T9.ref.txt").write_text(REFERENCE, encoding="utf-8")
+    terms = [{"term": "npm", "keep": True, "notes": "tool"}, {"term": "Docker", "keep": True, "notes": "x"}]
+    fake_genai.answers = [SimpleNamespace(text=json.dumps({"terms": terms}), candidates=[
+        SimpleNamespace(finish_reason=FinishReason.STOP)], usage_metadata=SimpleNamespace(
+        prompt_token_count=100, candidates_token_count=10, thoughts_token_count=0))]
+    result = runner.invoke(cli.app, ["glossary-ref", "T9"])
+    assert result.exit_code == 0, result.output
+    assert "1 terms (2 proposed" in result.output and "npm" not in result.output
+    glossary = load_glossary(tmp_path / "T9.glossary.md")
+    assert [(e.term, e.keep) for e in glossary.entries] == [("npm", True)]
+    assert REFERENCE in fake_genai.calls[0].contents[0]
+    assert runner.invoke(cli.app, ["glossary-ref", "T9"]).exit_code == 1  # no silent overwrite

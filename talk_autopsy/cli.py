@@ -781,6 +781,43 @@ def judge_compare_command(
     typer.echo(f"Wrote {out}")
 
 
+@app.command(name="glossary-ref")
+def glossary_ref_command(
+    fragment: Annotated[str, typer.Argument(help="Test-set fragment ID with a reference, e.g. T6.")],
+    model: Annotated[str | None, typer.Option(
+        help="Gemini model. Default: GEMINI_MODEL (gemini-3.8-flash).")] = None,
+    force: ForceOption = False,
+) -> None:
+    """
+    Reference glossary drafted by Gemini (not Claude) from data/test-set/<FRAGMENT>.ref.txt:
+    terms that do not occur in the reference are dropped. Writes <FRAGMENT>.glossary.md. Counts only.
+    """
+    import datetime
+
+    from talk_autopsy import ref_glossary
+
+    fragment = _fragment(fragment)
+    reference = config.TEST_SET_DIR / f"{fragment}.ref.txt"
+    out = config.TEST_SET_DIR / f"{fragment}.glossary.md"
+    if not reference.is_file():
+        _fail(f"No {reference}; resolve {fragment} first")
+    if out.exists() and not force:
+        _fail(f"{out} exists. Pass --force to overwrite it.")
+    try:
+        extraction = ref_glossary.extract(reference.read_text(encoding="utf-8"),
+                                          model or config.gemini_model())
+    except (ValueError, RuntimeError, ConfigurationError) as e:
+        _fail(str(e))
+    out.write_text(ref_glossary.glossary_file(fragment, extraction, datetime.date.today().isoformat()),
+                   encoding="utf-8", newline=chr(10))
+    kept = len(extraction.glossary.entries)
+    typer.echo(f"Wrote {out}: {kept} terms ({extraction.proposed} proposed by {extraction.model}, "
+               f"{extraction.dropped_absent} not in the reference, {extraction.dropped_over_limit} over "
+               f"the limit of {ref_glossary.MAX_TERMS})")
+    if kept < ref_glossary.MIN_TERMS:
+        typer.echo(f"  fewer than {ref_glossary.MIN_TERMS} terms")
+
+
 def main() -> None:
     """
     The entry point of `talk-autopsy` and `python -m talk_autopsy`: load .env, then

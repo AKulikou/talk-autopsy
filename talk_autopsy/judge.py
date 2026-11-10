@@ -287,8 +287,8 @@ def decision_of(options: list[ShownOption], answer: Answer) -> dict:
     return {"other": text or NO_WORDS, "text": text, "engines": []}
 
 
-class _Caller:
-    """One generate_content call per span with retries and pacing."""
+class GeminiCaller:
+    """Structured generate_content calls with pacing and retries (the judge, the reference glossary)."""
 
     def __init__(self, model: str, pace_seconds: float, sleep: Callable[[float], None] = time.sleep):
         from talk_autopsy.stt import gemini
@@ -312,7 +312,11 @@ class _Caller:
                 self.sleep(wait)
         self.last_start = time.monotonic()
 
-    def generate(self, audio: bytes, prompt: str, schema: dict):
+    def audio_part(self, audio: bytes):
+        return self.types.Part.from_bytes(data=audio, mime_type="audio/wav")
+
+    def generate(self, contents: list, schema: dict):
+        """One structured request; `contents` as for generate_content (parts and text)."""
         types, errors, gemini = self.types, self.errors, self.gemini
         for attempt, wait in enumerate((*RETRY_WAIT_SECONDS, None), start=1):
             self._pace()
@@ -320,7 +324,7 @@ class _Caller:
             try:
                 response = self.client.models.generate_content(
                     model=self.model,
-                    contents=[types.Part.from_bytes(data=audio, mime_type="audio/wav"), prompt],
+                    contents=contents,
                     config=types.GenerateContentConfig(response_mime_type="application/json",
                                                        response_json_schema=schema,
                                                        max_output_tokens=MAX_OUTPUT_TOKENS))
@@ -345,12 +349,12 @@ class _Caller:
         raise AssertionError("unreachable")
 
 
-def judge_span(caller: _Caller, fragment: str, span: Span, clip: Path, conventions: list[str]) -> dict:
+def judge_span(caller: GeminiCaller, fragment: str, span: Span, clip: Path, conventions: list[str]) -> dict:
     """Judge one span; returns its judge.jsonl record. Errors propagate."""
     seed = span_seed(fragment, span.number)
     options = shown_options(span, seed)
     prompt = build_prompt(span, options, conventions)
-    response = caller.generate(clip.read_bytes(), prompt, answer_schema(len(options)))
+    response = caller.generate([caller.audio_part(clip.read_bytes()), prompt], answer_schema(len(options)))
     answer = parse_answer(response.text, len(options))
     decision = decision_of(options, answer)
     usage = response.usage_metadata
@@ -400,7 +404,7 @@ def run(fragment: str, consensus: Consensus, clip_dir: Path, conventions: list[s
                          f"rerun talk-autopsy adjudicate {fragment}")
     if not todo:
         return summary
-    caller = _Caller(model, pace_seconds, sleep)
+    caller = GeminiCaller(model, pace_seconds, sleep)
     out.parent.mkdir(parents=True, exist_ok=True)
     consecutive = 0
     with out.open("a", encoding="utf-8", newline="\n") as file:
