@@ -467,6 +467,33 @@ include upload.
   not been backed up yet); its AssemblyAI pass (up to 0.098 USD) is counted
   as spent in the session total.
 
+### YouTube input and output formats (2026-11-10, prompt 10; no pipeline run)
+
+- **Smoke test not run:** `work/youtube-test-url.txt` did not exist, so no
+  video went through the pipeline (0 USD Claude, 0 USD AssemblyAI). The
+  command for the owner: `uv run talk-autopsy run "<url>" --domain web3
+  --output all`.
+- **Download path checked without the pipeline** (no API cost): `doctor`
+  found ffmpeg, Node.js 24.15.0 (Deno is not installed; yt-dlp 2026.10.26
+  supports Deno, Node.js 22+, Bun and QuickJS), `yt-dlp-ejs` 0.8.0 and the
+  keys. `run <url> --dry-run` read a public video's metadata (title, channel,
+  duration, captions de/en, 3 chapters); `youtube.download` fetched a 19 s
+  public video as H.264 + AAC MP4 with the author's English captions as
+  `.srt`. A removed video gave the error, the `doctor` hint and the
+  local-file reminder.
+- **Output formats on real files** (the T2.source pipeline outputs, 27:52,
+  1080p, no API call): `srt`, `ass`, `bilingual`, `mp4-soft` (H.264 + AAC
+  copied, two `mov_text` tracks: rus default, eng), `mp4-burned` (Russian
+  drawn in, checked on a frame) in 457 s together. Burn-in alone: 10.7 s for
+  a 60 s clip (0.18x real time); the estimate printed before burn-in uses
+  0.27x from the full run.
+- **web3 glossary:** 140 terms (the draft's grouped rows split into one term
+  each, so each is a key term; all within AssemblyAI's 6-word and 1000-term
+  limits). With translation-v2 every agreed translation is enforced in every
+  segment where the term occurs, so everyday words with an agreed
+  translation (`finding`, `block`, `coverage`) can make a block fail
+  validation; translation-v3 does not enforce them.
+
 ### stress-01: the frozen pipeline on an accented interview (2026-11-10, not scored)
 
 An interview, 29:50 (`data/test-set/source-video-2.mp4`): a guest with a
@@ -550,6 +577,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | v3 is an option, v2 stays the default until the owner's blind rating (`work/C1-v3-blind.md`) |
 | D1 (setup) | 2026-11-10 | none: sentence units before translation and display extended into pauses (subtitle-v2) | translation-v2 on units; T2 fragment, C1 input, T2.source, real-01 | T2 fragment Russian above 17 / 25 cps 74.7% / 25.3% -> 58.8% / 15.8%; on AssemblyAI input units = segments (149/149, 373/373, 428/426); Gemini input 109 -> 85 units; 0.547 USD | the C1 fragments become whole sentences; the extension does most of the reading-speed work; word timing raises speed variance in multi-cue segments | units frozen with the pipeline; display rule stays open |
 | C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | both above 4.0; v2 preferred; not fully blind | **C1 met; translation-v2 adopted** |
 | B2 (v2) | 2026-11-10 | correction-v2 edits distort meaning in < 5% of cases | owner checked `B2-review-v2.md` | T2 0 edits; T1 2 edits, 0 distort meaning | met on a tiny sample | correction-v2 frozen unchanged |
@@ -566,6 +594,100 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | A4 (setup) | 2026-11-09 | none: Gemini transcripts for the consensus reference | gemini-3.8-flash, Files API, structured JSON, no glossary; T2, T1 | 446 s / 602 s wall incl. 503 retries; 0 USD (free tier; 0.038 / 0.029 USD at paid prices); agreement with the backbone 95.3% / 91.9% | runs end to end; frequent 503 "high demand" | transcripts feed the T1 and T2 adjudication |
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
+
+### C1b: translation-v3, term classes (2026-11-10; owner's blind rating pending)
+
+- **Problem.** The owner watched the whole [removed] interview (real-01) with
+  translation-v2 subtitles: ordinary words stayed in English or became odd
+  loanwords ("computer science", "tokens", "thinking tokens",
+  "frontier-модель", "compute", "inference", "inference-компании",
+  "alignment", "промптнуть", "эмерджентные свойства"). translation-v2 says
+  "technical terms stay in English" without telling names and code from words
+  that have a normal Russian translation; the same flaw was noted for UI names
+  (Backlog).
+- **Policy (owner, 2026-11-10; decisions):**
+
+  | Class | Rule | Examples |
+  |---|---|---|
+  | `keep` | Latin script as is: names of products, companies, people, tools, libraries; code, commands, identifiers, file names; acronyms without a Russian form | Claude, OpenAI, Foundry, `msg.sender`, `forge test`, API, GPU |
+  | `translate` | Russian only, no English | computer science -> информатика; tokens -> токены; thinking tokens -> токены рассуждений; frontier model -> передовая модель |
+  | `both` | Russian with the English in brackets at its first occurrence in the video, Russian only afterwards | compute -> вычислительные мощности (compute); inference -> запуск моделей (inference); alignment -> согласование ИИ с интересами людей (alignment) |
+  | `ui` | English as on screen, Russian gloss in brackets at the first occurrence, English only afterwards | Dictation (голосовой ввод); Command Palette (палитра команд) |
+
+- **What was built.** A `policy` column in the glossary format (backwards
+  compatible: `keep: yes` -> keep, `keep: no` with a translation ->
+  translate); `glossaries/web3.md` mapped from the owner's draft (109 keep,
+  21 translate, 10 both); `term_policy.py` (`term-policy-v1`): one Haiku call
+  after the frozen auto-glossary classifies the terms without a policy, for
+  the translation only (`glossary.md` and the speech recognition key terms are
+  untouched: tested); `translation-v3`: v2 with the policy replacing
+  "technical terms stay in English", plain renderings for rare scientific
+  loanwords, `both` / `ui` terms marked inline and the first occurrence decided
+  in code over the whole video; a validator that rejects a missing or
+  transliterated keep term that looks like a name or code. `run --translation
+  v2|v3`; the default stays v2.
+- **Runs** (`translate --prompt translation-v3` from the cached corrected
+  transcripts, the same sentence units as the v2 outputs the owner watched;
+  `scripts/c1b_compare.py`): real-01 with its run glossary (29 terms, all
+  classified by Haiku: 16 keep, 10 translate, 3 both: LLM, inference,
+  compute), 171 s; T2 with `run.glossary.md` (31 terms: 21 keep, 7
+  translate, 3 both: IDE, REPL, CLI), 54 s. Subtitles `work/real-01/v3/`,
+  `work/T2/v3/` (`.srt` + `.ass`, layout as before).
+
+| | real-01 v2 | real-01 v3 | T2 v2 | T2 v3 |
+|---|---|---|---|---|
+| units / failed blocks | 428 / 0 | 428 / 0 | 149 / 0 | 149 / 0 |
+| Latin words of keep terms per 100 Russian words | 0.88 | 0.88 | 6.45 | 6.32 |
+| other Latin words per 100 Russian words | **0.81** | **0.25** | **2.10** | **0.74** |
+| keep terms preserved (term in the English -> in the Russian) | 43 / 44 (Twitter dropped) | 44 / 44 | 89 / 89 | 89 / 89 |
+| marker warnings | - | 0 | - | 0 |
+| cues above 17 / 25 cps | 49.2% / 14.8% | 50.0% / 14.6% | 58.8% / 15.8% | 65.1% / 21.9% |
+| cost (translation + classification) | 0.230 USD | 0.263 + 0.001 USD | 0.071 USD | 0.081 + 0.001 USD |
+
+  The keep-term split uses the v3 classified glossary for both versions.
+  Reading speed is recomputed from both transcripts with the current layout.
+
+  The owner's example words (units whose English has the word; first
+  matching rendering per unit; real-01 unless noted):
+
+  | Word | v2 | v3 |
+  |---|---|---|
+  | computer science (the speaker says "CS") | computer science (Latin) 3 | информатика 3 |
+  | tokens | tokens (Latin) 5, токены 2 | токены 7 |
+  | thinking tokens | thinking tokens (Latin) 1 | токены рассуждений 1 |
+  | frontier | передовые 3, frontier-… 1 | передовые 4 |
+  | compute | вычислительные мощности 12, compute (Latin) 3 | вычислительные мощности (compute) 1 (the first), вычислительные мощности 14 |
+  | inference | inference (Latin) 4 | запуск моделей (inference) 1 (the first), запуск моделей 3 |
+  | alignment | alignment (Latin) 1 | согласование ИИ с интересами людей (alignment) 1 |
+  | prompt (real-01) | промпт / промптнуть 3 | запрос 2, вопрос 1 ("let me try to prompt you" -> «подтолкнуть вас к этому вопросу») |
+  | prompt (T2) | промпт 9, other 3 | промпт 8, вопрос 1, other 3 |
+  | emergent | эмерджентное / эмерджентными 2, other 1 | свойства, которые появляются при большом масштабе 2, other 1 |
+  | Dictation (T2) | «Диктовка» 1, диктовка 1 | Dictation (диктовка) 1 (as a UI name), диктовка 1 (the key) |
+
+- **Observations.** Every one of the owner's examples now follows the policy
+  in real-01. The `both` brackets appear once per video, as designed (the
+  first "compute" carries "(compute)", the next 14 do not). Haiku classified
+  T2's `dictation` as translate, not ui; the model still wrote the macOS
+  setting as `⟦ui:Dictation|диктовка⟧` (and Accessibility likewise), because
+  the prompt lets it classify by context, but the gloss is «диктовка», not the
+  owner's «голосовой ввод». On T2 v3 reads slower (cues above 17 cps 58.8% ->
+  65.1%, above 25 cps 15.8% -> 21.9%): Russian renderings are longer than the
+  English words v2 kept (`pull request` -> «запрос на слияние», IDE ->
+  «интегрированная среда разработки (IDE)»); real-01 is unchanged. Haiku put
+  `pull request` in translate, while Russian developers usually say
+  «пул-реквест»; the blind rating will show whether that reads well.
+- **Blind pairs for the owner:** `work/C1-v3-blind.md`, 16 pairs (10
+  real-01, 6 T2) chosen by code (`scripts/c1b_blind_pairs.py`, seed
+  20261110) among units where v2 and v3 differ, 12 with an example word
+  (every example covered); A and B in random order per pair; the key in
+  `work/C1-v3-key.json`. **Decision rule (written before the rating):** v3 is
+  adopted if, in the owner's blind scores, v3 wins more pairs than v2 and v3
+  has no pair with a score of 2 or less caused by lost meaning. Otherwise v2
+  stays and the comments go to the Backlog.
+- **Status:** owner's blind rating pending; translation-v3 is an option
+  (`--translation v3`), the default and the `pipeline-v2` freeze are
+  unchanged. Adopting v3 means a short follow-up: flip the default, tag the
+  freeze.
 
 ### Subtitles: up to 3 lines and `.ass` (operational, not scored)
 
@@ -1478,4 +1600,8 @@ Ideas that come up during a stage and wait for a later one.
   "Dictation" was rendered with a literal Russian word, while the Russian
   Windows UI calls it "Голосовой ввод"). Idea for a future translation
   version: keep UI element names in English with a short Russian gloss in
-  brackets.
+  brackets. *Addressed 2026-11-10 by translation-v3 (the `ui` class, C1b), an
+  option until the owner's blind rating. On T2 the model wrote "Dictation
+  (диктовка)" as a UI name; the classifier had put `dictation` in translate,
+  and the gloss is not the localized name: a user glossary entry with policy
+  `ui` and the official name fixes it per video.*
