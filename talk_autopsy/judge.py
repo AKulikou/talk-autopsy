@@ -163,11 +163,16 @@ def shown_options(span: Span, seed: int) -> list[ShownOption]:
     return options
 
 
+CALIBRATION_ADDENDUM = "after the judge calibration"  # marks README rows added after 09b
+
+
 def read_conventions(readme_text: str) -> list[str]:
     """
     The rows of the "Reference conventions" table in data/test-set/README.md as
     `case: rule` lines, without the "*In code:*" notes (those are applied by the
-    code, not by the writer).
+    code, not by the writer), and without the rows added after the T2
+    calibration (marked `CALIBRATION_ADDENDUM`): those are applied by
+    `normalize_for_adjudication`, so the judge's prompt stays as calibrated.
     """
     match = re.search(r"^## Reference conventions\s*$(.*?)(?=^## |\Z)", readme_text, re.M | re.S)
     if not match:
@@ -177,6 +182,8 @@ def read_conventions(readme_text: str) -> list[str]:
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) != 2 or cells[0] in ("Case", "") or set(cells[0]) <= set("-: "):
             continue
+        if CALIBRATION_ADDENDUM in cells[1]:
+            continue  # applied in code (normalize_for_adjudication); the prompt stays as calibrated
         rule = re.split(r"\.?\s*\*In code:\*", cells[1])[0].strip().rstrip(".")
         rules.append(f"{cells[0]}: {rule}.")
     if not rules:
@@ -271,6 +278,122 @@ def clean_text(text: str) -> str:
     if text.strip() in (NO_WORDS, EMPTY_OPTION):
         return ""
     return " ".join(word for word in text.split() if not metrics.is_filler(word))
+
+
+# --- adjudication normaliser (post-hoc, 2026-11-10) ------------------------------
+#
+# The reference convention on repetitions was never written down before the 09b
+# calibration: the judge writes every spoken word, the T2 reference mostly drops
+# immediate repetitions and restarts. `normalize_for_adjudication` makes the
+# convention explicit and is applied to BOTH sides of every comparison (and to
+# the judge's decided text when a reference is built from a judged file). It
+# does not change the metrics normaliser (`metrics.tokenize`) or any reference
+# file. Known limitation: grammatical doubles ("that that", "very, very") are
+# collapsed too; applied symmetrically, that cannot create a disagreement.
+
+MAX_REPEAT_WORDS = 4
+_MODIFIERS = {"shift": "Shift", "ctrl": "Ctrl", "control": "Ctrl", "alt": "Alt", "cmd": "Cmd",
+              "command": "Cmd", "option": "Option"}
+_NAMED_KEYS = {"enter": "Enter", "tab": "Tab", "esc": "Esc", "escape": "Esc", "space": "Space",
+               "backspace": "Backspace", "delete": "Delete"}
+_MOD = "(?:" + "|".join(sorted(_MODIFIERS, key=len, reverse=True)) + ")"
+_KEY = "(?:" + "|".join(sorted(_NAMED_KEYS, key=len, reverse=True)) + r"|f1[0-2]|f[1-9]|[a-z0-9])"
+_SEP = r"(?:\s*[+\-]\s*|\s+)"
+_COMBO = re.compile(rf"\b{_MOD}(?:{_SEP}{_MOD})*{_SEP}{_KEY}\b", re.I)
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
+
+
+def _canonical_combo(match: re.Match) -> str:
+    text = match.group(0)
+    parts = re.split(r"\s*[+\-]\s*|\s+", text)
+    key = parts[-1].lower()
+    last_sep_is_space = not re.search(r"[+\-]\s*" + re.escape(parts[-1]) + r"$", text)
+    if last_sep_is_space and key not in _NAMED_KEYS:
+        return text  # "command f", "shift a": a letter needs an explicit + or - to count as a key
+    names = [_MODIFIERS[p.lower()] for p in parts[:-1]]
+    last = _NAMED_KEYS.get(key) or key.upper()
+    return "+".join([*names, last])
+
+
+def canonical_key_combinations(text: str) -> str:
+    """`shift enter`, `Shift-Enter`, `shift+enter` -> `Shift+Enter`; likewise Ctrl/Alt/Cmd, Tab/Esc."""
+    return _COMBO.sub(_canonical_combo, text)
+
+
+def remove_thousands_separators(text: str) -> str:
+    """`3,000` -> `3000`, `1,000,000` -> `1000000`; `1,5` and `2, 3` are left alone."""
+    return _THOUSANDS.sub("", text)
+
+
+def _word_key(word: str) -> str:
+    return " ".join(metrics.tokenize(word))
+
+
+def collapse_repetitions(text: str) -> str:
+    """
+    An immediately repeated sequence of 1-4 words (case and punctuation ignored)
+    is written once, repeatedly until stable: "For for everyone" -> "For everyone",
+    "I wanted to I wanted to include" -> "I wanted to include". The first
+    occurrence is kept. Pieces with no letter or digit (a lone dash) are dropped;
+    the metrics ignore them anyway. Non-adjacent repeats are kept.
+    """
+    words = [w for w in text.split() if _word_key(w)]
+    keys = [_word_key(w) for w in words]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(words)):
+            for n in range(1, MAX_REPEAT_WORDS + 1):
+                if i + 2 * n <= len(words) and keys[i:i + n] == keys[i + n:i + 2 * n]:
+                    del words[i + n:i + 2 * n], keys[i + n:i + 2 * n]
+                    changed = True
+                    break
+            if changed:
+                break
+    return " ".join(words)
+
+
+def normalize_for_adjudication(text: str) -> str:
+    """
+    The adjudication normaliser (applied identically to both sides of a
+    comparison): key combinations canonicalised, thousands separators removed,
+    immediate repetitions of 1-4 words collapsed, then the reference
+    conventions applied in code (`clean_text`: fillers removed, whitespace
+    collapsed). The formatting rules run before the collapse so that it sees
+    canonical forms, and the whole chain is repeated until the text is stable,
+    so the function is idempotent (removing a filler can expose a repetition:
+    "for um for").
+    """
+    current = text
+    while True:
+        formatted = remove_thousands_separators(canonical_key_combinations(current))
+        new = clean_text(collapse_repetitions(formatted))
+        if new == current:
+            return new
+        current = new
+
+
+def disagreement_class(reference: str, judge: str, terms: list[str] = ()) -> str:
+    """
+    Class of a remaining disagreement (after the adjudication normaliser):
+    `term` if a differing token belongs to a glossary term; `formatting` if the
+    two texts differ only in spelling (case, punctuation, separators, `@` for
+    "at", number words); `word` otherwise.
+    """
+    ref_tokens, judge_tokens = metrics.tokenize(reference), metrics.tokenize(judge)
+    term_tokens = {t for term in terms for t in metrics.tokenize(term)}
+    matcher = difflib.SequenceMatcher(None, ref_tokens, judge_tokens, autojunk=False)
+    changed = {t for tag, i1, i2, j1, j2 in matcher.get_opcodes() if tag != "equal"
+               for t in ref_tokens[i1:i2] + judge_tokens[j1:j2]}
+    if changed & term_tokens:
+        return "term"
+
+    def key(text: str) -> str:
+        return _spelling_key(text.replace("@", " at "))
+
+    if key(reference) == key(judge):
+        return "formatting"
+    return "word"
 
 
 def contains_tokens(haystack: str, needle: str) -> bool:
@@ -694,13 +817,16 @@ def classify_decision(span: Span, choice: Choice, terms: list[str] = ()) -> str:
 
 
 def compare(consensus: Consensus, reference: dict[int, Choice], judged: dict[int, Choice],
-            terms: list[str] = (), by_ear: frozenset[int] | set[int] = frozenset()) -> dict:
+            terms: list[str] = (), by_ear: frozenset[int] | set[int] = frozenset(),
+            normalize: Callable[[str], str] | None = None) -> dict:
     """
     Agreement of the judge with decided spans: per span, the decided texts are
     compared after the metrics normalization (`metrics.tokenize`), overall and by
     class: `owner_ear` for the spans in `by_ear` (the owner's recorded list of
     spans decided by listening), else `classify_decision` with the fragment's
-    glossary `terms`.
+    glossary `terms`. With `normalize` (e.g. `normalize_for_adjudication`) both
+    texts pass through it first, and each disagreement gets a
+    `disagreement_class`.
     """
     rows = []
     for span in judgeable(consensus):
@@ -709,10 +835,15 @@ def compare(consensus: Consensus, reference: dict[int, Choice], judged: dict[int
         ref_text = decided_text(span, reference[span.number])
         judge_text = decided_text(span, judged[span.number])
         inferred = classify_decision(span, reference[span.number], terms)
-        rows.append({"span": span.number, "verdict": span.verdict,
-                     "class": "owner_ear" if span.number in by_ear else inferred, "inferred": inferred,
-                     "reference": ref_text, "judge": judge_text,
-                     "agree": metrics.tokenize(ref_text) == metrics.tokenize(judge_text)})
+        left, right = (normalize(ref_text), normalize(judge_text)) if normalize else (ref_text, judge_text)
+        row = {"span": span.number, "verdict": span.verdict,
+               "class": "owner_ear" if span.number in by_ear else inferred, "inferred": inferred,
+               "reference": ref_text, "judge": judge_text,
+               "agree": metrics.tokenize(left) == metrics.tokenize(right)}
+        if normalize:
+            row.update({"reference_normalized": left, "judge_normalized": right,
+                        "disagreement": None if row["agree"] else disagreement_class(left, right, terms)})
+        rows.append(row)
 
     def share(selected: list[dict]) -> dict:
         agree = sum(1 for r in selected if r["agree"])

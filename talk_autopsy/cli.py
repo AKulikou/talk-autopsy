@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Annotated
 
@@ -26,6 +27,7 @@ from talk_autopsy import (
     glossary_auto,
     ingest,
     judge,
+    metrics,
     pipeline,
     proofread,
     subtitles,
@@ -647,6 +649,11 @@ def resolve_command(
         help="Filled adjudication file. Default: data/test-set/<FRAGMENT>.adjudication.md "
              "(the judge's copy: <FRAGMENT>.adjudication.judged.md).")] = None,
     force: ForceOption = False,
+    normalize_adjudication: Annotated[bool, typer.Option(
+        "--normalize-adjudication",
+        help="Pass every span's chosen text through the adjudication normaliser (repetitions written "
+             "once, thousands separators, key combinations); for a reference built from a judged file.",
+    )] = False,
 ) -> None:
     """Compose the reference from the agreed words and the variants chosen in the adjudication file."""
     fragment = _fragment(fragment)
@@ -659,7 +666,8 @@ def resolve_command(
     try:
         result = consensus_module.consensus_from_json(consensus_file.read_text(encoding="utf-8"))
         choices = consensus_module.parse_choices(adjudication.read_text(encoding="utf-8-sig"))
-        resolution = consensus_module.resolve(result, choices)
+        resolution = consensus_module.resolve(
+            result, choices, postprocess=judge.normalize_for_adjudication if normalize_adjudication else None)
     except (ValueError, TypeError, KeyError) as e:
         _fail(str(e))
     _write_new(out, resolution.reference, force)
@@ -759,12 +767,20 @@ def judge_command(
 @app.command(name="judge-compare")
 def judge_compare_command(
     fragment: Annotated[str, typer.Argument(help="Test-set fragment ID with decided spans, e.g. T2.")],
+    normalize_adjudication: Annotated[bool, typer.Option(
+        "--normalize-adjudication",
+        help="Compare after the adjudication normaliser on both sides (post-hoc rescoring, 2026-11-10); "
+             "writes judge.compare.normalized.json.")] = False,
 ) -> None:
     """
     Agreement of the judge's file with the decided adjudication file, overall and by how each
-    span was decided (inferred). Prints span texts: never use it on a sealed fragment.
+    span was decided (inferred), and the WER between the decided reference and one resolved from
+    the judged file. Prints span texts: never use it on a sealed fragment.
     """
     fragment = _fragment(fragment)
+    if fragment in config.SEALED_FRAGMENTS:
+        _fail(f"{fragment} is sealed; judge-compare prints span texts")
+    normalize = judge.normalize_for_adjudication if normalize_adjudication else None
     try:
         result = consensus_module.consensus_from_json(_consensus_path(fragment).read_text(encoding="utf-8"))
         reference = consensus_module.parse_choices(
@@ -775,9 +791,19 @@ def judge_compare_command(
         ear_file = config.WORK_DIR / fragment / "owner-by-ear.json"  # the owner's list, if recorded
         by_ear = ({int(s["span"]) for s in json.loads(ear_file.read_text(encoding="utf-8"))["spans"]}
                   if ear_file.is_file() else set())
-        report = judge.compare(result, reference, judged, terms, by_ear)
+        report = judge.compare(result, reference, judged, terms, by_ear, normalize=normalize)
+        decided_ref = consensus_module.resolve(result, reference).reference
+        judged_ref = consensus_module.resolve(result, judged, postprocess=normalize).reference
+        records = {r["span"]: r for r in judge.load_records(config.WORK_DIR / fragment / "judge.jsonl")}
     except (FileNotFoundError, ValueError, RuntimeError, KeyError) as e:
         _fail(str(e))
+    if normalize:  # the decided reference passes through the same normaliser: both sides alike
+        decided_ref = normalize(decided_ref)
+        judged_ref = normalize(judged_ref)
+    wer = metrics.word_error_rate(decided_ref, judged_ref)
+    report["references_wer"] = {"wer": round(wer.wer, 4), "substitutions": wer.substitutions,
+                                "deletions": wer.deletions, "insertions": wer.insertions,
+                                "reference_words": wer.reference_words}
 
     def line(name: str, s: dict) -> str:
         share = "-" if s["share"] is None else f"{s['share']:.1%}"
@@ -789,12 +815,23 @@ def judge_compare_command(
         typer.echo(line(f"decided by {name}", s))
     for name, s in report["by_verdict"].items():
         typer.echo(line(f"{name} spans", s))
+    typer.echo(f"WER between the decided reference and the judged one: {wer.wer:.2%} "
+               f"({wer.reference_words} words; {wer.substitutions} S, {wer.deletions} D, {wer.insertions} I)")
     typer.echo("Disagreements (span, class, decided | judge):")
     for row in report["rows"]:
         if not row["agree"]:
             typer.echo(f"  {row['span']:04d} {row['class']:<8} {row['reference'] or '(no words)'} | "
                        f"{row['judge'] or '(no words)'}")
-    out = config.WORK_DIR / fragment / "judge.compare.json"
+            if normalize:
+                record = records.get(row["span"], {})
+                typer.echo(f"       [{row['disagreement']}] heard: {record.get('heard', '?')!r}; "
+                           f"final_text: {record.get('final_text_raw', '?')!r}")
+    if normalize:
+        counts = Counter(r["disagreement"] for r in report["rows"] if not r["agree"])
+        typer.echo("Remaining disagreements by class: "
+                   + ", ".join(f"{c} {counts.get(c, 0)}" for c in ("term", "word", "formatting")))
+    name = "judge.compare.normalized.json" if normalize else "judge.compare.json"
+    out = config.WORK_DIR / fragment / name
     out.write_text(json.dumps(report, ensure_ascii=False, indent=1) + chr(10), encoding="utf-8",
                    newline=chr(10))
     typer.echo(f"Wrote {out}")

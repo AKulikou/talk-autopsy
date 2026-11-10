@@ -262,6 +262,7 @@ COST_CONFIRMATION_USD = 3.00
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TEST_SET_DIR = PROJECT_ROOT / "data" / "test-set"
+SEALED_FRAGMENTS = frozenset({"T6"})  # hold-out: never print its span texts
 WORK_DIR = PROJECT_ROOT / "work"  # per-run intermediate files (audio.wav, raw.json, ...)
 RESULTS_DIR = PROJECT_ROOT / "results"
 BENCHMARK_CSV = RESULTS_DIR / "benchmark.csv"

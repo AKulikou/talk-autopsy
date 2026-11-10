@@ -56,6 +56,9 @@ leaves out.
 | `you know`, `like`, `so`, `I mean` | written: they are words |
 | Plurals of glossary terms | the glossary keeps the base form. *In code:* term matching also accepts the regular English plural (`-s`, `-es`, `y` -> `ies`) of the last word of a term (`diffs`, `pull requests`, `libraries`) |
 | Numbers | digits |
+| Thousands separators | not written: `3000` (added 2026-11-10 after the judge calibration). *In code:* removed by `judge.normalize_for_adjudication` |
+| Immediate repetitions and restarts | written once: "for for" -> "for"; "I wanted to I wanted to" -> "I wanted to" (added 2026-11-10 after the judge calibration). *In code:* `judge.normalize_for_adjudication` collapses an immediately repeated sequence of 1-4 words on both sides of a judge comparison and in a reference built from a judged file; grammatical doubles ("that that", "very, very") are collapsed too, which, applied to both sides, cannot create a disagreement; a repetition split by a span boundary is not seen. The metrics normalizer is unchanged. Rows added after the judge calibration are not passed to the judge's prompt (`audio-judge-v1` stays as calibrated); the code applies them |
+| Key combinations | `Shift+Enter`, `Ctrl+C`, `Cmd+F` (added 2026-11-10 after the judge calibration). *In code:* the same function canonicalises `shift enter`, `Shift-Enter`, `shift+enter` (and Ctrl/Alt/Cmd with Tab/Esc/Enter or a letter joined by + or -) |
 | Hallucinated lines, segments with no word (only `.`) | removed. *In code:* the speech recognition engines drop wordless segments before writing a transcript; ids are assigned after dropping |
 
 ## File naming

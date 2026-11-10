@@ -45,6 +45,7 @@ import difflib
 import json
 import re
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -432,12 +433,15 @@ class Resolution:
     protocol: dict
 
 
-def resolve(consensus: Consensus, choices: dict[int, Choice]) -> Resolution:
+def resolve(consensus: Consensus, choices: dict[int, Choice],
+            postprocess: Callable[[str], str] | None = None) -> Resolution:
     """
     Compose the reference from the agreed words and the chosen variant of every
     listed span; unanimous spans use their one variant. Errors: a listed span
     missing from the file, nothing chosen, or more than one box ticked without an
-    `other:` text.
+    `other:` text. `postprocess` (e.g. `judge.normalize_for_adjudication`, for a
+    reference built from a judged file) is applied to every listed span's chosen
+    text; the protocol keeps where the text came from.
     """
     chosen_text: dict[int, str] = {}
     span_rows = []
@@ -477,6 +481,9 @@ def resolve(consensus: Consensus, choices: dict[int, Choice]) -> Resolution:
             for engine in option.engines:
                 totals["words_by_engine"][engine] += words
                 totals["spans_by_engine"][engine] += 1
+        if postprocess is not None:
+            text = postprocess(text)
+            words = len(metrics.tokenize(text))
         totals["span_words"] += words
         if span.verdict == "majority":
             kept = source == span.options[span.premarked].label
