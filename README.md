@@ -76,20 +76,30 @@ video URL or local file
   across segment boundaries
       |
       v
-  Claude translation in blocks of      work/<run>/<lang>.json
-  5 minutes with context, every
-  clause kept, one glossary per video
+  sentence units: segments joined
+  until a sentence ends, split
+  above 25 s
       |
       v
-  subtitles, up to 3 lines             <name>.<lang>.srt/.ass, <name>.en.srt/.ass
+  Claude translation of the units      work/<run>/<lang>.json
+  in blocks of 5 minutes with
+  context, every clause kept, one
+  glossary per video
+      |
+      v
+  subtitles, up to 3 lines, timed      <name>.<lang>.srt/.ass, <name>.en.srt/.ass
+  by the English words, shown into
+  the following pause
       |
       v
   later: dubbed audio (edge-tts +      <name>.<lang>.dub.m4a
   ffmpeg)
 ```
 
-Every stage reads and writes the same JSON format: timed segments with ids that
-no stage changes, so any two files of a run can be compared segment by segment.
+Every stage reads and writes the same JSON format: timed segments. Recognition
+and correction keep the same segment ids, so their files can be compared segment
+by segment; the translation's segments are sentence units, each listing the
+segment ids it covers.
 Only text (transcript segments, the glossary, the context you give) goes to the
 Claude API. The audio goes to the speech recognition service as compressed
 FLAC; the video never leaves the machine.
@@ -184,7 +194,8 @@ Python 3.13 for every push.
 
 ## Status and roadmap
 
-Status: **stage 2, Claude correction and translation.** Every number below is
+Status: **stage 2, Claude correction and translation; the pipeline is frozen
+as `pipeline-v2` (git tag, 2026-11-10) for the hold-out run.** Every number below is
 in [results/benchmark.csv](results/benchmark.csv) or the
 [experiment log](docs/experiments.md).
 
@@ -223,26 +234,35 @@ measurable (0 edits on T2); it did most of its work on faster-whisper input
 (T2 61.7% -> 94.4% with correction-v1, B1). False-edit rate 0 in every
 correction run.
 
-**Translation (C1).** The owner rated translation-v1 at a mean of 3.85 of 5
-(target 4.0) on 20 T2 segments; the three lowest scores all came from its
-compression rule. translation-v2 keeps every clause; a blind v1-against-v2
-rating of the same segments is waiting for the owner.
+**Translation (C1): met.** The owner rated translation-v1 at a mean of 3.85
+of 5 (target 4.0) on 20 T2 segments; the three lowest scores all came from its
+compression rule. translation-v2 keeps every clause. In the blind pairwise
+comparison (15 pairs, not fully blind: the owner had seen the v1 texts) v1
+scored 4.40 and **v2 4.67**; v2 was better in 8 pairs, v1 in 3, 4 ties.
+translation-v2 is adopted. Its two weak items were half sentences cut at a
+segment boundary; translation now runs on sentence units (D1 (setup)).
 
 **Whole videos** through `run` (AssemblyAI two passes, auto-glossary,
-correction-v2, translation-v2), [operational runs](docs/experiments.md#operational-runs):
+correction-v2, translation-v2 on sentence units, cues shown up to 1.5 s into
+the following pause), [operational runs](docs/experiments.md#operational-runs):
 
-| | T2.source (talk, 27:52) | real-01 (interview, 38:30) |
-|---|---|---|
-| wall time | 4.6 min (9.8 min per hour of video) | 5.8 min (9.1 min per hour) |
-| AssemblyAI, list price | 0.47 USD per hour | 0.47 USD per hour |
-| Claude | 0.82 USD per hour | 0.67 USD per hour |
-| Russian cues above 17 / 25 characters per second | 76.8% / 22.5% | 50.9% / 13.7% |
+| | T2.source (talk, strong accent, 27:52) | real-01 (interview, 38:30) | stress-01 (interview, two accents, 29:50) |
+|---|---|---|---|
+| wall time | 4.6 min (9.8 min per hour of video) | 5.8 min (9.1 min per hour) | 4.9 min (9.9 min per hour) |
+| AssemblyAI, list price | 0.47 USD per hour | 0.47 USD per hour | 0.47 USD per hour |
+| Claude | 0.82 USD per hour | 0.67 USD per hour | 0.73 USD per hour |
+| Russian cues above 17 / 25 characters per second, before -> after sentence units and longer display | 76.8% / 22.5% -> 62.4% / 17.6% | 50.9% / 13.7% -> 49.2% / 14.8% | 51.3% / 14.8% (after) |
 
 The plan's limit is 30 minutes per hour of video. Nothing is cut for reading
 speed (owner's decision): cues hold up to three lines and every `.srt` has an
-`.ass` twin with a smaller font. Still ahead for the stage 2 gate: the blind
-rating, the sealed hold-out T6 (cut blind, opened only after the prompts are
-frozen with a tag), and the external audit. Dubbing is a stub.
+`.ass` twin with a smaller font. On real-01 the longer display is outweighed by
+timing cues by the English words, which makes reading speed uneven inside a
+long sentence (D1 (setup)); subtitle layout stays open after the freeze.
+
+**Pending for the stage 2 gate:** the owner adjudicates the sealed hold-out T6
+(`data/test-set/T6.adjudication.md`, prepared 2026-11-10 from three engines);
+a later session resolves the reference and runs the frozen `pipeline-v2` on T6
+once; then the external audit. Dubbing is a stub.
 
 | Stage | Content | Gate |
 |---|---|---|

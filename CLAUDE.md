@@ -168,10 +168,12 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   decisions), Gemini + forced alignment and faster-whisper as fallbacks;
   baselines measured. Still open from the plan: prior-art survey, T3–T5.
 - **Stage 2 (current):** correction and translation prompts, measured and frozen; hold-out
-  and external audit at the gate. `correction-v2` and `translation-v2` are the defaults; the
-  auto-glossary (B5) feeds the key-term pass; the blind C1 file and the B2 v2 review wait for
-  the owner. T6 is cut (blind) and sealed until the v2 prompts are frozen with a git tag
-  (`docs/experiments.md`, T6 protocol).
+  and external audit at the gate. C1 met (blind pairwise: v1 4.40, v2 4.67); B2 v2 checked.
+  Frozen 2026-11-10 as git tag `pipeline-v2` (`docs/experiments.md`, Freeze pipeline-v2):
+  AssemblyAI two passes, glossary-auto-v1, correction-v2, sentence units, translation-v2;
+  a change to a frozen part needs a new tag and a new hold-out. T6: three engines run and
+  `data/test-set/T6.adjudication.md` prepared; the owner adjudicates every span, then a later
+  session resolves the reference and runs the tagged pipeline on T6 once; then the external audit.
 - **Stage 3:** the CLI tool with subtitles; external audit; v1.0.
 - **Stage 4:** dubbed audio track.
 - **v1.1:** local web UI over the same core.
@@ -186,7 +188,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 - AssemblyAI and Gemini helped build the T1/T2 references, so their WER against them is biased in their favour; compare them through the resolve protocol (docs/experiments.md, methodology).
 - faster-whisper 1.2.1 cannot decode files with PyAV 19 (`metadata_errors`); the engine reads the WAV itself and passes samples.
 - faster-whisper's segment `avg_logprob` is per 30-second decoding window, so segment `confidence` is too; word probabilities are per word.
-- T3–T5 are not selected; T6 is cut blind (25:46–35:46 of `T6.source.mp4`) and sealed: never transcribe, play or describe it before the freeze tag. T1's speaker is assumed native (to be confirmed).
+- T3–T5 are not selected; T6 is cut blind (25:46–35:46 of `T6.source.mp4`). Since the `pipeline-v2` tag its engine transcripts exist (`work/T6/`), but nothing derived from its content goes into chat, commits, `docs/`, printed logs or any file outside `data/test-set/` and `work/T6/`: only counts, durations and costs. The assistant never reads its transcripts and decides none of its spans. T1's speaker is assumed native (to be confirmed).
 - AssemblyAI costs about $0.47 per hour of video in `run` (two passes, list price: $0.21 + $0.26 with key terms), drawn from the account's free credit for now.
 - Claude Haiku 5.5 costs more for prompts over 100,000 tokens; the cost estimate
   uses the lower tier.
