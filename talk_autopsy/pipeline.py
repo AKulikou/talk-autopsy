@@ -52,7 +52,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from talk_autopsy import align as align_module
-from talk_autopsy import blocks, config, correct, glossary_auto, ingest, subtitles, translate, units
+from talk_autopsy import (
+    blocks,
+    config,
+    correct,
+    glossary_auto,
+    ingest,
+    subtitles,
+    term_policy,
+    translate,
+    units,
+)
 from talk_autopsy.glossary import Glossary, load_glossary, to_markdown
 from talk_autopsy.segments import Transcript, load_transcript, save_transcript
 from talk_autopsy.stt.chunked import ProgressEvent, file_sha256
@@ -82,6 +92,7 @@ class RunSettings:
     max_cost_usd: float = config.COST_CONFIRMATION_USD
     correction_model: str = field(default_factory=config.correction_model)
     translation_model: str = field(default_factory=config.translation_model)
+    translation_version: str = field(default_factory=config.translation_version)  # translation-v2 | -v3
     helper_model: str = field(default_factory=config.helper_model)
     gemini_cache_only: bool = False  # no Gemini call; uncached chunks go to faster-whisper
     refusal_fallback: bool = True
@@ -296,7 +307,12 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
             emit("estimate", "fix", e.line())
             total += e.usd
         if "translate" in steps:
-            e = translate.estimate(base, glossary_now, lang, context, settings.translation_model)
+            if settings.translation_version == translate.V3:
+                e = term_policy.estimate(glossary_now, user_glossary, lang, settings.helper_model)
+                emit("estimate", "translate", f"term classification: {e.line()}")
+                total += e.usd
+            e = translate.estimate(base, glossary_now, lang, context, settings.translation_model,
+                                   version=settings.translation_version)
             emit("estimate", "translate", e.line())
             total += e.usd
         report.estimate_usd = round(total, 4)
@@ -413,22 +429,26 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         t0 = time.perf_counter()
         glossary_now, glossary_hash = current_glossary()
         source_file = fixed if fixed.is_file() else need(english, "translate")
+        cost = 0.0
+        version = settings.translation_version
+        if version == translate.V3:  # term classes for translation only; glossary.md is not touched
+            glossary_now, glossary_hash, cost = _classified_glossary(
+                settings, work, lang, glossary_now, glossary_hash, user_glossary, user_glossary_hash, emit)
         inputs = {"input": file_sha256(source_file), "glossary": glossary_hash, "context": context_hash,
-                  "lang": lang, "model": settings.translation_model, "prompt": translate.PROMPT_VERSION,
+                  "lang": lang, "model": settings.translation_model, "prompt": version,
                   "units": units.VERSION}
         skipped = up_to_date(translated, inputs)
-        cost = 0.0
         if not skipped:
-            emit("step-start", "translate", f"{translate.PROMPT_VERSION}, {settings.translation_model}")
+            emit("step-start", "translate", f"{version}, {settings.translation_model}")
             result = translate.translate(load_transcript(source_file), glossary_now, lang, context=context,
-                                         model=settings.translation_model,
+                                         model=settings.translation_model, version=version,
                                          refusal_fallback=settings.refusal_fallback,
                                          progress=lambda n, total: emit("block-done", "translate",
                                                                         f"block {n}/{total}"))
             save_transcript(result, translated)
             write_stamp(translated, inputs)
-            cost = result.meta["translation"]["cost_usd"]
-        step_done("translate", translated, skipped, cost, t0)
+            cost += result.meta["translation"]["cost_usd"]
+        step_done("translate", translated, skipped and not cost, cost, t0)
 
     if "srt" in steps:
         t0 = time.perf_counter()
@@ -450,6 +470,32 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
     emit("done", "pipeline",
          f"{report.cost_usd:.4f} USD Claude, {report.stt_cost_usd:.4f} USD speech recognition")
     return report
+
+
+def _classified_glossary(settings: RunSettings, work: Path, lang: str, glossary: Glossary, glossary_hash: str,
+                         user_glossary: Glossary | None, user_glossary_hash: str, emit
+                         ) -> tuple[Glossary, str, float]:
+    """
+    translation-v3: glossary.v3.md, the run glossary with a policy for every term
+    (term_policy.py; skipped when up to date). Returns it, its hash and the cost.
+    """
+    out = work / "glossary.v3.md"
+    inputs = {"glossary": glossary_hash, "user_glossary": user_glossary_hash, "model": settings.helper_model,
+              "lang": lang, "version": term_policy.VERSION}
+    cost = 0.0
+    if not up_to_date(out, inputs):
+        emit("step-start", "translate", f"{term_policy.VERSION}, {settings.helper_model}: term classes")
+        result = term_policy.classify(glossary, lang, user_glossary, model=settings.helper_model)
+        languages = sorted({lang, *result.glossary.languages()})
+        header = (f"<!-- translation glossary (translation-v3): glossary.md with a policy per term; "
+                  f"{result.classified} classified by {result.model}, {result.kept} from the user glossary "
+                  "or a policy column -->")
+        out.write_text(header + NL + NL + to_markdown(result.glossary, languages), encoding="utf-8",
+                       newline=NL)
+        write_stamp(out, inputs)
+        cost = result.cost_usd
+    text = out.read_text(encoding="utf-8")
+    return load_glossary(out), _text_hash(text), cost
 
 
 def _first_pass(settings: RunSettings, audio: Path, flac: Path, audio_hash: str, work: Path, emit,

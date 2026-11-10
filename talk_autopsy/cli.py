@@ -345,6 +345,22 @@ def translate_command(
         _fail(str(e))
     source, terms, ctx = _stage_inputs(transcript, glossary, context)
     model = model or config.translation_model()
+    if prompt == translate.V3:  # term classes first (helper model); the classified glossary next to OUT
+        from talk_autopsy import term_policy
+
+        _confirm_cost(term_policy.estimate(terms, None, target_lang), max_cost)
+        try:
+            classified = term_policy.classify(terms, target_lang)
+        except (RuntimeError, ValueError, ConfigurationError) as e:
+            _fail(str(e))
+        terms = classified.glossary
+        glossary_out = out.with_name(out.stem + ".glossary-v3.md")
+        glossary_out.parent.mkdir(parents=True, exist_ok=True)
+        glossary_out.write_text(to_markdown(terms, sorted({target_lang, *terms.languages()})),
+                                encoding="utf-8",
+                                newline=chr(10))
+        typer.echo(f"Term classes: {classified.classified} classified by {classified.model}, "
+                   f"{classified.kept} kept; {classified.cost_usd:.4f} USD -> {glossary_out}")
     _confirm_cost(translate.estimate(source, terms, target_lang, ctx, model, version=prompt,
                                      units=not per_segment), max_cost)
     _log_to_stderr()
@@ -358,7 +374,8 @@ def translate_command(
     tr = result.meta["translation"]
     kind = "segments" if per_segment else f"sentence units (from {len(source.segments)} segments)"
     typer.echo(f"Wrote {out}: {len(result.segments)} {kind} in {target_lang}, "
-               f"{len(tr['failed_blocks'])} failed blocks; {tr['cost_usd']:.4f} USD")
+               f"{len(tr['failed_blocks'])} failed blocks; {tr['cost_usd']:.4f} USD"
+               + (f"; {len(tr['marker_warnings'])} marker warnings" if "marker_warnings" in tr else ""))
 
 
 @app.command(name="srt")
@@ -515,6 +532,9 @@ def run(
     output: Annotated[str, typer.Option(
         help=f"Comma-separated outputs: {', '.join(outputs.FORMATS)}, or all. mp4-burned is for TVs.")]
     = outputs.DEFAULT,
+    translation: Annotated[str | None, typer.Option(
+        help="Translation prompt: v2 (default) or v3 (term classes keep / both / translate / ui). "
+             "Default: TRANSLATION_VERSION.")] = None,
     max_cost: Annotated[float, typer.Option(
         help="Stop before the Claude steps of a video if their estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
@@ -552,6 +572,10 @@ def run(
         formats = outputs.parse_outputs(output)
     except ValueError as e:
         raise typer.BadParameter(str(e), param_hint="--output") from None
+    try:
+        translation_version = config.translation_version(translation)
+    except ConfigurationError as e:
+        raise typer.BadParameter(str(e), param_hint="--translation") from None
     if not is_url(source) and not Path(source).is_file():
         _fail(f"No such file: {source}")
     try:
@@ -564,7 +588,7 @@ def run(
     typer.echo("Steps:")
     for number, step_name in enumerate(selected, start=1):
         detail = STEPS[step_name].format(correction=f"{correct.PROMPT_VERSION}, {config.correction_model()}",
-                                    translation=f"{translate.PROMPT_VERSION}, {config.translation_model()}",
+                                    translation=f"{translation_version}, {config.translation_model()}",
                                     helper=config.helper_model(), lang=target_lang, engine=engine)
         typer.echo(f"  {number}. {step_name:<10} {detail}")
     typer.echo(f"Outputs: {', '.join(formats)}")
@@ -575,7 +599,8 @@ def run(
     def settings_for(video_source: Path, run_name: str, video_context: str):
         settings = pipeline.RunSettings(source=video_source, target_lang=target_lang, steps=selected,
                                         engine=engine, max_cost_usd=max_cost, context=video_context,
-                                        name=run_name, gemini_cache_only=gemini_cache_only)
+                                        name=run_name, gemini_cache_only=gemini_cache_only,
+                                        translation_version=translation_version)
         if not dry_run:
             settings.glossary = _run_glossary(glossary_paths, settings.work_dir)
         return settings
