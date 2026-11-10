@@ -483,6 +483,10 @@ def test_compare_counts_agreement_by_class_and_verdict():
     assert report["overall"] == {"spans": 2, "agree": 1, "share": 0.5}
     assert report["by_verdict"]["majority"]["agree"] == 1 and report["by_verdict"]["split"]["agree"] == 0
     assert [r["agree"] for r in report["rows"]] == [True, False]
+    assert "owner_ear" not in report["by_class"]
+    with_ear = judge.compare(result, reference, judged, by_ear={2})
+    assert with_ear["by_class"]["owner_ear"] == {"spans": 1, "agree": 0, "share": 0.0}
+    assert [(r["class"], r["inferred"]) for r in with_ear["rows"]][1] == ("owner_ear", "ear")
 
 
 # --- CLI -------------------------------------------------------------------------

@@ -694,11 +694,13 @@ def classify_decision(span: Span, choice: Choice, terms: list[str] = ()) -> str:
 
 
 def compare(consensus: Consensus, reference: dict[int, Choice], judged: dict[int, Choice],
-            terms: list[str] = ()) -> dict:
+            terms: list[str] = (), by_ear: frozenset[int] | set[int] = frozenset()) -> dict:
     """
     Agreement of the judge with decided spans: per span, the decided texts are
     compared after the metrics normalization (`metrics.tokenize`), overall and by
-    class (`classify_decision` with the fragment's glossary `terms`).
+    class: `owner_ear` for the spans in `by_ear` (the owner's recorded list of
+    spans decided by listening), else `classify_decision` with the fragment's
+    glossary `terms`.
     """
     rows = []
     for span in judgeable(consensus):
@@ -706,8 +708,9 @@ def compare(consensus: Consensus, reference: dict[int, Choice], judged: dict[int
             raise JudgeError(f"span {span.number:04d} is missing from one of the files")
         ref_text = decided_text(span, reference[span.number])
         judge_text = decided_text(span, judged[span.number])
+        inferred = classify_decision(span, reference[span.number], terms)
         rows.append({"span": span.number, "verdict": span.verdict,
-                     "class": classify_decision(span, reference[span.number], terms),
+                     "class": "owner_ear" if span.number in by_ear else inferred, "inferred": inferred,
                      "reference": ref_text, "judge": judge_text,
                      "agree": metrics.tokenize(ref_text) == metrics.tokenize(judge_text)})
 
@@ -716,6 +719,7 @@ def compare(consensus: Consensus, reference: dict[int, Choice], judged: dict[int
         return {"spans": len(selected), "agree": agree,
                 "share": round(agree / len(selected), 4) if selected else None}
 
-    by_class = {c: share([r for r in rows if r["class"] == c]) for c in ("ear", "rule", "majority")}
+    classes = (("owner_ear",) if by_ear else ()) + ("ear", "rule", "majority")
+    by_class = {c: share([r for r in rows if r["class"] == c]) for c in classes}
     by_verdict = {v: share([r for r in rows if r["verdict"] == v]) for v in ("majority", "split")}
     return {"overall": share(rows), "by_class": by_class, "by_verdict": by_verdict, "rows": rows}

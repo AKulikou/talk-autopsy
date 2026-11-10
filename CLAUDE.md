@@ -177,15 +177,17 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   Frozen 2026-11-10 as git tag `pipeline-v2` (`docs/experiments.md`, Freeze pipeline-v2):
   AssemblyAI two passes, glossary-auto-v1, correction-v2, sentence units, translation-v2;
   a change to a frozen part needs a new tag and a new hold-out. T6: three engines run and
-  `data/test-set/T6.adjudication.md` prepared; the owner adjudicates every span, then a later
-  session resolves the reference and runs the tagged pipeline on T6 once; then the external audit.
+  `data/test-set/T6.adjudication.md` prepared; the owner withdrew from adjudication and the blind
+  audio judge failed its T2 calibration (79.0% < 90%), so T6's reference waits for an owner decision;
+  then the tagged pipeline on T6 once; then the external audit.
 - **Stage 3:** the CLI tool with subtitles; external audit; v1.0.
 - **Stage 4:** dubbed audio track.
 - **v1.1:** local web UI over the same core.
 
 ## Known issues
 
-- Gemini's free tier allows 20 requests per day per project for `gemini-3.8-flash` (429 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, measured 2026-11-10; not in the docs). The blind audio judge (one request per span) therefore judges at most about 20 spans a day; rerun `judge <ID> --resume` after the reset (midnight Pacific).
+- Gemini's free tier allows 20 requests per day per project for `gemini-3.8-flash` (429 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, measured 2026-11-10; not in the docs). The project is on the paid tier since 2026-11-10 (EUR 5 monthly cap); the audio judge costs about $0.0026 per span with `gemini-4-carbon`.
+- The blind audio judge (`audio-judge-v1`) failed its T2 calibration on 2026-11-10 (agreement 79.0% against the 90% rule; it keeps repetitions the reference drops), so T6 has no reference yet (docs/experiments.md, Methodology: blind audio judge).
 - T1's reference was decided by a Claude model without listening; it is secondary evidence for the Claude stages.
 - Gemini's free tier: 503 "high demand" is frequent and the daily quota can run out within one long talk (2026-11-09: on the third chunk). The chunked engine falls back per chunk on 503 and stops on quota; `run --gemini-cache-only` finishes a video with faster-whisper for the missing chunks.
 - Forced alignment places word starts 130–230 ms later than faster-whisper does; which is closer to the truth is not measured (no hand-labelled onsets yet).

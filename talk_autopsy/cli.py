@@ -772,7 +772,10 @@ def judge_compare_command(
         judged = consensus_module.parse_choices(_judged_path(fragment).read_text(encoding="utf-8-sig"))
         glossary_file = config.TEST_SET_DIR / f"{fragment}.glossary.md"
         terms = [e.term for e in load_glossary(glossary_file).entries] if glossary_file.is_file() else []
-        report = judge.compare(result, reference, judged, terms)
+        ear_file = config.WORK_DIR / fragment / "owner-by-ear.json"  # the owner's list, if recorded
+        by_ear = ({int(s["span"]) for s in json.loads(ear_file.read_text(encoding="utf-8"))["spans"]}
+                  if ear_file.is_file() else set())
+        report = judge.compare(result, reference, judged, terms, by_ear)
     except (FileNotFoundError, ValueError, RuntimeError, KeyError) as e:
         _fail(str(e))
 

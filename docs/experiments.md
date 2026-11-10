@@ -125,7 +125,8 @@ the T6 run scores. Spans are now decided by a blind audio judge.
 
 **Method** (`talk_autopsy/judge.py`, `audio-judge-v1`; evaluation tooling,
 not part of the frozen pipeline). Gemini `gemini-3.8-flash` (the most capable
-free-tier model on 2026-11-10; `gemini-4-argon` is paid only), one request per
+free-tier model on 2026-11-10; `gemini-4-argon` is paid only; *the T2 run used
+`gemini-4-carbon` on the paid tier, see below*), one request per
 majority or split span with the span's clip inline. The structured answer has
 three fields in this order: `heard`, a verbatim transcription of the whole
 clip written before the options; `choice`, the number of the matching option
@@ -158,7 +159,8 @@ the T2 glossary): **majority** 74 (decided with the pre-marked text),
 term), **ear** 8 (a majority overruled, or a split decided, with other words
 and no rule). The 19 by-ear decisions are therefore approximated by these 8
 spans; the other 11 sit among the majority or rule classes and cannot be
-told apart. Also reported: the WER between `T2.ref.txt` and a reference
+told apart. *(The list was recorded afterwards, `work/T2/owner-by-ear.json`;
+the T2 run below reports those 19 spans directly.)* Also reported: the WER between `T2.ref.txt` and a reference
 resolved from the judged file (into a temporary path; `T2.ref.txt` is not
 changed), and the judge's Gemini share next to the owner's on the same spans
 (71 of 114, 62%, `T2.ref.protocol.json`).
@@ -167,16 +169,74 @@ changed), and the judge's Gemini share next to the owner's on the same spans
 is at least 90% and the WER between the two T2 references is at most 2%.
 Otherwise the disagreement pattern is logged here and T6 is not judged.
 
-**Status 2026-11-10: not run.** The free tier allows 20 requests per day per
-project for `gemini-3.8-flash` (HTTP 429, quota
+**Free tier, 2026-11-10 (prompt 09a): not run.** The free tier allows 20
+requests per day per project for `gemini-3.8-flash` (HTTP 429, quota
 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, value 20; the docs do
-not publish it). The day's earlier calls had used it up before the first T2
-span was judged, and the model also answered 503 "high demand" to most calls.
-At 20 requests a day, T2 (114 spans) and T6 (86) need at least 10 days of
-quota, more if 503 answers count against it (not measured). Each day after
-the reset (midnight Pacific): `uv run talk-autopsy judge T2 --resume` until
-114 of 114, then `judge-compare T2`, `resolve T2 --adjudication
-data/test-set/T2.adjudication.judged.md --out <temporary path>` and the WER.
+not publish it), and it was used up before the first T2 span was judged. The
+owner then moved the project to the paid tier (decisions, 2026-11-10).
+
+### Calibration on T2, paid tier (2026-11-10, prompt 09b)
+
+- **Method in two sentences.** Gemini listens to each disputed span's clip,
+  writes down what it hears before it sees any option, then picks one of the
+  engines' variants (deduplicated, shuffled, unlabeled) or types its own text.
+  Its decisions are compared with the decided T2 adjudication, span by span,
+  after the metrics normalization.
+- **Model and settings.** `gemini-4-carbon` (paid Standard tier; not the STT
+  engine's model), thinking level `low` (the lowest the model allows; it used 0
+  thinking tokens on every span), pace 2 s, the prompt and options exactly as
+  in 09a (`audio-judge-v1`). The brief asked for the newest Pro model:
+  `gemini-3.1-pro-preview` answers 404 for this key and `gemini-2.5-pro` routes
+  to the STT engine's model from 2026-12-01, so the judge is the pricing page's
+  "most capable reasoning model". All 114 spans judged by this one model; no
+  free-tier pilot records existed.
+- **The owner's 19.** The owner's list of the spans decided by ear was recorded
+  after 09a (`work/T2/owner-by-ear.json`, 19 span ids); `judge-compare` now
+  uses it as its own class (`owner_ear`) and infers the class of the other
+  spans as before.
+
+| Agreement with the decided T2 text | spans | agree | share |
+|---|---|---|---|
+| **overall** | 114 | 90 | **79.0%** |
+| decided by the owner's ear (recorded list) | 19 | 13 | 68.4% |
+| decided by rule (inferred: product name, convention, glossary) | 30 | 23 | 76.7% |
+| decided with the majority pre-mark (inferred) | 60 | 51 | 85.0% |
+| other, by ear (inferred, not on the owner's list) | 5 | 3 | 60.0% |
+| majority spans (verdict) | 89 | 75 | 84.3% |
+| split spans (verdict) | 25 | 15 | 60.0% |
+
+- **WER between the two T2 references** (`T2.ref.txt` against a reference
+  resolved from `T2.adjudication.judged.md` into a temporary path):
+  **1.90%** (2052 reference words; 11 substitutions, 2 deletions, 26
+  insertions). `T2.ref.txt` is unchanged.
+- **Judge indicators.** It chose the Gemini engine's variant in 85 of 114
+  spans (74.6%; the owner's decisions matched it in 71, 62%); `none` (own
+  text) in 15 (13.2%); `heard` contains the chosen text in 110 of 113 (97.4%);
+  `heard` written before `choice` in 114 of 114.
+- **Cost and time.** $0.2934 for 114 spans ($0.0026 per span; 110,383 input,
+  7,260 output, 0 thinking tokens), by the run's own counter at list price;
+  8.9 s mean latency, 17 min for the run, no retries.
+- **Disagreements on the owner's 19** (6): in 4 the judge kept a repetition
+  or false start the reference leaves out (0005 "For for everyone", 0022 "like
+  what do I," where the owner chose no words, 0028 "you know, it", 0104 "wanted
+  to I wanted to include"); 0020 (owner not sure) adds "in the" and writes
+  "freeform"; 0015 the judge chose "There's" where the owner heard "there are".
+- **Disagreement pattern (all 24).** 14 are words the judge adds to the
+  decided text: repetitions, false starts and short words around the span
+  ("For for", "in the in the", "Yeah, and", "I've I shipped"); the judge's
+  writing rules ask for every spoken word including repetitions, while the
+  T2 reference mostly follows the engines, which drop them. 5 are spelling
+  conventions the reference applies and the judge does not (`Shift+Enter`,
+  `at-mention`, `Command+F`, `stand-up`, `3,000`). 5 are one-word
+  substitutions (`there are` / `There's`, `as` / `is`, `you're` / `you were`,
+  `an` / `a`, `the` / `this`). Which side is right in the first group is not
+  known: the reference was never checked for dropped repetitions.
+- **Decision (rule fixed before the run).** Agreement 79.0% is below 90%
+  (WER 1.90% is within 2%), so **the judge is not accepted for T6** and T6 is
+  not judged. The rule and the prompt are not changed after seeing these
+  numbers; a revised judge (for example a writing rule on repetitions that
+  matches the reference) would be a new version (`audio-judge-v2`) and would
+  need a new calibration before T6.
 
 ## T6 protocol
 
@@ -214,6 +274,9 @@ configured fallback model `gemini-3.6-flash` (free tier), noted at the top of
 backbone words, 92.8% unanimous, 65 majority and 21 split spans, 86 clips
 (7.8 min) in `work/T6/clips/`. No reference, glossary or pipeline run yet;
 nothing from the content is recorded outside `data/test-set/` and `work/T6/`.
+2026-11-10 (prompt 09b): the blind audio judge failed its T2 calibration
+(agreement 79.0% against the 90% rule), so T6 was not judged: 0 of 86 spans,
+no reference, no glossary.
 
 ## Freeze pipeline-v2
 
