@@ -47,6 +47,9 @@ uv run talk-autopsy fix <transcript>.json --glossary <md> --out <fixed>.json [--
 uv run talk-autopsy translate <fixed>.json --lang ru --glossary <md> --out <ru>.json [--prompt translation-v1]       # Claude translation (default v2)
 uv run talk-autopsy adjudicate T2 --backbone work/T2/raw.whisper-large-v3.json --hyp work/T2/raw.assemblyai.json --hyp work/T2/raw.gemini.json
 uv run talk-autopsy resolve T2                    # after ticking data/test-set/T2.adjudication.md -> T2.ref.txt + protocol
+uv run talk-autopsy judge T6 --resume             # blind audio judge (Gemini, free tier): work/T6/judge.jsonl + T6.adjudication.judged.md; counts only
+uv run talk-autopsy resolve T6 --adjudication data/test-set/T6.adjudication.judged.md   # reference from the judge's decisions
+uv run talk-autopsy judge-compare T2              # judge vs the decided T2 spans (prints span texts: never on a sealed fragment)
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
 uv run talk-autopsy run <source> --lang ru [--context <text-or-file>] [--glossary <md>]
                                            # the pipeline (default steps stt,glossary,stt2,align,fix,translate,srt; engine assemblyai);
@@ -75,7 +78,8 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/align.py` — forced alignment (wav2vec2 base 960h from torchaudio, Viterbi in numpy, block by block with garbage states); `AlignedTranscriber` = the `gemini+align` engine; `start_differences` for timing comparisons. torch is the optional `align` extra; tests use a stub emitter
 - `talk_autopsy/metrics.py` — pure metric functions: `tokenize` (the one normalization; drops fillers uh/um/er/ah/hmm), WER, term accuracy (base form or regular plural of the last word), false-edit rate, reading speed; timing drift is an interface only
 - `talk_autopsy/evaluation.py` — reads hypothesis/reference/glossary files, `evaluate`, the benchmark row and its append
-- `talk_autopsy/adjudicate.py` — reference by consensus: aligns two cloud transcripts to the faster-whisper backbone, spans of disagreement, the adjudication file, clips, `resolve` to the reference and its protocol
+- `talk_autopsy/adjudicate.py` — reference by consensus: aligns two cloud transcripts to the faster-whisper backbone, spans of disagreement, the adjudication file, clips, `resolve` to the reference and its protocol (`other: (no words)` types an empty variant)
+- `talk_autopsy/judge.py` — blind audio judge (`audio-judge-v1`, evaluation tooling, not frozen): one Gemini request per majority/split span with the clip inline; `heard` (verbatim, written first) then `choice` among deduplicated, shuffled, unlabeled options or `none` + `final_text`; resumable `judge.jsonl`; filled copy `T<n>.adjudication.judged.md`; self-preference / none / consistency shares; `compare` and `classify_decision` for calibration on decided spans
 - `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import; superseded by `adjudicate.py` for the test set (`draft`, `ref-from-draft` still work)
 - `talk_autopsy/blocks.py` — what correction and translation share: 5-minute blocks with 3 read-only context segments, video context from `meta.json`, token and cost estimates, stage meta
 - `talk_autopsy/glossary_auto.py` — auto-glossary (`glossary-auto-v1`, helper model): terms, `keep`, suggested translation, `heard_as` mis-recognitions, evidence rule; `coverage` against a reference glossary; `merge` with a user glossary (user wins, drafted translations become "suggested" notes)

@@ -1,7 +1,7 @@
 """
 Command line: `cut`, `transcribe` (faster-whisper or a cloud engine), `align`,
 `fix`, `translate`, `srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`,
-`eval` and `run` (the pipeline, pipeline.py).
+`judge`, `judge-compare`, `eval` and `run` (the pipeline, pipeline.py).
 
 Only argument parsing and printing live here; the stages are plain functions in
 the package, so a web UI can call them the same way later.
@@ -25,6 +25,7 @@ from talk_autopsy import (
     evaluation,
     glossary_auto,
     ingest,
+    judge,
     pipeline,
     proofread,
     subtitles,
@@ -642,12 +643,15 @@ def resolve_command(
     fragment: Annotated[str, typer.Argument(help="Test-set fragment ID, e.g. T2.")],
     out: Annotated[Path | None, typer.Option(
         "--out", "-o", help="Reference to write. Default: data/test-set/<FRAGMENT>.ref.txt.")] = None,
+    adjudication: Annotated[Path | None, typer.Option(
+        help="Filled adjudication file. Default: data/test-set/<FRAGMENT>.adjudication.md "
+             "(the judge's copy: <FRAGMENT>.adjudication.judged.md).")] = None,
     force: ForceOption = False,
 ) -> None:
     """Compose the reference from the agreed words and the variants chosen in the adjudication file."""
     fragment = _fragment(fragment)
     out = out or config.TEST_SET_DIR / f"{fragment}.ref.txt"
-    adjudication = config.TEST_SET_DIR / f"{fragment}.adjudication.md"
+    adjudication = adjudication or config.TEST_SET_DIR / f"{fragment}.adjudication.md"
     consensus_file = _consensus_path(fragment)
     for path in (adjudication, consensus_file):
         if not path.is_file():
@@ -671,6 +675,110 @@ def resolve_command(
     typer.echo(f"  typed by the owner: {t['typed_words']} words in {t['spans_typed']} spans")
     typer.echo(f"  majority spans kept / changed: {t['majority_kept']} / {t['majority_changed']}")
     typer.echo(f"Wrote {protocol_path}")
+
+
+def _judged_path(fragment: str) -> Path:
+    return config.TEST_SET_DIR / f"{fragment}.adjudication.judged.md"
+
+
+@app.command(name="judge")
+def judge_command(
+    fragment: Annotated[str, typer.Argument(help="Test-set fragment ID, e.g. T2.")],
+    model: Annotated[str | None, typer.Option(
+        help="Gemini model. Default: GEMINI_MODEL (gemini-3.8-flash).")] = None,
+    limit: Annotated[int | None, typer.Option(min=1, help="Judge at most N spans in this run.")] = None,
+    resume: Annotated[bool, typer.Option("--resume", help="Continue work/<FRAGMENT>/judge.jsonl.")] = False,
+    pace: Annotated[float, typer.Option(min=0.0, help="Seconds between request starts.")] = (
+        judge.PACE_SECONDS),
+) -> None:
+    """
+    Blind audio judge: Gemini listens to every majority and split span's clip, transcribes it,
+    then picks one of the shuffled unlabeled variants or types its own text. Writes
+    work/<FRAGMENT>/judge.jsonl and data/test-set/<FRAGMENT>.adjudication.judged.md. Prints counts only.
+    """
+    import datetime
+
+    fragment = _fragment(fragment)
+    adjudication = config.TEST_SET_DIR / f"{fragment}.adjudication.md"
+    consensus_file = _consensus_path(fragment)
+    for path in (adjudication, consensus_file):
+        if not path.is_file():
+            _fail(f"No {path}; run talk-autopsy adjudicate {fragment} first")
+    model = model or config.gemini_model()
+    out = config.WORK_DIR / fragment / "judge.jsonl"
+    try:
+        result = consensus_module.consensus_from_json(consensus_file.read_text(encoding="utf-8"))
+        conventions = judge.read_conventions((config.TEST_SET_DIR / "README.md").read_text(encoding="utf-8"))
+        summary = judge.run(fragment, result, config.WORK_DIR / fragment / "clips", conventions, out, model,
+                            limit=limit, resume=resume, pace_seconds=pace, progress=typer.echo)
+        records = judge.load_records(out)
+    except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError) as e:
+        _fail(str(e))
+    filled = judge.filled_markdown(adjudication.read_text(encoding="utf-8-sig"), records, summary.total,
+                                   datetime.date.today().isoformat())
+    judged = _judged_path(fragment)
+    judged.write_text(filled, encoding="utf-8", newline=chr(10))
+    stats = judge.run_stats(records)
+    typer.echo(f"Judge {model}: {summary.done} of {summary.total} spans judged "
+               f"({summary.judged_now} in this run), {summary.remaining} remaining")
+    if records:
+        typer.echo(f"  chose the Gemini engine's variant: {stats['gemini_chosen']} "
+                   f"({stats['gemini_share']:.1%})")
+        typer.echo(f"  none of the options: {stats['none']} ({stats['none_share']:.1%})")
+        if stats["consistency_share"] is not None:
+            typer.echo(f"  heard contains the chosen text: {stats['consistent']} of "
+                       f"{stats['consistency_checked']} ({stats['consistency_share']:.1%})")
+        typer.echo(f"  heard written before choice: {stats['heard_first_share']:.1%}")
+    typer.echo(f"Wrote {out} and {judged}")
+    if summary.failed:
+        typer.echo(f"  {len(summary.failed)} spans failed twice and are left for the next run")
+    if summary.stopped:
+        typer.echo(f"Stopped early: {summary.stopped}")
+    if summary.remaining:
+        typer.echo(f"Rerun `talk-autopsy judge {fragment} --resume` "
+                   "(after the daily reset if the quota ran out).")
+        raise typer.Exit(code=2)
+
+
+@app.command(name="judge-compare")
+def judge_compare_command(
+    fragment: Annotated[str, typer.Argument(help="Test-set fragment ID with decided spans, e.g. T2.")],
+) -> None:
+    """
+    Agreement of the judge's file with the decided adjudication file, overall and by how each
+    span was decided (inferred). Prints span texts: never use it on a sealed fragment.
+    """
+    fragment = _fragment(fragment)
+    try:
+        result = consensus_module.consensus_from_json(_consensus_path(fragment).read_text(encoding="utf-8"))
+        reference = consensus_module.parse_choices(
+            (config.TEST_SET_DIR / f"{fragment}.adjudication.md").read_text(encoding="utf-8-sig"))
+        judged = consensus_module.parse_choices(_judged_path(fragment).read_text(encoding="utf-8-sig"))
+        glossary_file = config.TEST_SET_DIR / f"{fragment}.glossary.md"
+        terms = [e.term for e in load_glossary(glossary_file).entries] if glossary_file.is_file() else []
+        report = judge.compare(result, reference, judged, terms)
+    except (FileNotFoundError, ValueError, RuntimeError, KeyError) as e:
+        _fail(str(e))
+
+    def line(name: str, s: dict) -> str:
+        share = "-" if s["share"] is None else f"{s['share']:.1%}"
+        return f"  {name:<22} {s['agree']:>3} of {s['spans']:<3} {share:>7}"
+
+    typer.echo(f"{fragment}: judge against the decided spans (normalized text equal)")
+    typer.echo(line("overall", report["overall"]))
+    for name, s in report["by_class"].items():
+        typer.echo(line(f"decided by {name}", s))
+    for name, s in report["by_verdict"].items():
+        typer.echo(line(f"{name} spans", s))
+    typer.echo("Disagreements (span, class, decided | judge):")
+    for row in report["rows"]:
+        if not row["agree"]:
+            typer.echo(f"  {row['span']:04d} {row['class']:<8} {row['reference'] or '(no words)'} | "
+                       f"{row['judge'] or '(no words)'}")
+    out = config.WORK_DIR / fragment / "judge.compare.json"
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=1) + chr(10), encoding="utf-8",
+                   newline=chr(10))
+    typer.echo(f"Wrote {out}")
 
 
 def main() -> None:

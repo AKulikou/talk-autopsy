@@ -456,8 +456,9 @@ def resolve(consensus: Consensus, choices: dict[int, Choice]) -> Resolution:
         if choice is None:
             problems.append(f"{span.number:04d}: missing from the adjudication file")
             continue
-        if choice.other:
-            source, text, words = "other", choice.other, len(metrics.tokenize(choice.other))
+        if choice.other:  # `other: (no words)` types an empty variant
+            text = "" if choice.other == NO_WORDS else choice.other
+            source, words = "other", len(metrics.tokenize(text))
             totals["typed_words"] += words
             totals["spans_typed"] += 1
         else:
