@@ -135,6 +135,33 @@ non-native English accent). Its 10-minute window was cut blind on
    recorded whatever they are; a prompt change after seeing them starts a new
    version that T6 can no longer judge.
 
+## Freeze pipeline-v2
+
+Frozen on 2026-11-10 with the annotated git tag `pipeline-v2`. The freeze
+covers everything that determines the text the T6 run is scored on. A change
+to any frozen part after the tag needs a new freeze tag and a new T6-like
+hold-out: T6 can judge only this version.
+
+| Part | Frozen as | Where |
+|---|---|---|
+| Audio | 16 kHz mono WAV for alignment; FLAC copy uploaded | `talk_autopsy/ingest.py` (`extract_audio`, `compress_audio`) |
+| Speech recognition, first pass | AssemblyAI `universal-3-5-pro` (`speech_models`, the model used recorded from `speech_model_used`), `language_code=en`, speaker labels off, no key terms; segments = the service's sentences | `talk_autopsy/stt/assemblyai.py`; SDK `assemblyai` 1.8.2 (`uv.lock`) |
+| Auto-glossary | prompt `glossary-auto-v1` (git blob `0c7088095fa4`), `claude-haiku-5-5`, from the first transcript and `--context`, at most 60 terms, evidence rule; merged with a user glossary (none on T6) | `talk_autopsy/glossary_auto.py`, `talk_autopsy/prompts/glossary-auto-v1.md` |
+| Speech recognition, second pass | AssemblyAI as above with the glossary as `keyterms_prompt` | `talk_autopsy/stt/assemblyai.py`, `talk_autopsy/pipeline.py` (`stt2`) |
+| Alignment | pass-through for AssemblyAI (measured times); wav2vec2 alignment only for model-estimated times (fallback engines) | `talk_autopsy/align.py`, `talk_autopsy/pipeline.py` (`align`) |
+| Correction | prompt `correction-v2` (git blob `14ebec334842`), `claude-sonnet-5-5`, blocks of 300 s with 3 read-only context segments, the validator in `correct.py` (70% of words kept in order, no runs from a neighbouring segment, glossary terms kept or merged into another term), one retry | `talk_autopsy/correct.py`, `talk_autopsy/blocks.py`, `talk_autopsy/prompts/correction-v2.md` |
+| Sentence units | `sentence-units-v1`: merge to terminal punctuation or a pause over 1.5 s, split above 25 s | `talk_autopsy/units.py` |
+| Translation | prompt `translation-v2` (git blob `903af80b234a`), `claude-sonnet-5-5`, on sentence units, blocks of 300 s with 3 read-only context units, the validator in `translate.py`, one retry; target language `ru` | `talk_autopsy/translate.py`, `talk_autopsy/prompts/translation-v2.md` |
+| Claude calls | structured output, `max_tokens` 16000, refusal fallback on in `run` (off in `fix` / `translate` / `eval`); SDK `anthropic` 2.6.0 | `talk_autopsy/core/structured_call.py`, `talk_autopsy/config.py` |
+| Model IDs | `claude-sonnet-5-5` (correction, translation), `claude-haiku-5-5` (auto-glossary): the code defaults; `CORRECTION_MODEL`, `TRANSLATION_MODEL`, `HELPER_MODEL` must stay empty in `.env` | `talk_autopsy/config.py` |
+| Fallback engines | chunked Gemini (`gemini-3.8-flash`, then `gemini-3.6-flash`) + alignment, then faster-whisper large-v3; used only if AssemblyAI fails, and the run then records the fallback | `talk_autopsy/stt/`, `talk_autopsy/pipeline.py` |
+
+Not frozen: subtitle layout (`subtitles.py`: line breaking, cue timing,
+display extension, the `.ass` style), the CLI's printing, the cost estimate,
+the metrics code (a change to a metric rescores every row and is recorded as
+such). The T6 run is `talk-autopsy run` from the tagged commit with the
+auto-glossary and no hand glossary (T6 protocol).
+
 ## Operational runs
 
 Whole videos through the production `run` (not scored: no reference, no
