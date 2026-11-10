@@ -1,4 +1,4 @@
-# Talk Autopsy
+# Talk Autopsy [![CI](https://github.com/AKulikou/talk-autopsy/actions/workflows/ci.yml/badge.svg)](https://github.com/AKulikou/talk-autopsy/actions/workflows/ci.yml)
 
 Subtitles in your language for English technical talks, with every stage of the
 pipeline measured on a fixed test set.

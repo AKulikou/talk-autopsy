@@ -32,6 +32,7 @@ uv sync                                    # Python 3.13 venv in .venv + depende
 uv sync --extra align                      # + CPU torch/torchaudio for forced alignment (about 0.9 GB with the model)
 uv run pytest                              # unit tests: fake Claude client, generated audio, no network
 uv run ruff check .                        # lint (config in pyproject.toml, target Python 3.13)
+pwsh scripts/check.ps1                     # before every push: exactly what CI runs, secrets cleared (scripts/check.sh elsewhere)
 uv run talk-autopsy cut <source> --start 00:00 --end 10:00 --out <file>.wav   # 16 kHz mono WAV
 uv run talk-autopsy transcribe <file>.wav --out work/T2/raw.whisper-large-v3.json   # faster-whisper, CPU
 uv run talk-autopsy transcribe <file>.wav --engine assemblyai --out work/T2/raw.assemblyai.json  # cloud, uploads audio
@@ -59,7 +60,8 @@ Requires ffmpeg (with ffprobe) on PATH. `ANTHROPIC_API_KEY` in `.env` (never com
 it) is needed only by the Claude stages; the CLI checks it before any work on a run
 that includes `glossary`, `fix` or `translate`. `ASSEMBLYAI_API_KEY` is needed by the
 default `run`; `GEMINI_API_KEY` only for the Gemini engine or fallback. Run `uv run pytest` and `uv run ruff check .`
-after any change. Use the uv-managed Python 3.13, not the system `python`.
+after any change, and `scripts/check.ps1` before every push (CI also scans the full git history
+for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `python`.
 
 ## Layout
 
@@ -86,6 +88,7 @@ after any change. Use the uv-managed Python 3.13, not the system `python`.
 - `data/test-set/` — media and reference transcripts are local only; `README.md` and `*.glossary.md` are tracked
 - `docs/decisions.md` — decision log; `docs/experiments.md` — experiment log and Backlog
 - `results/benchmark.csv` — one row per measured run (tracked); everything else in `results/`, `logs/`, `work/` is git-ignored
+- `scripts/check.ps1`, `scripts/check.sh` — the CI test job, run locally with the secrets cleared
 
 ## Data rules
 
