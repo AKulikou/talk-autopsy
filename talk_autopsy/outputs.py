@@ -19,7 +19,8 @@ ffmpeg does the MP4 work: subtitle tracks are added without re-encoding
 veryfast -crf 20`), copies the audio and draws the `.ass` file with the
 `subtitles` filter (libass), run from the output folder with a plain file name
 so that no Windows path needs filter escaping. Measured on the owner's laptop
-(2026-11-10, 60 s of 1080p): 10.7 s, about 0.18x real time.
+(2026-11-10, 1080p H.264): 10.7 s for a 60 s clip (0.18x real time), 457 s for a
+27:52 talk together with the subtitle-track MP4 (0.27x; the estimate uses 0.27).
 
 No CLI I/O here; `run_ffmpeg` is injectable for tests.
 """
@@ -36,7 +37,7 @@ from talk_autopsy.segments import Transcript
 
 FORMATS = ("srt", "ass", "bilingual", "mp4-soft", "mp4-burned")
 DEFAULT = "srt,ass"
-BURN_SPEED = 0.18  # encoding seconds per second of 1080p video, measured 2026-11-10 (see the docstring)
+BURN_SPEED = 0.27  # encoding seconds per second of 1080p video, measured 2026-11-10 (see the docstring)
 BURN_FILTER_NAME = "burn-subtitles.ass"  # plain name: the subtitles filter needs no path escaping
 LANG3 = {"ru": "rus", "en": "eng", "de": "deu", "fr": "fra", "es": "spa", "uk": "ukr", "it": "ita",
          "pt": "por", "pl": "pol", "zh": "zho", "ja": "jpn"}  # ISO 639-2 tags for the MP4 tracks
