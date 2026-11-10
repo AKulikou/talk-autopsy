@@ -10,22 +10,28 @@ reading speed; cues hold up to three lines, every `.srt` gets a sibling `.ass`
 with a smaller font so three lines fit, and reading speed is reported per file
 (share of cues above 17 and above 25 characters per second), never enforced.
 
-Cues never cross a segment boundary: segments are the unit every stage keeps,
-and a translated segment has no finer timing. Inside a segment:
+Cues never cross a segment boundary. The English file is cut from the corrected
+segments; the target-language file from the translation's segments, which are
+sentence units (units.py) since 2026-11-10. Inside a segment:
 
-- **Timing.** With word timings whose words are the segment text's words
-  (an aligned transcript), a cue runs from its first word's start to its last
-  word's end. Without them (a translation), the segment's time is shared out
-  by character count.
+- **Timing.** Three cases. (1) The segment's words are its text's words (the
+  English): a cue runs from its first word's start to its last word's end.
+  (2) The segment carries other words than its text (a translated unit keeps
+  its English words): a cue covering target characters [a, b) of the text
+  covers the same share of the English words, and gets their times, so pauses
+  between English words become pauses between cues. A break that ends a target
+  sentence (clause) moves to an English sentence (clause) end when one lies
+  within SNAP_WORDS words. (3) No words (a translation made per segment): the
+  segment's time is shared out by character count.
 - **Splitting.** A cue holds at most MAX_LINES lines of MAX_LINE_CHARS
   characters and lasts at most MAX_SECONDS. Among the break points that keep a
   cue within both limits, the latest sentence end (. ? !) is taken, else the
   latest clause end (, ; : and dashes), else the latest word boundary; a break
   is never placed inside a glossary term of several words.
-- **Duration.** A cue shorter than MIN_SECONDS is extended into the silence
-  after it, never over the next cue; every cue lingers LINGER_SECONDS after its
-  last word when there is room. Cues that still miss 1–7 s are counted in the
-  report.
+- **Display time.** After cutting, each cue's end is extended into the silence
+  that follows: by up to EXTEND_SECONDS, never closer than GAP_SECONDS to the
+  next cue's start and never past MAX_SECONDS on screen. Cues never overlap.
+  Cues outside 1–7 s are counted in the report.
 - **Lines.** A cue longer than one line is wrapped into the fewest lines (up
   to MAX_LINES) that keep every line within MAX_LINE_CHARS, at the spaces that
   balance the lines best (a break after punctuation wins a tie).
@@ -38,27 +44,29 @@ of cues above 17 and 25 characters per second, and the cues outside the limits.
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from talk_autopsy import metrics
 from talk_autopsy.glossary import Glossary
-from talk_autopsy.segments import Transcript
+from talk_autopsy.segments import Segment, Transcript, Word
+from talk_autopsy.units import CLAUSE_END as _CLAUSE_END
+from talk_autopsy.units import SENTENCE_END as _SENTENCE_END
+from talk_autopsy.units import segment_words
 
 MAX_LINE_CHARS = 48
 MAX_LINES = 3
 MIN_SECONDS = 1.0
 MAX_SECONDS = 7.0
-LINGER_SECONDS = 0.3
-GAP_SECONDS = 0.04  # the smallest gap kept between two cues
-
-_SENTENCE_END = re.compile(r"[.?!…][\"')\]»]*$")
-_CLAUSE_END = re.compile(r"([,;:]|—|–)[\"')\]»]*$|^[—–-]$")
+EXTEND_SECONDS = 1.5  # display time added after a cue's last word, into the silence that follows
+GAP_SECONDS = 0.1  # the smallest gap an extended cue keeps before the next cue
+SNAP_WORDS = 3  # how far (in English words) a sentence or clause break may move to meet the English one
 
 
 @dataclass
 class Unit:
-    """One word of a segment with its time."""
+    """One word of a segment's text with its time."""
 
     text: str
     start: float
@@ -78,25 +86,93 @@ class Cue:
         return " ".join(self.lines)
 
 
-def _units(segment) -> list[Unit]:
-    chunks = segment.text.split()
+class _WordTimes:
+    """Cases (1) and (3): every word of the text has its own time."""
+
+    def __init__(self, units: list[Unit]):
+        self.units = units
+
+    def span(self, i: int, j: int) -> tuple[float, float]:
+        return self.units[i].start, self.units[j - 1].end
+
+    def final(self, ranges: list[tuple[int, int]]) -> list[tuple[float, float]]:
+        return [self.span(i, j) for i, j in ranges]
+
+
+class _SourceTimes:
+    """
+    Case (2): the text's words are timed through the segment's other words (a
+    translated unit's English words). The break before text word k sits before
+    English word `position(k)`: the same share of the English words as of the
+    text's characters, moved to a matching English sentence or clause end
+    within SNAP_WORDS words.
+    """
+
+    def __init__(self, segment: Segment, chunks: list[str], source: list[Word], fallback: _WordTimes):
+        self.segment, self.chunks, self.source, self.fallback = segment, chunks, source, fallback
+        self.offsets = [0]
+        for chunk in chunks:
+            self.offsets.append(self.offsets[-1] + len(chunk) + 1)
+
+    def position(self, k: int) -> int:
+        n = len(self.source)
+        if k <= 0:
+            return 0
+        if k >= len(self.chunks):
+            return n
+        raw = self.offsets[k] / self.offsets[-1] * n
+        base = min(max(round(raw), 1), n - 1)
+        before = self.chunks[k - 1]
+        if _SENTENCE_END.search(before):
+            patterns = [_SENTENCE_END]
+        elif _CLAUSE_END.search(before):
+            patterns = [_SENTENCE_END, _CLAUSE_END]
+        else:
+            return base
+        near = [q for q in range(base - SNAP_WORDS, base + SNAP_WORDS + 1)
+                if 1 <= q <= n - 1 and any(p.search(self.source[q - 1].text) for p in patterns)]
+        return min(near, key=lambda q: (abs(q - raw), q)) if near else base
+
+    def _times(self, a: int, b: int) -> tuple[float, float]:
+        """From English word a to English word b - 1; the segment's own edges at the ends."""
+        n = len(self.source)
+        start = self.segment.start if a == 0 else self.source[a].start
+        end = self.segment.end if b == n else self.source[b - 1].end
+        return start, max(start, end)
+
+    def span(self, i: int, j: int) -> tuple[float, float]:
+        a = min(self.position(i), len(self.source) - 1)
+        return self._times(a, max(self.position(j), a + 1))
+
+    def final(self, ranges: list[tuple[int, int]]) -> list[tuple[float, float]]:
+        """Each cue gets at least one English word; with fewer English words than cues, by characters."""
+        n = len(self.source)
+        if n < len(ranges):
+            return self.fallback.final(ranges)
+        cuts = [self.position(i) for i, _ in ranges] + [n]
+        for m in range(1, len(cuts) - 1):
+            cuts[m] = max(cuts[m], cuts[m - 1] + 1)
+        for m in range(len(cuts) - 2, 0, -1):
+            cuts[m] = min(cuts[m], cuts[m + 1] - 1)
+        return [self._times(a, b) for a, b in zip(cuts, cuts[1:], strict=False)]
+
+
+def _timing(segment: Segment, chunks: list[str]) -> _WordTimes | _SourceTimes:
     words = segment.words or []
     if words and [w.text for w in words] == chunks:
-        return [Unit(w.text, w.start, max(w.end, w.start)) for w in words]
-    total = sum(len(c) + 1 for c in chunks) or 1
-    span, t, units = segment.end - segment.start, segment.start, []
-    for chunk in chunks:
-        length = span * (len(chunk) + 1) / total
-        units.append(Unit(chunk, t, t + length))
-        t += length
-    return units
+        return _WordTimes([Unit(w.text, w.start, max(w.end, w.start)) for w in words])
+    by_characters = _WordTimes([Unit(w.text, w.start, w.end) for w in segment_words(
+        Segment(id=segment.id, start=segment.start, end=segment.end, text=segment.text))])
+    if len(words) >= 2:
+        return _SourceTimes(segment, chunks, sorted(words, key=lambda w: w.start), by_characters)
+    return by_characters
 
 
-def _protected(units: list[Unit], glossary: Glossary | None) -> set[int]:
-    """Break positions (a break at k = between unit k-1 and unit k) inside a multi-word glossary term."""
+def _protected(chunks: list[str], glossary: Glossary | None) -> set[int]:
+    """Break positions (a break at k = between word k-1 and word k) inside a multi-word glossary term."""
     if glossary is None:
         return set()
-    words = [re.sub(r"^\W+|\W+$", "", u.text).casefold() for u in units]
+    words = [re.sub(r"^\W+|\W+$", "", c).casefold() for c in chunks]
     blocked: set[int] = set()
     for entry in glossary.entries:
         parts = [p.casefold() for p in entry.term.split()]
@@ -152,47 +228,61 @@ def _fits(text: str) -> bool:
     return len(lines) <= MAX_LINES and all(len(line) <= MAX_LINE_CHARS for line in lines)
 
 
-def _split(units: list[Unit], blocked: set[int]) -> list[tuple[int, int]]:
-    """[(i, j)] unit ranges, one per cue."""
+def _split(chunks: list[str], blocked: set[int],
+           span: Callable[[int, int], tuple[float, float]]) -> list[tuple[int, int]]:
+    """[(i, j)] word ranges, one per cue; `span(i, j)` is the time of words i..j-1."""
     ranges, i = [], 0
-    while i < len(units):
+    while i < len(chunks):
         candidates = []
-        for j in range(i + 1, len(units) + 1):
-            text = " ".join(u.text for u in units[i:j])
-            if j > i + 1 and (not _fits(text) or units[j - 1].end - units[i].start > MAX_SECONDS):
+        for j in range(i + 1, len(chunks) + 1):
+            start, end = span(i, j)
+            if j > i + 1 and (not _fits(" ".join(chunks[i:j])) or end - start > MAX_SECONDS):
                 break
-            if j == len(units) or j not in blocked:
+            if j == len(chunks) or j not in blocked:
                 candidates.append(j)
         if not candidates:  # a term longer than a cue: break inside it rather than nowhere
             candidates = [i + 1]
-        if candidates[-1] == len(units):
-            ranges.append((i, len(units)))
+        if candidates[-1] == len(chunks):
+            ranges.append((i, len(chunks)))
             break
-        sentence = [j for j in candidates if _SENTENCE_END.search(units[j - 1].text)]
-        clause = [j for j in candidates if _CLAUSE_END.search(units[j - 1].text)]
+        sentence = [j for j in candidates if _SENTENCE_END.search(chunks[j - 1])]
+        clause = [j for j in candidates if _CLAUSE_END.search(chunks[j - 1])]
         end = (sentence or clause or candidates)[-1]
         ranges.append((i, end))
         i = end
     return ranges
 
 
+def extend_display(cues: list[Cue]) -> None:
+    """
+    Each cue's end moves into the silence after it: by up to EXTEND_SECONDS, to
+    at most GAP_SECONDS before the next cue and MAX_SECONDS on screen; a cue
+    that already reaches the next one is cut back to its start, so no two cues
+    overlap. Numbers the cues and rounds times to milliseconds.
+    """
+    for cue in cues:
+        cue.start = round(cue.start, 3)
+    for n, cue in enumerate(cues):
+        cue.index = n + 1
+        following = cues[n + 1] if n + 1 < len(cues) else None
+        limit = following.start - GAP_SECONDS if following else float("inf")
+        end = max(cue.end, min(cue.end + EXTEND_SECONDS, limit, cue.start + MAX_SECONDS))
+        if following is not None:
+            end = min(end, following.start)
+        cue.end = round(max(end, cue.start), 3)
+
+
 def build_cues(transcript: Transcript, glossary: Glossary | None = None) -> list[Cue]:
     cues: list[Cue] = []
     for segment in transcript.segments:
-        units = _units(segment)
-        if not units:
+        chunks = segment.text.split()
+        if not chunks:
             continue
-        blocked = _protected(units, glossary)
-        for i, j in _split(units, blocked):
-            text = " ".join(u.text for u in units[i:j])
-            cues.append(Cue(0, units[i].start, units[j - 1].end, wrap(text), segment.id))
-    for n, cue in enumerate(cues):
-        cue.index = n + 1
-        last = n + 1 == len(cues)
-        limit = cue.end + MIN_SECONDS + LINGER_SECONDS if last else cues[n + 1].start - GAP_SECONDS
-        wanted = max(cue.end + LINGER_SECONDS, cue.start + MIN_SECONDS)
-        cue.end = round(max(cue.end, min(wanted, limit, cue.start + MAX_SECONDS)), 3)
-        cue.start = round(cue.start, 3)
+        timing = _timing(segment, chunks)
+        ranges = _split(chunks, _protected(chunks, glossary), timing.span)
+        for (i, j), (start, end) in zip(ranges, timing.final(ranges), strict=True):
+            cues.append(Cue(0, start, end, wrap(" ".join(chunks[i:j])), segment.id))
+    extend_display(cues)
     return cues
 
 

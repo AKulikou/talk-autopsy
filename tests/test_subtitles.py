@@ -79,17 +79,17 @@ def test_no_break_inside_a_glossary_term():
     assert any("pull request" in c.text for c in cues)
 
 
-def test_times_come_from_words_and_short_cues_are_extended_without_overlap():
+def test_times_come_from_words_and_cues_are_extended_without_overlap():
     t = transcript(timed(1, 1.0, "Yes."), timed(2, 1.5, "Then we go on with the demo."))
     first, second = build_cues(t)
-    assert first.start == 1.0 and first.end == pytest.approx(1.5 - 0.04)  # cannot reach 1 s
+    assert first.start == 1.0 and first.end == pytest.approx(1.5 - 0.1)  # stops 0.1 s before the next cue
     assert second.start == 1.5
-    assert second.end == pytest.approx(1.5 + 6 * 0.3 + 0.25 + 0.3)  # last word end + linger
+    assert second.end == pytest.approx(1.5 + 6 * 0.3 + 0.25 + 1.5)  # last word end + 1.5 s
 
 
-def test_a_lone_cue_gets_at_least_a_second():
+def test_a_lone_cue_stays_1_5_s_after_its_last_word():
     (cue,) = build_cues(transcript(timed(1, 0.0, "Hi.")))
-    assert cue.end - cue.start == pytest.approx(1.0)
+    assert cue.end - cue.start == pytest.approx(0.25 + 1.5)
 
 
 def test_without_word_timings_time_is_shared_by_characters():
@@ -104,21 +104,21 @@ def test_without_word_timings_time_is_shared_by_characters():
 def test_srt_text_and_timestamps():
     assert timestamp(3723.456) == "01:02:03,456"
     cues = build_cues(transcript(timed(1, 0.0, "Hello there.")))
-    assert srt_text(cues) == "1\n00:00:00,000 --> 00:00:01,000\nHello there.\n"
+    assert srt_text(cues) == "1\n00:00:00,000 --> 00:00:02,050\nHello there.\n"
 
 
 def test_report_counts_reading_speed(tmp_path):
     report = subtitles.write_srt(transcript(timed(1, 0.0, "Hello there.")), tmp_path / "a.srt")
-    assert report.cues == 1 and report.reading.cps == [pytest.approx(12.0)]
+    assert report.cues == 1 and report.reading.cps == [pytest.approx(12 / 2.05)]
     assert report.shorter_than_min == 0 and report.lines_too_long == 0
     assert report.share_above_17 == 0 and report.share_above_25 == 0
 
 
 def test_report_shares_above_17_and_25_cps():
-    # each cue lingers 0.3 s after its segment: 1.3 s, 1.3 s and 2.3 s on screen
-    t = transcript(Segment(id=1, start=0.0, end=1.0, text="x" * 25),  # 19.2 cps
-                   Segment(id=2, start=5.0, end=6.0, text="y" * 40),  # 30.8 cps
-                   Segment(id=3, start=10.0, end=12.0, text="z" * 20))  # 8.7 cps
+    # each cue stays 1.5 s after its segment: 2.5 s, 2.5 s and 3.5 s on screen
+    t = transcript(Segment(id=1, start=0.0, end=1.0, text="x" * 45),  # 18.0 cps
+                   Segment(id=2, start=5.0, end=6.0, text="y" * 66),  # 26.4 cps
+                   Segment(id=3, start=10.0, end=12.0, text="z" * 20))  # 5.7 cps
     report = subtitles.report(build_cues(t))
     assert report.share_above_25 == pytest.approx(1 / 3)
     assert report.share_above_17 == pytest.approx(2 / 3) and "33.3% above 25 cps" in report.line()
@@ -140,7 +140,7 @@ def test_ass_file_structure(tmp_path):
     assert fields["Fontname"] == "Arial" and fields["Fontsize"] == "42" and fields["Alignment"] == "2"
     assert fields["PrimaryColour"] == "&H00FFFFFF" and float(fields["Outline"]) > 0
     events = [line for line in text.splitlines() if line.startswith("Dialogue:")]
-    assert len(events) == 2 and events[0].startswith("Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,")
+    assert len(events) == 2 and events[0].startswith("Dialogue: 0,0:00:00.00,0:00:02.05,Default,,0,0,0,,")
     assert events[1].endswith("A " + chr(92) + "{brace" + chr(92) + "} and a back" + chr(92) * 2 + "slash.")
 
 
@@ -157,3 +157,67 @@ def test_srt_command(tmp_path):
     assert result.exit_code == 0, result.output
     assert out.read_text(encoding="utf-8").startswith("1\n00:00:00,000")
     assert "1 cues" in result.output and "cps" in result.output
+
+
+# --- target text timed by the English words of a sentence unit -----------------------
+
+
+def unit(text: str, english: list[tuple[str, float, float]]) -> Segment:
+    words = [Word(start=s, end=e, text=w) for w, s, e in english]
+    return Segment(id=1, start=words[0].start, end=words[-1].end, text=text, words=words, source_ids=[1, 2])
+
+
+def test_a_translated_unit_is_timed_by_its_english_words_not_by_characters():
+    # two English clauses with a 3-second pause between them; the target text has a clause end too
+    english = [("We", 0.0, 0.4), ("open", 0.5, 0.9), ("the", 1.0, 1.4), ("terminal,", 1.5, 2.0),
+               ("and", 5.0, 5.4), ("then", 5.5, 6.4), ("we", 6.5, 7.4), ("run", 7.5, 8.4),
+               ("tests.", 8.5, 9.0)]
+    text = "Открываем терминал, а потом запускаем все тесты."
+    (first, second) = build_cues(transcript(unit(text, english)))
+    assert first.text == "Открываем терминал," and second.text == "а потом запускаем все тесты."
+    assert first.start == 0.0
+    assert second.start == 5.0  # the English "and": the pause falls between the two cues
+    assert first.end == pytest.approx(2.0 + 1.5)  # "terminal," ends at 2.0 s, then +1.5 s of display
+    assert second.end == pytest.approx(9.0 + 1.5)
+    # by characters the first cue would have ended at about 3.6 s, inside the pause
+    by_chars = build_cues(transcript(Segment(id=1, start=0.0, end=9.0, text=text)))
+    assert by_chars[1].start == pytest.approx(9.0 * 20 / 49, abs=0.01)
+
+
+def test_cue_spans_are_proportional_to_the_english_words():
+    # ten English words, one per second; the target has no punctuation, so no snapping
+    english = [(f"w{n}", float(n), n + 0.9) for n in range(10)]
+    text = " ".join(["слово"] * 30)  # 30 equal words over 10 s: too long for 7 s, two cues
+    cues = build_cues(transcript(unit(text, english)))
+    assert len(cues) == 2
+    share = len(cues[0].text) / len(text)
+    boundary = round(share * 10)  # the second cue starts at that English word
+    assert cues[1].start == pytest.approx(float(boundary))
+    assert cues[0].end <= cues[1].start - 0.1 + 1e-9
+
+
+def test_fewer_english_words_than_cues_falls_back_to_characters():
+    english = [("Yes,", 0.0, 0.5), ("sure.", 0.6, 9.0)]
+    text = " ".join(["слово"] * 40)
+    cues = build_cues(transcript(unit(text, english)))
+    assert len(cues) >= 3
+    assert all(c.end > c.start for c in cues)
+    assert all(a.end <= b.start for a, b in zip(cues, cues[1:], strict=False))
+
+
+def test_display_extension_limits():
+    cues = [subtitles.Cue(0, 0.0, 6.5, ["a"], 1),  # 7 s cap: ends at 7.0, not 8.0
+            subtitles.Cue(0, 9.0, 9.5, ["b"], 2),  # 0.1 s before the next cue: 10.0
+            subtitles.Cue(0, 10.1, 10.5, ["c"], 3),  # +1.5 s: 12.0
+            subtitles.Cue(0, 20.0, 21.0, ["d"], 4),  # cut back: reaches into the next cue
+            subtitles.Cue(0, 20.8, 22.0, ["e"], 5)]  # last: +1.5 s
+    subtitles.extend_display(cues)
+    assert [c.end for c in cues] == [7.0, 10.0, 12.0, 20.8, 23.5]
+    assert [c.index for c in cues] == [1, 2, 3, 4, 5]
+
+
+def test_cues_never_overlap_on_a_dense_transcript():
+    segments = [timed(n + 1, n * 1.1, "Short one here.") for n in range(30)]
+    cues = build_cues(transcript(*segments))
+    assert all(a.end <= b.start for a, b in zip(cues, cues[1:], strict=False))
+    assert all(a.end <= b.start - 0.1 + 1e-9 for a, b in zip(cues, cues[1:], strict=False))
