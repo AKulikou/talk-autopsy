@@ -159,6 +159,10 @@ uv run talk-autopsy run "https://www.youtube.com/playlist?list=..." --domain web
 #    and the run stops before a video that would cross --max-total-cost (default 10 USD)
 ```
 
+`--translation v3` (an option, being rated) renders ordinary words in Russian
+and keeps only names and code in English; jargon gets the English term in
+brackets once per video.
+
 `--output` takes `srt`, `ass`, `bilingual` (English small on top, Russian
 below), `mp4-soft` (MP4 with Russian and English subtitle tracks) and
 `mp4-burned`, or `all`. The video's title, description and chapter titles are

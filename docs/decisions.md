@@ -6,6 +6,34 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-10 — Translation term policy (keep / both / translate / ui)
+
+Context: the owner watched the [removed] interview (real-01) with
+translation-v2 subtitles and found ordinary words left in English or turned
+into odd loanwords ("tokens", "compute", "inference-компании", "промптнуть",
+"эмерджентные свойства"). translation-v2's rule "technical terms stay in
+English" does not separate names and code from words with a normal Russian
+translation; the same flaw had been noted for UI names.
+
+Decision (owner's policy): four classes of terms. `keep`: Latin script as is
+(names, code, commands, identifiers, file names, acronyms without a Russian
+form). `translate`: Russian only. `both`: Russian with the English in
+brackets at the first occurrence in the video, Russian only afterwards (jargon
+without a good Russian word). `ui`: English as on screen with a Russian gloss
+in brackets at the first occurrence. The policy lives in the glossary (a
+`policy` column; user glossaries win), terms without one are classified by
+one Haiku call after the auto-glossary, and the first occurrence is decided in
+code, not by the model. Implemented as `translation-v3`, an option
+(`--translation v3`); the default stays translation-v2 until the owner's blind
+rating of 16 v2/v3 pairs (experiments, C1b, decision rule written before the
+rating).
+
+What it does not change: the speech recognition path, the auto-glossary
+extraction, correction-v2 and sentence units, which decide the English
+transcript and the T6 number, are untouched (`glossary.md` and the key terms
+are not rewritten; tested). `pipeline-v2` stays the frozen version; adopting
+v3 needs a short follow-up that flips the default and tags a new freeze.
+
 ## 2026-11-10 — Audio judge: repetition convention made explicit, post-hoc rescoring (still failed)
 
 Context: the blind audio judge failed its T2 calibration in prompt 09b

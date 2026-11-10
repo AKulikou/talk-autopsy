@@ -45,6 +45,7 @@ uv run talk-autopsy srt <transcript>.json --out <file>.srt [--glossary <md>]    
 uv run talk-autopsy glossary-auto <raw>.json --out <glossary>.md [--context <text-or-file>] [--compare <ref>.md]  # Haiku auto-glossary (B5)
 uv run talk-autopsy fix <transcript>.json --glossary <md> --out <fixed>.json [--model <id>] [--prompt correction-v1]  # Claude correction (default v2), prints the estimate
 uv run talk-autopsy translate <fixed>.json --lang ru --glossary <md> --out <ru>.json [--prompt translation-v1]       # Claude translation (default v2)
+uv run talk-autopsy translate <fixed>.json ... --prompt translation-v3   # term classes first (Haiku) -> <out>.glossary-v3.md, then v3
 uv run talk-autopsy adjudicate T2 --backbone work/T2/raw.whisper-large-v3.json --hyp work/T2/raw.assemblyai.json --hyp work/T2/raw.gemini.json
 uv run talk-autopsy resolve T2                    # after ticking data/test-set/T2.adjudication.md -> T2.ref.txt + protocol
 uv run talk-autopsy judge T6 --resume [--spent-before <usd>] [--plan-after <n>]  # blind audio judge (JUDGE_MODEL gemini-4-carbon, paid, $3 session budget): work/T6/judge.jsonl + T6.adjudication.judged.md; counts and cost only
@@ -59,6 +60,7 @@ uv run talk-autopsy run <source> --lang ru [--context <text-or-file>] [--glossar
                                            # work/<video-id>/, skips steps that are up to date; --dry-run prints the plan;
                                            # --engine gemini+align|faster-whisper|gemini; --gemini-cache-only: no Gemini call
                                            # --output srt,ass(default)|bilingual|mp4-soft|mp4-burned|all -> OUTPUT_DIR/<name>/
+                                           # --translation v2(default)|v3 (TRANSLATION_VERSION): v3 = term classes, glossary.v3.md
 ```
 
 `fix`, `translate` and `eval` are the experiment commands: no refusal fallback, one
@@ -80,7 +82,8 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/youtube.py` — YouTube links and playlists through yt-dlp as a library (`yt-dlp[default]`, incl. the `yt-dlp-ejs` challenge solver; a JavaScript runtime must be installed, never installed automatically): metadata without download, estimate, MP4 up to 1080p (H.264 preferred) + the author's English captions (saved, not used), `meta.json`, Windows-safe `<upload-date> <title>` folders, playlist plan (order, done markers, caps), `doctor` checks
 - `talk_autopsy/outputs.py` — output formats after the srt step: `<stem>.srt` (named like the video, for players that auto-load), `.en.srt`, `.ass`, `bilingual.ass` (English small on top), `.subs.mp4` (mov_text tracks, no re-encode), `.<lang>.mp4` (burned in with libx264, for TVs; 0.27x real time measured on a 28-min talk)
 - `glossaries/` — reusable domain glossaries (`web3.md`; `--domain web3`); `glossaries/local/` git-ignored personal additions (names)
-- `talk_autopsy/glossary.py` — `Glossary`: a Markdown table per video (`T<n>.glossary.md`), format in the module docstring
+- `talk_autopsy/glossary.py` — `Glossary`: a Markdown table per video (`T<n>.glossary.md`), format in the module docstring; optional `policy` column (keep / both / translate / ui, `effective_policy` maps old files); `combine`, `domain_paths` for `--glossary` + `--domain`
+- `talk_autopsy/term_policy.py` — `term-policy-v1`: one Haiku call classifies the glossary terms without a policy, for translation-v3 only (user entries win; `glossary.md` and the STT key terms are never rewritten)
 - `talk_autopsy/stt/` — `base.py` `Transcriber` protocol and `drop_wordless`; `faster_whisper.py` first engine (large-v3, int8, CPU, `cpu_threads`; reads the WAV itself, see its docstring); `assemblyai.py` cloud engine (Universal-3.5 Pro, keyterms with `--glossary-prompt`); `gemini.py` cloud engine (Files API upload, verbatim JSON transcript; timestamps are model estimates, never for subtitles; typed errors `GeminiUnavailable` / `GeminiQuotaExhausted`); `chunked.py` long audio through Gemini (chunks cut at silences, per-chunk cache, model fallback list, faster-whisper for a failed chunk, quota error stops, `ProgressEvent`s)
 - `talk_autopsy/align.py` — forced alignment (wav2vec2 base 960h from torchaudio, Viterbi in numpy, block by block with garbage states); `AlignedTranscriber` = the `gemini+align` engine; `start_differences` for timing comparisons. torch is the optional `align` extra; tests use a stub emitter
 - `talk_autopsy/metrics.py` — pure metric functions: `tokenize` (the one normalization; drops fillers uh/um/er/ah/hmm), WER, term accuracy (base form or regular plural of the last word), false-edit rate, reading speed; timing drift is an interface only
@@ -91,7 +94,7 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import; superseded by `adjudicate.py` for the test set (`draft`, `ref-from-draft` still work)
 - `talk_autopsy/blocks.py` — what correction and translation share: 5-minute blocks with 3 read-only context segments, video context from `meta.json`, token and cost estimates, stage meta
 - `talk_autopsy/glossary_auto.py` — auto-glossary (`glossary-auto-v1`, helper model): terms, `keep`, suggested translation, `heard_as` mis-recognitions, evidence rule; `coverage` against a reference glossary; `merge` with a user glossary (user wins, drafted translations become "suggested" notes)
-- `talk_autopsy/correct.py` — Claude correction (`correction-v2` default, `correction-v1`), validator (incl. 70% words kept in order, no runs of words from a neighbouring segment), failed blocks keep their text and are listed; `translate.py` — Claude translation (`translation-v2` default: no meaning compression; `translation-v1`) of sentence units by default (`units=False` / `--per-segment`: each segment alone), `target_lang` a parameter; prompts in `talk_autopsy/prompts/<version>.md`
+- `talk_autopsy/correct.py` — Claude correction (`correction-v2` default, `correction-v1`), validator (incl. 70% words kept in order, no runs of words from a neighbouring segment), failed blocks keep their text and are listed; `translate.py` — Claude translation (`translation-v2` default: no meaning compression; `translation-v1`) of sentence units by default (`units=False` / `--per-segment`: each segment alone), `target_lang` a parameter; prompts in `talk_autopsy/prompts/<version>.md`; `translation-v3` (option, C1b): term policies, `⟦both:…|…⟧` / `⟦ui:…|…⟧` markers rendered by `render_markers` (first occurrence over the whole video, malformed markers stripped and counted), `validate_block_v3` rejects a missing name-or-code keep term
 - `talk_autopsy/subtitles.py` — SRT and `.ass` writer: up to 3 x 48 characters, at most 7 s, breaks at sentence/clause ends, never inside a glossary term; a translated unit's cues timed by the English words they cover; every cue extended into the following pause (up to +1.5 s, 0.1 s before the next cue, at most 7 s); `.ass` 1920x1080, Arial 42, outline, bottom centre; reading speed reported (shares above 17 and 25 cps), never enforced
 - `talk_autopsy/pipeline.py` — `run`: stt (AssemblyAI on `audio.flac`; fallback chunked Gemini, then faster-whisper), glossary, stt2 (key terms), align (model-estimated times only), fix, translate, srt in `work/<video-id>/`; stamp files to skip unchanged steps, key checks first, cost estimate and limit, Claude and speech recognition cost report, fallbacks listed, progress events
 - `talk_autopsy/core/structured_call.py` also has `refusal_fallback` (`fallbacks: "default"` through the beta endpoint); `run` turns it on for Sonnet calls
@@ -186,7 +189,8 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   a change to a frozen part needs a new tag and a new hold-out. T6: three engines run and
   `data/test-set/T6.adjudication.md` prepared; the owner withdrew from adjudication and the blind
   audio judge failed its T2 calibration (79.0% < 90%; 82.5% after a post-hoc rescoring), so T6's reference waits for an owner decision;
-  then the tagged pipeline on T6 once; then the external audit.
+  then the tagged pipeline on T6 once; then the external audit. translation-v3 (term classes, C1b) is built as an
+  option; the owner's blind rating (`work/C1-v3-blind.md`) decides whether it replaces v2 (new freeze tag).
 - **Stage 3:** the CLI tool with subtitles; external audit; v1.0.
 - **Stage 4:** dubbed audio track.
 - **v1.1:** local web UI over the same core.
