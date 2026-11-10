@@ -39,6 +39,24 @@ class ConfigurationError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
 
+# --- Secrets ---------------------------------------------------------------
+
+# Every environment variable that holds a secret: the keys this code reads, and
+# the credentials the SDKs it calls would pick up from the environment on their
+# own. tests/conftest.py replaces each with a placeholder before every test;
+# tests/test_secrets.py fails if the source reads a *_KEY, *_TOKEN or *_SECRET
+# variable missing here, or if .env.example and this list differ. Values are
+# never printed or logged.
+SECRET_ENV_VARS: tuple[str, ...] = (
+    "ANTHROPIC_API_KEY",     # Claude stages (require_api_key)
+    "ANTHROPIC_AUTH_TOKEN",  # read by the anthropic SDK as a bearer token; not used here
+    "ASSEMBLYAI_API_KEY",    # AssemblyAI engine (require_key)
+    "GEMINI_API_KEY",        # Gemini engine (require_key)
+    "GOOGLE_API_KEY",        # read by the google-genai SDK; the explicit GEMINI_API_KEY wins
+    "HF_TOKEN",              # read by huggingface_hub when faster-whisper downloads a model
+)
+
+
 # --- API key ---------------------------------------------------------------
 
 API_KEY_ENV_VAR = "ANTHROPIC_API_KEY"

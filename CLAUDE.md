@@ -82,7 +82,7 @@ after any change. Use the uv-managed Python 3.13, not the system `python`.
 - `talk_autopsy/tts/edge.py` (stage 4) — stub with input -> output in the docstring
 - `talk_autopsy/cli.py` — typer CLI (`cut`, `transcribe`, `align`, `glossary-auto`, `fix`, `translate`, `srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval`, `run`); argument parsing and printing only
 - `talk_autopsy/core/` — shared with autopsy-template: `structured_call.py` (structured request, stop-reason checks, validation, one retry), `claude_client.py`, `batch_client.py` (Message Batches at half price), `token_summary.py` (cost)
-- `tests/` — `conftest.py` has the fake Claude client (`fake_claude`) and the generated sine WAV (`sine`)
+- `tests/` — `conftest.py` has the fake Claude client (`fake_claude`), the generated sine WAV (`sine`) and a placeholder for every secret in `config.SECRET_ENV_VARS` (autouse); `test_secrets.py` fails on an environment read of a `*_KEY`/`*_TOKEN`/`*_SECRET` name missing from the registry, and on a `.env.example` out of sync with it. A new provider key: add it to `SECRET_ENV_VARS` and `.env.example`, nothing else
 - `data/test-set/` — media and reference transcripts are local only; `README.md` and `*.glossary.md` are tracked
 - `docs/decisions.md` — decision log; `docs/experiments.md` — experiment log and Backlog
 - `results/benchmark.csv` — one row per measured run (tracked); everything else in `results/`, `logs/`, `work/` is git-ignored

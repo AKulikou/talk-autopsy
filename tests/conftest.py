@@ -3,17 +3,14 @@ Shared test fixtures. No test calls the Anthropic API: a fake client stands in
 for it and answers each structured request according to the test's script.
 """
 
-import os
 import shutil
 import subprocess
 import threading
 from types import SimpleNamespace
 
-# The Claude stages refuse to start without a plausible key; tests never use it.
-os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test-key-not-used")
-
 import pytest
 
+from talk_autopsy import config
 from talk_autopsy.core import claude_client as claude_client_module
 
 
@@ -101,18 +98,26 @@ def sine(tmp_path):
     return path
 
 
+def placeholder(name: str) -> str:
+    """
+    A clearly fake value for the secret `name`. The Anthropic key keeps the
+    prefix require_api_key checks for, so the Claude stages start.
+    """
+    fake = f"test-placeholder-{name.lower().replace('_', '-')}-not-a-real-secret"
+    return config.API_KEY_PREFIX + fake if name == config.API_KEY_ENV_VAR else fake
+
+
 @pytest.fixture(autouse=True)
-def placeholder_api_key(monkeypatch):
+def placeholder_secrets(monkeypatch):
     """
-    Every test starts with the placeholder key, whatever a local .env holds or
-    the shell exports (an empty key in .env once broke the CLI tests). Tests that
-    need a missing key still set it themselves.
+    Every test starts with a placeholder for every secret in
+    config.SECRET_ENV_VARS, whatever the shell exports: a key a laptop has and
+    CI lacks can then never make a test pass locally and fail in CI. A new
+    provider's key needs only its registry entry. Tests that need a missing key
+    still delete or blank it themselves.
     """
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-not-used")
-    # run checks the Gemini key before any work for the default gemini+align engine; CI has none
-    monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key-not-used")
-    # run checks the AssemblyAI key before any work for the default assemblyai engine; CI has none
-    monkeypatch.setenv("ASSEMBLYAI_API_KEY", "aai-test-key-not-used")
+    for name in config.SECRET_ENV_VARS:
+        monkeypatch.setenv(name, placeholder(name))
 
 
 @pytest.fixture(autouse=True)

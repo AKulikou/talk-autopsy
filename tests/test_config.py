@@ -130,8 +130,7 @@ print(json.dumps({"modules": modules, "leaked": leaked, "read": read, "loaded": 
 """
 
 # Secrets and the settings .env commonly holds.
-_SENTINEL_NAMES = ["ANTHROPIC_API_KEY", "ASSEMBLYAI_API_KEY", "GEMINI_API_KEY",
-                   "TARGET_LANG", "CORRECTION_MODEL", "GEMINI_MODELS"]
+_SENTINEL_NAMES = [*config.SECRET_ENV_VARS, "TARGET_LANG", "CORRECTION_MODEL", "GEMINI_MODELS"]
 
 
 def test_importing_every_module_reads_neither_dotenv_nor_secrets(tmp_path):
