@@ -6,6 +6,30 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-10 — Paid Gemini tier for the audio judge
+
+Context: the blind audio judge (evaluation tooling, `judge.py`) needs one
+Gemini request per disputed span: 114 for the T2 calibration, 86 for the T6
+reference. The free tier allows 20 requests per day per project for
+`gemini-3.8-flash`, and that quota stopped the T2 calibration before its first
+span (prompt 09a); at that rate the two fragments needed at least 10 days.
+
+Decision: the owner moved the Gemini project to the paid tier (Tier 1) with a
+monthly spend cap of EUR 5 in AI Studio. The judge uses the most capable model
+the key offers, `gemini-4-carbon`, with the lowest thinking level (`low`): a
+model different from the one the Gemini STT engine uses (the CLI refuses the
+engine's models). The brief asked for the newest Pro model, but
+`gemini-3.1-pro-preview` answers 404 for this key, and `gemini-2.5-pro` will
+route to `gemini-3.8-flash`, the STT engine's model, from 2026-12-01. Each
+session caps the judge at $3 by its own counter (cost per response from the
+usage metadata and a dated price table in `config.py`); the AI Studio cap is
+only a backstop, because its spend display lags by hours.
+
+What it does not change: the production pipeline still uses AssemblyAI
+(`pipeline-v2`), and Gemini remains its fallback engine on whatever tier the
+key has. Records judged by another model (the free-tier pilot) are kept apart
+in `judge.free-pilot.jsonl` and never mixed into a calibration.
+
 ## 2026-11-10 — translation-v2 adopted
 
 Owner's blind pairwise comparison C1 (`work/T2/C1-blind.md`, segments 1–15 of

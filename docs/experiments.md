@@ -599,6 +599,10 @@ linger; cues never cross a segment boundary. Writing both files takes about
 - **Decision:** sentence units go into the freeze (they decide the text that
   is translated); the display rule and the timing of cues are subtitle layout
   and stay open.
+- **Reading speed in practice** (owner, recorded 2026-11-10): the owner watched
+  the full 28-minute talk with the sentence-unit `.ass` subtitles. 59% of its
+  cues were above 17 characters per second, yet the owner did not need to
+  pause or slow down. 17 cps stays an informational metric, not a limit.
 
 ### B2 (v2): the owner's check of correction-v2's edits
 
@@ -1378,3 +1382,9 @@ Ideas that come up during a stage and wait for a later one.
 
 - ~~Server-side refusal fallback on the Claude calls~~ Decided 2026-11-09:
   on in `run`, off in experiments (decisions).
+- UI element names in translation (owner, 2026-11-10): names of UI elements
+  are translated by meaning, not by their official localized name (Windows
+  "Dictation" was rendered with a literal Russian word, while the Russian
+  Windows UI calls it "Голосовой ввод"). Idea for a future translation
+  version: keep UI element names in English with a short Russian gloss in
+  brackets.
