@@ -511,21 +511,22 @@ over-read.
 related topic. It does not show transfer to a new domain; that is T3's job,
 after T6.
 
-**Translation check on T6 (pre-registered).** After the run, 20 sentence
-units are drawn at random from T6's units (`talk_autopsy/translation_check.py`,
+**Translation check on T6 (pre-registered; amended twice before the run,
+below).** After the run, **12 sentence units with at least 6 English words**
+are drawn at random from T6's units (`talk_autopsy/translation_check.py`,
 `scripts/translation_check.py sample`; `random.Random(20261111)`, seed recorded
-here, units in id order; the English of each unit rebuilt from the run's
-`fixed.json`). Baseline: the same English units translated by Gemini
+here, the qualifying units in id order; the English of each unit rebuilt from
+the run's `fixed.json`). Baseline: the same English units translated by Gemini
 (`gemini-4-carbon`, paid tier, one request per unit, plain prompt "Translate
 this English sentence from a technical talk into natural Russian for
-subtitles. Answer with the translation only."). The owner rates **40 items
-shuffled together** (seed 20261112), one at a time, single-rated 1–5, without
-knowing which system wrote which; the English is shown above each item (as in
-C1; caveat: the rater reads the source first). **Rule: C1 on T6 is met if the
-pipeline's mean >= 4.0.** The difference to the baseline is reported with a
-paired bootstrap 95% interval (10,000 resamples of the 20 units); no other
-conclusion is drawn. Implemented and tested with a fake client on
-2026-11-11; not run.
+subtitles. Answer with the translation only."). The owner rates **at most 24
+items shuffled together** (seed 20261112), one at a time, single-rated 1–5,
+without knowing which system wrote which; the English is shown above each item
+(as in C1; caveat: the rater reads the source first). **Rule: C1 on T6 is met
+if the pipeline's mean >= 4.0.** The difference to the baseline is reported
+with a paired bootstrap 95% interval (10,000 resamples of the 12 units); no
+other conclusion is drawn. Implemented and tested with a fake client on
+2026-11-11; not run. (As first written: 20 units of any length, 40 items.)
 
 *Amendment (2026-11-11, before the T6 run; prompt 15).* The owner asked that
 the two translations of one unit are never adjacent in the rating file. The
@@ -533,11 +534,27 @@ order under seed 20261112 depends only on the seed, not on any text. Its
 first shuffle puts two units' items side by side (positions 11–12 and 30–31),
 so the rating file now takes the first shuffle without adjacent pairs from
 the same generator (`random.Random(20261112)`, each attempt shuffling the
-original order; the second attempt has none). The number of shuffles is
+original order; for 40 items the second attempt has none). The number of shuffles is
 written into the key. The rating file's instructions are in Russian, and it
 is written to `work/T6/C1-T6-rating.md` with the key in
 `work/T6/C1-T6-key.json`. The sample (seed 20261111), the baseline prompt,
 the rule and the scorer are unchanged.
+
+*Amendment 2 (owner's decision, 2026-11-11 20:00, before the T6 run; the
+pipeline had not started).* The check is reduced: **12 units instead of 20**,
+same seed (20261111), drawn only from sentence units with **at least 6 English
+words** (counted by `metrics.tokenize`, the metrics' one normalization, so
+fillers do not count). If the pipeline's and Gemini's translations of a unit
+are **identical after whitespace and punctuation normalisation**
+(`translation_check.normalized`: Unicode punctuation removed, whitespace
+collapsed, case kept), the item is shown once (marked `shared` in the key,
+with the list `shared_units`) and its score counts for both systems. So the
+rating file has at most 24 numbered items and the Gemini baseline covers the
+12 units only. The no-adjacent-pairs rule of the first amendment still
+applies; with fewer items the number of shuffles it needs is whatever the key
+records. Everything else is unchanged: single rating, shuffled, the rule
+(pipeline mean >= 4.0) and the baseline difference with a paired bootstrap
+interval over the units.
 
 ### History of the protocol (superseded 2026-11-11)
 

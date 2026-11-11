@@ -4,7 +4,7 @@ protocol). Four steps; each writes into OUT (work/T6/translation-check by defaul
 and prints counts and costs only, never text.
 
     uv run python scripts/translation_check.py sample --fixed <run>/fixed.json --translated <run>/ru.json
-    uv run python scripts/translation_check.py baseline [--model gemini-4-carbon]  # paid Gemini, 20 requests
+    uv run python scripts/translation_check.py baseline [--model gemini-4-carbon]  # paid Gemini, 12 requests
     uv run python scripts/translation_check.py rating   # -> work/T6/C1-T6-rating.md + work/T6/C1-T6-key.json
     uv run python scripts/translation_check.py score    # after the owner filled C1-T6-rating.md
 """

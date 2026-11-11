@@ -4,11 +4,13 @@ protocol; written 2026-11-11, before the T6 run). Evaluation tooling, not part o
 the frozen pipeline.
 
     fixed.json + <lang>.json of the run
-      -> sample: SAMPLE_SIZE sentence units drawn at random with SEED -> sample.json
+      -> sample: SAMPLE_SIZE sentence units with at least MIN_WORDS English words, drawn at random
+         with SEED -> sample.json
       -> baseline: the same English units translated by Gemini with a plain prompt -> baseline.json
-      -> rating file: 2 x SAMPLE_SIZE items (pipeline and baseline) shuffled together, one at a
-         time, English above each, no system named, a unit's two items never adjacent
-         -> C1-T6-rating.md + C1-T6-key.json
+      -> rating file: at most 2 x SAMPLE_SIZE items (pipeline and baseline) shuffled together, one at
+         a time, English above each, no system named, a unit's two items never adjacent; a unit
+         whose two translations are identical after whitespace and punctuation normalisation is
+         shown once and its score counts for both -> C1-T6-rating.md + C1-T6-key.json
       -> score (after the owner rates): un-blind, means, the paired difference with a bootstrap
          interval, and the rule: C1 on the fragment is met if the pipeline's mean >= C1_TARGET.
 
@@ -21,17 +23,20 @@ here: the sealed fragment's text goes only into the files the caller names.
 import json
 import random
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+from talk_autopsy import metrics
 from talk_autopsy import units as units_module
 from talk_autopsy.segments import Transcript
 
 SEED = 20261111  # recorded in docs/experiments.md before the run; the shuffle uses SEED + 1
-SAMPLE_SIZE = 20
+SAMPLE_SIZE = 12  # owner's amendment before the T6 run (2026-11-11 20:00); was 20
+MIN_WORDS = 6  # English words of a sampled unit, counted by metrics.tokenize (same amendment)
 C1_TARGET = 4.0
 BOOTSTRAP_RESAMPLES = 10000
-PIPELINE, BASELINE = "pipeline", "baseline"
+PIPELINE, BASELINE, SHARED = "pipeline", "baseline", "shared"
 VERSION = "translation-check-v1"
 
 LANGUAGE_NAMES = {"ru": "Russian"}  # the baseline prompt names the language; only Russian is measured
@@ -69,10 +74,14 @@ def paired_units(fixed: Transcript, translated: Transcript) -> list[Item]:
 
 
 def sample(items: list[Item], size: int = SAMPLE_SIZE, seed: int = SEED) -> list[Item]:
-    """`size` units with English text, drawn with `random.Random(seed)`, in id order."""
-    candidates = [i for i in items if i.english and i.translation]
+    """
+    `size` units with a translation and at least MIN_WORDS English words
+    (`metrics.tokenize`, the metrics' one normalization), drawn with
+    `random.Random(seed)` from those units in id order; returned in id order.
+    """
+    candidates = [i for i in items if i.translation and len(metrics.tokenize(i.english)) >= MIN_WORDS]
     if len(candidates) < size:
-        raise CheckError(f"only {len(candidates)} units with text; {size} are needed")
+        raise CheckError(f"only {len(candidates)} units with {MIN_WORDS}+ words; {size} are needed")
     chosen = random.Random(seed).sample(range(len(candidates)), size)
     return [candidates[k] for k in sorted(chosen)]
 
@@ -116,21 +125,29 @@ def _pairs_adjacent(entries: list) -> bool:
     return any(a[0].unit == b[0].unit for a, b in zip(entries, entries[1:], strict=False))
 
 
+def normalized(text: str) -> str:
+    """Punctuation (Unicode category P*) removed, whitespace collapsed; case kept."""
+    without = "".join(" " if unicodedata.category(c).startswith("P") else c for c in text)
+    return " ".join(without.split())
+
+
 def rating_file(items: list[Item], baseline: dict[int, str], seed: int = SEED + 1) -> tuple[str, dict]:
     """
     The owner's rating file and its key: every unit twice (pipeline, baseline),
-    shuffled together with `random.Random(seed)`, numbered 1..2n, the English
-    above each item, no system named. The two items of one unit are never
-    adjacent: the same generator shuffles the original order again until none
-    are (amendment of
-    2026-11-11, written before the T6 run; the order never depends on the
-    text). Returns (Markdown, key).
+    shuffled together with `random.Random(seed)`, numbered 1..n, the English
+    above each item, no system named. A unit whose two translations are equal
+    after `normalized` is shown once (the pipeline's text) as a shared item whose
+    score counts for both systems (owner's amendment before the T6 run). The two
+    items of one unit are never adjacent: the same generator shuffles the
+    original order again until none are (amendment of 2026-11-11, written before
+    the T6 run). Returns (Markdown, key).
     """
     missing = [i.unit for i in items if i.unit not in baseline]
     if missing:
         raise CheckError(f"no baseline translation for units {missing}")
-    original = ([(i, PIPELINE, i.translation) for i in items]
-                + [(i, BASELINE, baseline[i.unit]) for i in items])
+    shared = [i.unit for i in items if normalized(i.translation) == normalized(baseline[i.unit])]
+    original = ([(i, SHARED if i.unit in shared else PIPELINE, i.translation) for i in items]
+                + [(i, BASELINE, baseline[i.unit]) for i in items if i.unit not in shared])
     rng, shuffles, entries = random.Random(seed), 0, None
     while entries is None or _pairs_adjacent(entries):
         if shuffles == MAX_SHUFFLES:
@@ -139,7 +156,7 @@ def rating_file(items: list[Item], baseline: dict[int, str], seed: int = SEED + 
         rng.shuffle(entries)
         shuffles += 1
     lines = list(RATING_INSTRUCTIONS)
-    key = {"version": VERSION, "seed": seed, "shuffles": shuffles, "items": {}}
+    key = {"version": VERSION, "seed": seed, "shuffles": shuffles, "shared_units": shared, "items": {}}
     for number, (item, system, text) in enumerate(entries, start=1):
         lines += [f"## {number}", "", f"EN: {item.english}", "", f"{text}", "", "Score (1-5):", "",
                   "Comment:", ""]
@@ -180,17 +197,22 @@ def score(scores: dict[int, int], key: dict, seed: int = SEED,
     Un-blind the owner's scores. The rule (written before the run): C1 on the
     fragment is met if the pipeline's mean >= C1_TARGET. The difference to the
     baseline is reported with a bootstrap 95% interval (units resampled with
-    replacement, paired); no other conclusion is drawn.
+    replacement, paired); no other conclusion is drawn. A shared item's score
+    counts for both systems.
     """
     items = key["items"]
     if set(scores) != {int(n) for n in items}:
         raise CheckError(f"{len(scores)} scores for {len(items)} items")
     by_unit: dict[int, dict[str, int]] = {}
     for number, meta in items.items():
-        by_unit.setdefault(meta["unit"], {})[meta["system"]] = scores[int(number)]
-    pairs = [(u[PIPELINE], u[BASELINE]) for u in by_unit.values()]
+        systems = (PIPELINE, BASELINE) if meta["system"] == SHARED else (meta["system"],)
+        for system in systems:
+            if system in by_unit.setdefault(meta["unit"], {}):
+                raise CheckError(f"unit {meta['unit']}: two {system} scores")
+            by_unit[meta["unit"]][system] = scores[int(number)]
     if any(len(u) != 2 for u in by_unit.values()):
         raise CheckError("every unit needs one pipeline and one baseline score")
+    pairs = [(u[PIPELINE], u[BASELINE]) for u in by_unit.values()]
     n = len(pairs)
     pipeline_mean = sum(p for p, _ in pairs) / n
     baseline_mean = sum(b for _, b in pairs) / n

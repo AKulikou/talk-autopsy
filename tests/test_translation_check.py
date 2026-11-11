@@ -20,7 +20,7 @@ def transcript(texts, translated=False):
 
 
 def items(n=30):
-    return [tc.Item(unit=k, english=f"English sentence {k}.", translation=f"Перевод {k}.")
+    return [tc.Item(unit=k, english=f"English sentence {k} of the check.", translation=f"Перевод {k}.")
             for k in range(1, n + 1)]
 
 
@@ -53,11 +53,19 @@ def test_mismatched_units_are_refused():
 
 def test_the_sample_is_seeded_sorted_and_of_the_registered_size():
     first, second = tc.sample(items()), tc.sample(items())
-    assert first == second and len(first) == tc.SAMPLE_SIZE == 20
+    assert first == second and len(first) == tc.SAMPLE_SIZE == 12
     assert [i.unit for i in first] == sorted(i.unit for i in first)
     assert tc.sample(items(), seed=1) != first
     with pytest.raises(tc.CheckError, match="only 5"):
         tc.sample(items(5))
+
+
+def test_the_sample_skips_units_under_six_words():
+    short = [tc.Item(unit=k, english="Yes, um, that is it.", translation="Да.") for k in range(100, 140)]
+    chosen = tc.sample(items(12) + short)  # "um" is a filler: 4 words
+    assert [i.unit for i in chosen] == list(range(1, 13))
+    with pytest.raises(tc.CheckError, match=r"only 11 units with 6\+ words"):
+        tc.sample(items(11) + short)
 
 
 def test_the_baseline_is_one_plain_request_per_unit():
@@ -65,7 +73,7 @@ def test_the_baseline_is_one_plain_request_per_unit():
     out, spent = tc.baseline_translations(items(3), caller, "ru")
     assert out == {1: "базовый 1", 2: "базовый 2", 3: "базовый 3"} and spent == pytest.approx(0.003)
     prompt = caller.calls[0][0]
-    assert "natural Russian for subtitles" in prompt and "English sentence 1." in prompt
+    assert "natural Russian for subtitles" in prompt and "English sentence 1 of the check." in prompt
 
 
 def test_a_malformed_baseline_answer_is_an_error():
@@ -84,7 +92,7 @@ def test_the_rating_file_shuffles_both_systems_and_names_neither():
     assert systems.count("pipeline") == systems.count("baseline") == 4
     assert systems != ["pipeline"] * 4 + ["baseline"] * 4
     assert "pipeline" not in text and "baseline" not in text and "Gemini" not in text
-    assert text.count("Score (1-5):") == 8 and text.count("EN: English sentence 1.") == 2
+    assert text.count("Score (1-5):") == 8 and text.count("EN: English sentence 1 of the check.") == 2
     assert text.startswith("# Оценка перевода")
 
 
@@ -109,6 +117,28 @@ def test_one_unit_cannot_be_rated_without_adjacency():
     chosen = items(1)
     with pytest.raises(tc.CheckError):
         tc.rating_file(chosen, {1: "б"})
+
+
+def test_identical_translations_are_shown_once_and_scored_for_both():
+    chosen = items(4)
+    baseline = {i.unit: f"базовый {i.unit}" for i in chosen}
+    baseline[2] = "  перевод 2 "  # case differs: not shared
+    baseline[3] = "Перевод  3"  # equal after normalisation
+    text, key = tc.rating_file(chosen, baseline)
+    assert key["shared_units"] == [3] and len(key["items"]) == 7 and text.count("Score (1-5):") == 7
+    shared = [n for n, m in key["items"].items() if m["system"] == "shared"]
+    assert len(shared) == 1 and key["items"][shared[0]]["unit"] == 3
+    scores = {int(n): (2 if m["system"] == "shared" else 4 if m["system"] == "pipeline" else 3)
+              for n, m in key["items"].items()}
+    result = tc.score(scores, key)
+    assert result.units == 4
+    assert result.pipeline_mean == pytest.approx((4 * 3 + 2) / 4)
+    assert result.baseline_mean == pytest.approx((3 * 3 + 2) / 4)
+
+
+def test_normalisation_drops_punctuation_and_whitespace_only():
+    assert tc.normalized("«Привет», — мир!  ") == tc.normalized("Привет мир") == "Привет мир"
+    assert tc.normalized("Привет") != tc.normalized("привет")
 
 
 def filled(text, score_of):
