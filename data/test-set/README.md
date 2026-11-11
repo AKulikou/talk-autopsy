@@ -27,9 +27,16 @@ experiment to the next. T6 is a sealed hold-out.
   correction keeps them verbatim and translation leaves them untranslated.
 - **T5:** slow speech with long sentences: tests segment boundaries, block
   overlap in translation and subtitle reading speed.
-- **T6:** sealed hold-out with another accent. It is not listened to, not
-  transcribed for prompt work and not used during development; it runs once, at
-  the stage 2 gate, with the prompts already frozen.
+- **T6:** hold-out with another accent. The owner chose the source from
+  candidates by type (accented speaker, technical workshop); its topic,
+  AI-assisted software development, is close to T1 and T2 and is known. The
+  10-minute window was cut blind (below). Nobody has watched or listened to
+  it. After the `pipeline-v2` freeze three engines transcribed it to build the
+  reference, a blind Gemini audio judge decided the disputed spans, and Gemini
+  extracted the glossary; **no human has checked the reference** (no fluent
+  listener available). The pipeline has never run on it and no prompt or
+  setting was tuned on it. It runs once, with `pipeline-v3`
+  (`docs/experiments.md`, T6 protocol).
 
 T3–T5 are not chosen yet; they will be selected deliberately to cover the cases
 above, not taken from whatever files are at hand.
@@ -39,8 +46,9 @@ file. The 10-minute window was chosen by speech density alone: ffmpeg
 `silencedetect` (−35 dB, at least 0.5 s) on the whole audio, the first 5 and
 the last 3 minutes skipped, and the window (1-second steps) with the largest
 share of non-silent audio taken, the earliest on a tie. Result: 25:46–35:46,
-93.8% non-silent (the whole file: 92.5%, 245 silences). T6 stays sealed until
-the stage 2 prompts are frozen (`docs/experiments.md`, T6 protocol).
+93.8% non-silent (the whole file: 92.5%, 245 silences). Its content stays out
+of everything outside `data/test-set/` and `work/T6/`; only counts are recorded
+(`docs/experiments.md`, T6 protocol).
 
 ## Reference conventions
 

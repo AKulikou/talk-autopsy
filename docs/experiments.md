@@ -398,6 +398,83 @@ not known without a listener.
 
 ## T6 protocol
 
+Written 2026-11-11, before the T6 run, after external audit #1. It replaces the
+earlier versions of the protocol, kept below as history. No T6 content is
+recorded here: counts, durations and costs only.
+
+**What T6 is, truthfully.** A 10-minute fragment cut blind (by speech density,
+`data/test-set/README.md`) from a 41-minute workshop with a live demo. The
+owner chose the source from candidates by type (accented speaker, technical
+workshop); its topic, AI-assisted software development, is close to T1 and
+T2 and is known. The owner has not watched it. Three engines transcribed it
+to build the reference; the blind Gemini audio judge decided the disputed
+spans (it failed its T2 calibration, hence two references and bounds); Gemini
+extracted the glossary (51 terms). The pipeline was never run on it and no
+prompt or setting was tuned on it. **No human has checked the reference**: no
+fluent listener is available (owner's decision); this is a limitation, not
+fixed.
+
+**Run.** `talk-autopsy run` from a clean `git worktree` of tag `pipeline-v3`
+(commit `d180a73ddc3c95f2b7cb79e8621e541aa36f99b5`; Freeze pipeline-v3 below),
+the commit hash recorded with the run; auto-glossary only (no hand glossary,
+no context); one run; the settings in `.env` that select models or versions
+empty. Then `talk-autopsy eval T6 --hyp <worktree>/work/<name>/fixed.json
+--raw <worktree>/work/<name>/raw2.json --record --engine pipeline-v3 --stage
+fix` from the main checkout.
+
+**Metric.** Term accuracy v2 (Metrics above: in place, possessives accepted)
+of the corrected English against reference J and reference M, the lower and
+the upper bound over the occurrences inside uncertain spans
+(`metrics.bounded_term_accuracy`, now on v2), and the **Wilson 95% interval**
+of each. Counts on T6 under v2: **72 term occurrences** of 51 terms in J, **6
+inside uncertain spans**; the most frequent term has 5 of the 72, so no term
+dominates. Also reported, not used by the verdict: WER against J and M, macro
+and without-top averages, precision, the false-edit rate.
+
+**Verdict** (threshold 85%, `metrics.gate_verdict`):
+
+- *Pass (demonstrated):* the Wilson lower limit of the lower bound >= 85%.
+- *Pass (not demonstrated):* the lower bound >= 85% but its Wilson lower limit
+  < 85%.
+- *Fail:* the upper bound < 85%.
+- *Inconclusive:* otherwise.
+- *Overfitting signal:* T6 (reference J, micro) more than 10 points below the
+  mean of the three `pipeline-v3` repeats on T2 (Freeze pipeline-v3, Repeats)
+  is reported as a separate finding regardless of the verdict
+  (`metrics.overfitting_signal`; `eval T6` prints it).
+
+**What 72 occurrences can show.** With n = 72 the Wilson lower limit reaches
+85% only from 68 hits (94.4%; 67 hits give 84.8%). The lower bound counts the
+6 uncertain occurrences as misses, so it is at most 66 / 72 = 91.7%, whose
+Wilson lower limit is 83.0%. **"Pass (demonstrated)" therefore cannot be
+reached on T6**: the best possible verdict is "pass (not demonstrated)". This
+was computed before the run and is stated so that the result is not
+over-read.
+
+**Scope.** A pass shows transfer to an unseen speaker and recording on a
+related topic. It does not show transfer to a new domain; that is T3's job,
+after T6.
+
+**Translation check on T6 (pre-registered).** After the run, 20 sentence
+units are drawn at random from T6's units (`talk_autopsy/translation_check.py`,
+`scripts/translation_check.py sample`; `random.Random(20261111)`, seed recorded
+here, units in id order; the English of each unit rebuilt from the run's
+`fixed.json`). Baseline: the same English units translated by Gemini
+(`gemini-4-carbon`, paid tier, one request per unit, plain prompt "Translate
+this English sentence from a technical talk into natural Russian for
+subtitles. Answer with the translation only."). The owner rates **40 items
+shuffled together** (seed 20261112), one at a time, single-rated 1–5, without
+knowing which system wrote which; the English is shown above each item (as in
+C1; caveat: the rater reads the source first). **Rule: C1 on T6 is met if the
+pipeline's mean >= 4.0.** The difference to the baseline is reported with a
+paired bootstrap 95% interval (10,000 resamples of the 20 units); no other
+conclusion is drawn. Implemented and tested with a fake client on
+2026-11-11; not run.
+
+### History of the protocol (superseded 2026-11-11)
+
+The first protocol (2026-11-09) and its changes, as written then:
+
 T6 is the sealed hold-out of stage 2 (a workshop with a live demo, a
 non-native English accent). Its 10-minute window was cut blind on
 2026-11-09 by speech density only (`data/test-set/README.md`): 25:46–35:46 of
@@ -444,7 +521,12 @@ no reference, no glossary.
 normaliser (Post-hoc rescoring above): 82.5%, still below 90%, so T6 is
 still not judged; no Gemini request was made.
 
-### Reference and gate with bounds (2026-11-11, prompt 13)
+#### Reference and gate with bounds (2026-11-11)
+
+*Superseded the same day by the protocol above: the metric is now term
+accuracy v2, the verdict uses the Wilson interval, and the run uses
+`pipeline-v3`, not `pipeline-v2`. The reference, the uncertain spans and the
+glossary described here are unchanged.*
 
 Reference built 2026-11-11 by the blind audio judge (`gemini-4-carbon`,
 thinking `low`, paid tier; `audio-judge-v1` exactly as calibrated) in two
