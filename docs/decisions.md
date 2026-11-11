@@ -6,6 +6,42 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-11 — Speaker details out of tracked files; history rewritten before going public
+
+Context: external audit #1 (finding 13) found the speakers of the test-set and
+operational videos identifiable from tracked files: names, a job title,
+accent labels next to product names, a course code.
+
+Decision: tracked files carry fragment IDs only (T1, T2, T6, real-01,
+stress-01) and generic descriptions ("strong non-native accent"); names and
+identifying descriptions were removed on 2026-11-11, and
+`scripts/check_names.py` checks every tracked file against a local,
+git-ignored list drawn from the owner's notes (`work/names.local.txt`). **Before
+the repository is made public, its history is squashed or rewritten**, so
+that old commits do not carry these details. Not done now: the repository is
+private, and rewriting history before the T6 run would move the tags the run
+depends on.
+
+What it rules out: making the repository public with its current history.
+
+## 2026-11-11 — pipeline-v3 refrozen after external audit #1; T6 runs on it
+
+Context: the audit found prompt examples taken from the test set, a lenient
+term-accuracy metric, no interpretation rule for T6, a cache that a
+validator fix did not invalidate, and a key-term limit that raised an error.
+
+Decision: the fixes that must precede T6 were made in one session and the
+pipeline refrozen as tag `pipeline-v3` (d180a73): `glossary-auto-v2` and
+`translation-v2.1` (same rules, neutral examples), cache key with a code hash,
+key-term truncation, term accuracy v2. The T6 protocol (rule, intervals,
+overfitting signal, scope, translation check) was written before the run
+(experiments, T6 protocol). The human check of the T6 reference that the
+audit asked for is not possible (no fluent listener; owner's decision); it is
+recorded as a limitation.
+
+What it rules out: running T6 on `pipeline-v2`; any change to a frozen path of
+`pipeline-v3` before the T6 run.
+
 ## 2026-11-11 — translation-v3 not adopted; v2 stays the default
 
 Context: translation-v3 (term classes keep / both / translate / ui) was built
@@ -52,7 +88,7 @@ re-judging T6 with another prompt after seeing the T6 run.
 
 ## 2026-11-10 — Translation term policy (keep / both / translate / ui)
 
-Context: the owner watched the [removed] interview (real-01) with
+Context: the owner watched a whole interview (real-01) with
 translation-v2 subtitles and found ordinary words left in English or turned
 into odd loanwords ("tokens", "compute", "inference-компании", "промптнуть",
 "эмерджентные свойства"). translation-v2's rule "technical terms stay in
@@ -80,7 +116,7 @@ v3 needs a short follow-up that flips the default and tags a new freeze.
 
 ## 2026-11-10 — Audio judge: repetition convention made explicit, post-hoc rescoring (still failed)
 
-Context: the blind audio judge failed its T2 calibration in prompt 09b
+Context: the blind audio judge failed its T2 calibration on 2026-11-10
 (agreement 79.0% against the 90% rule; WER between the two T2 references
 1.90% against 2%). Of the 24 disagreements, 14 were repetitions and false
 starts the judge writes and the T2 reference omits, 5 were formatting
@@ -117,7 +153,7 @@ Context: the blind audio judge (evaluation tooling, `judge.py`) needs one
 Gemini request per disputed span: 114 for the T2 calibration, 86 for the T6
 reference. The free tier allows 20 requests per day per project for
 `gemini-3.8-flash`, and that quota stopped the T2 calibration before its first
-span (prompt 09a); at that rate the two fragments needed at least 10 days.
+span (first attempt, 2026-11-10); at that rate the two fragments needed at least 10 days.
 
 Decision: the owner moved the Gemini project to the paid tier (Tier 1) with a
 monthly spend cap of EUR 5 in AI Studio. The judge uses the most capable model
@@ -149,7 +185,7 @@ addressed in the subtitle and unit layer (sentence units), not in the prompt.
 
 ## 2026-11-09 — Refusal fallback on in `run`, off in experiments
 
-Owner instruction of 2026-11-09 (session prompt 06), revising the entry "no
+Owner instruction of 2026-11-09, revising the entry "no
 server-side refusal fallback" below: `talk-autopsy run`, the tool a viewer
 uses, sends `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`)
 on the Sonnet correction and translation calls, so a block the classifiers
@@ -215,8 +251,7 @@ listed in `meta.correction.failed_blocks`).
 
 ## 2026-11-09 — Gate 1 -> 2 passed: Gemini as the main engine
 
-Owner decision of 2026-11-09, given in advance in the session prompt of that
-day: if the stage 1 summary shows Gemini under the WER limit on T2, stage 1
+Owner decision of 2026-11-09, given in advance that day: if the stage 1 summary shows Gemini under the WER limit on T2, stage 1
 closes with Gemini as the main engine and stage 2 starts. The numbers: Gemini
 `gemini-3.8-flash` WER 2.34% on T2 (limit 15%) and 1.41% on T1; term accuracy
 93.5% / 99.2% without a glossary. Used as `gemini+align` (chunked Gemini plus

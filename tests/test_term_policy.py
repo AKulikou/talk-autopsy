@@ -16,7 +16,7 @@ from talk_autopsy.glossary import (
 from talk_autopsy.term_policy import TermPolicy, TermPolicyAnswer
 from tests.conftest import response
 
-# --- Part 1: the policy column -----------------------------------------------------------
+# --- the policy column -----------------------------------------------------------
 
 
 def test_policy_column_is_parsed():
@@ -66,7 +66,7 @@ def test_web3_maps_the_draft_decisions():
     assert all(e.policy for e in g.entries)
 
 
-# --- Part 1: the classification step --------------------------------------------------------
+# --- the classification step --------------------------------------------------------
 
 
 AUTO = Glossary(entries=[GlossaryEntry(term="OpenAI", keep=True),

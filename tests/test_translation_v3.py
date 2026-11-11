@@ -13,7 +13,7 @@ from talk_autopsy.translate import SegmentText, TranslationAnswer
 from tests.conftest import response
 from tests.test_term_policy import classifier_handler
 
-# --- Part 1: the key terms of speech recognition do not change --------------------------------
+# --- the key terms of speech recognition do not change --------------------------------
 
 
 def _pipeline_handler(kwargs):
@@ -43,7 +43,7 @@ def test_stt_key_terms_are_identical_with_and_without_classification(version, mo
     assert (settings.work_dir / "glossary.v3.md").is_file() == (version == "translation-v3")
 
 
-# --- Part 2: markers -----------------------------------------------------------------------
+# --- markers -----------------------------------------------------------------------
 
 
 def test_first_occurrence_gets_the_brackets_later_ones_do_not():
@@ -104,7 +104,7 @@ def test_v2_output_has_no_marker_processing(fake_claude):
     assert "⟦both:" in result.segments[0].text and "marker_warnings" not in result.meta["translation"]
 
 
-# --- Part 2: the keep validator ------------------------------------------------------------
+# --- the keep validator ------------------------------------------------------------
 
 
 KEEP = Glossary(entries=[GlossaryEntry(term="Claude Code", keep=True, policy="keep"),

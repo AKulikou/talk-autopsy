@@ -278,7 +278,7 @@ chosen text.
 agrees when the judge's text and the decided text are equal after the metrics
 normalization. Agreement is reported overall, by verdict (89 majority, 25
 split) and by how the span was decided. The owner's list of the 19 spans he
-decided by ear was not recorded (prompt 05 gave counts only), so the classes
+decided by ear was not recorded (only counts were recorded at the time), so the classes
 are inferred from each decision's pattern (`judge.classify_decision`, with
 the T2 glossary): **majority** 74 (decided with the pre-marked text),
 **rule** 32 (the product-name rule, a spelling convention, or a glossary
@@ -295,13 +295,13 @@ changed), and the judge's Gemini share next to the owner's on the same spans
 is at least 90% and the WER between the two T2 references is at most 2%.
 Otherwise the disagreement pattern is logged here and T6 is not judged.
 
-**Free tier, 2026-11-10 (prompt 09a): not run.** The free tier allows 20
+**Free tier, 2026-11-10 (first attempt): not run.** The free tier allows 20
 requests per day per project for `gemini-3.8-flash` (HTTP 429, quota
 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, value 20; the docs do
 not publish it), and it was used up before the first T2 span was judged. The
 owner then moved the project to the paid tier (decisions, 2026-11-10).
 
-### Calibration on T2, paid tier (2026-11-10, prompt 09b)
+### Calibration on T2, paid tier (2026-11-10)
 
 - **Method in two sentences.** Gemini listens to each disputed span's clip,
   writes down what it hears before it sees any option, then picks one of the
@@ -546,7 +546,7 @@ non-native English accent). Its 10-minute window was cut blind on
    owner adjudicates every span, the assistant decides none (T1's
    assistant-decided reference is the reason). Its glossary is made the same
    way as T2's, by the owner.
-   *Changed 2026-11-10 (prompt 09a):* the owner has withdrawn from
+   *Changed 2026-11-10:* the owner has withdrawn from
    adjudication; the spans are decided by the blind audio judge if it passes its
    T2 calibration (Methodology: blind audio judge), and the glossary is drafted
    by Gemini from the reference (`talk-autopsy glossary-ref`), not by Claude.
@@ -570,10 +570,10 @@ configured fallback model `gemini-3.6-flash` (free tier), noted at the top of
 backbone words, 92.8% unanimous, 65 majority and 21 split spans, 86 clips
 (7.8 min) in `work/T6/clips/`. No reference, glossary or pipeline run yet;
 nothing from the content is recorded outside `data/test-set/` and `work/T6/`.
-2026-11-10 (prompt 09b): the blind audio judge failed its T2 calibration
+2026-11-10 (paid tier): the blind audio judge failed its T2 calibration
 (agreement 79.0% against the 90% rule), so T6 was not judged: 0 of 86 spans,
 no reference, no glossary.
-2026-11-10 (prompt 12, section A): rescored on T2 with the adjudication
+2026-11-10 (post-hoc): rescored on T2 with the adjudication
 normaliser (Post-hoc rescoring above): 82.5%, still below 90%, so T6 is
 still not judged; no Gemini request was made.
 
@@ -772,8 +772,8 @@ include upload.
 - **Auto-glossary on real videos.** T2.source: `Claude Code` <- "QuadCode",
   "Quad Code", "Cloud Code", "Cod Code"; `CLAUDE.md` <- "Claude MD", "Claude
   MT", "CloudMD", "Quad MD" and five more forms; `/install-github-app`;
-  `.mcp.json` <- "MCP JSON". real-01: `[removed]` <- "[removed]" (and a
-  harmless `GPU` <- "GPUs").
+  `.mcp.json` <- "MCP JSON". real-01: a course code heard as an ordinary
+  word (and a harmless `GPU` <- "GPUs").
 - **A validator bug found here and fixed.** On T2.source correction block 4/6
   failed validation twice ("glossary terms removed: Claude, MCP, JSON"), so
   its segments (211–271) kept the key-term transcript. Cause: the
@@ -808,7 +808,7 @@ include upload.
   not been backed up yet); its AssemblyAI pass (up to 0.098 USD) is counted
   as spent in the session total.
 
-### YouTube input and output formats (2026-11-10, prompt 10; no pipeline run)
+### YouTube input and output formats (2026-11-10; no pipeline run)
 
 - **Smoke test not run:** `work/youtube-test-url.txt` did not exist, so no
   video went through the pipeline (0 USD Claude, 0 USD AssemblyAI). The
@@ -837,8 +837,8 @@ include upload.
 
 ### stress-01: the frozen pipeline on an accented interview (2026-11-10, not scored)
 
-An interview, 29:50 (`data/test-set/source-video-2.mp4`): a guest with a
-regional accent and an interviewer who speaks fast with a light regional accent.
+An interview, 29:50 (`data/test-set/source-video-2.mp4`): two speakers
+with two different non-native accents, one of them fast.
 `talk-autopsy run data/test-set/source-video-2.mp4 --name stress-01 --lang ru`
 from the tagged code (`pipeline-v2`), no `--context`, no user glossary.
 Outputs `work/stress-01/stress-01.ru.srt` / `.ass`, `stress-01.en.srt` / `.ass`.
@@ -939,7 +939,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 ### C1b: translation-v3, term classes (2026-11-10; rated 2026-11-11: not adopted)
 
-- **Problem.** The owner watched the whole [removed] interview (real-01) with
+- **Problem.** The owner watched the whole interview real-01 with
   translation-v2 subtitles: ordinary words stayed in English or became odd
   loanwords ("computer science", "tokens", "thinking tokens",
   "frontier-модель", "compute", "inference", "inference-компании",
@@ -1426,8 +1426,8 @@ linger; cues never cross a segment boundary. Writing both files takes about
   keyterm gain: on T2 96.3% against 99.1% with the reference-checked
   glossary. Biases: AssemblyAI helped build both references (its WER is biased
   low); T1's reference was decided by a Claude model; two fragments.
-- **Decision:** the auto-glossary is the glossary step of the pipeline (Part 7
-  of the session prompt); its suggested translations are suggestions, not
+- **Decision:** the auto-glossary is the glossary step of the pipeline (owner's
+  direction); its suggested translations are suggestions, not
   agreed translations (translation-v2 records a deviation as a warning).
   Coverage on T1 is not chased with prompt changes against this reference;
   the hold-out T6 gives the honest number.
@@ -1761,7 +1761,7 @@ of them above 17 characters per second (verbatim English of a fast speaker),
 - **Hypothesis:** passing the fragment's glossary to AssemblyAI as
   `keyterms_prompt` raises term accuracy over the run without it, without
   raising WER. (The project plan is not in the repository; the wording follows
-  the session prompt of 2026-11-09.)
+  the owner's instructions of 2026-11-09.)
 - **Run:** 2026-11-09, engine code at 0505ba9 (unchanged), Universal-3.5 Pro,
   `--glossary-prompt` with the reviewed glossaries (39 terms on T2, 37 on T1;
   none over 6 words), otherwise as A3 (setup). Outputs
@@ -1945,9 +1945,8 @@ Ideas that come up during a stage and wait for a later one.
   spans 0052 and 0055 set to `@claude` on the owner's instruction, T1
   re-scored (see "T1 re-scored after the `@claude` fix").
 
-- translation-v2 still calques the job title "[removed]"
-  ("[removed]", T2 segment 2) although the prompt asks for job
-  titles by meaning (C1 blind run, 2026-11-09). Revisit after the owner's
+- translation-v2 still calques a job title (T2 segment 2: rendered word for
+  word) although the prompt asks for job titles by meaning (C1 blind run, 2026-11-09). Revisit after the owner's
   blind scores; a third translation prompt version is within the limit of 5.
   The owner scored that item 5 for both versions (C1 blind, 2026-11-10); no
   prompt change before the freeze.
@@ -1986,7 +1985,7 @@ Ideas that come up during a stage and wait for a later one.
   came out word for word in the sentence-unit translation of the C1 input,
   by meaning in the per-segment one. One sample; watch in the T6 run.
 - Translation warnings for kept terms (operational runs): translation-v2
-  dropped "[removed]", "commit", "tokens" in a few segments (3 warnings per
+  dropped a person's name, "commit", "tokens" in a few segments (3 warnings per
   video). With no compression rule left, check whether these are pronoun
   substitutions or real losses before the C1 decision.
 

@@ -1,17 +1,18 @@
 # Test set
 
-Six fragments of English technical speech, 5–10 minutes each. Every stage of the
-pipeline is measured on the same fragments, so results stay comparable from one
-experiment to the next. T6 is a sealed hold-out.
+Six planned fragments of English technical speech, 5–10 minutes each. T1 and
+T2 are scored; T6, the hold-out, has a reference and has not been run; T3–T5
+are not selected. Every stage of the pipeline is measured on the same
+fragments, so results stay comparable from one experiment to the next.
 
 | ID | Type | Speech | Duration | Topic | Glossary terms |
 |---|---|---|---|---|---|
-| T1 | conference talk with live demo | native speaker (to be confirmed) | 9:27 | AI coding agents | 37 (draft) |
-| T2 | conference talk, slides | strong regional accent | 10:00 (cut from 27:52) | AI coding agents, terminal tooling | 37 (draft) |
+| T1 | conference talk with live demo | native speaker (to be confirmed) | 9:27 | AI coding agents | 37 (reviewed against the reference) |
+| T2 | conference talk, slides | strong non-native accent | 10:00 (cut from 27:52) | AI coding agents, terminal tooling | 39 (reviewed against the reference) |
 | T3 | conference talk | other non-native accent | TBD | TBD | TBD |
 | T4 | screen demo / tutorial | fast speech, code identifiers, shell commands | TBD | TBD | TBD |
 | T5 | university lecture | slow pace, long sentences | TBD | TBD | TBD |
-| T6 | workshop with live demo (sealed hold-out) | non-native English accent | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | sealed | sealed |
+| T6 | workshop with live demo (sealed hold-out) | non-native English accent | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | AI-assisted software development | 51 (drafted by Gemini from the reference; local until the run) |
 
 ## What each fragment tests
 
@@ -75,7 +76,7 @@ leaves out.
 |---|---|---|
 | `T<n>.source.mp4` | the original video or audio | no |
 | `T<n>.wav` | 16 kHz mono audio of the fragment (`talk-autopsy cut`) | no |
-| `T<n>.draft.txt` | speech recognition draft from prompt 02; superseded by the adjudication, not proofread | no |
+| `T<n>.draft.txt` | speech recognition draft of 2026-11-09; superseded by the adjudication, not proofread | no |
 | `T<n>.adjudication.md` | the spans where the three engines disagree, with clips, for the owner to decide (`talk-autopsy adjudicate`) | no |
 | `T<n>.ref.txt` | reference transcript: agreed words plus the owner's decisions (`talk-autopsy resolve`) | no |
 | `T<n>.ref.protocol.json` | where every word of the reference came from: consensus, an engine's variant, or typed (`talk-autopsy resolve`) | no |

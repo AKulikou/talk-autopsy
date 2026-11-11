@@ -78,7 +78,7 @@ def main() -> None:
         "For the owner. **Do not open `C1-v3-key.json` until every score below is filled in**: it says",
         "which prompt version wrote A and which wrote B. A is not always the same version.",
         "",
-        "10 pairs come from the [removed] interview (real-01), 6 from T2. They were chosen by code among the",
+        "10 pairs come from an interview (real-01), 6 from T2. They were chosen by code among the",
         "sentences where the two translations differ, at least 8 of them with one of your example words",
         "(computer science, tokens, thinking tokens, frontier, compute, inference, alignment, prompt,",
         "emergent, Dictation). Both translations were made from the same corrected English, shown first.",
