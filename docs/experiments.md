@@ -526,7 +526,8 @@ without knowing which system wrote which; the English is shown above each item
 if the pipeline's mean >= 4.0.** The difference to the baseline is reported
 with a paired bootstrap 95% interval (10,000 resamples of the 12 units); no
 other conclusion is drawn. Implemented and tested with a fake client on
-2026-11-11; not run. (As first written: 20 units of any length, 40 items.)
+2026-11-11; prepared after the run, not rated yet (below). (As first written:
+20 units of any length, 40 items.)
 
 *Amendment (2026-11-11, before the T6 run; prompt 15).* The owner asked that
 the two translations of one unit are never adjacent in the rating file. The
@@ -555,6 +556,18 @@ applies; with fewer items the number of shuffles it needs is whatever the key
 records. Everything else is unchanged: single rating, shuffled, the rule
 (pipeline mean >= 4.0) and the baseline difference with a paired bootstrap
 interval over the units.
+
+*Prepared 2026-11-11, after the run (not rated, not scored).*
+`scripts/translation_check.py sample --fixed work/T6/run-pipeline-v3/fixed.json
+--translated work/T6/run-pipeline-v3/ru.json`: 12 of 145 units drawn (seed
+20261111; units 24, 32, 35, 52, 58, 62, 74, 76, 97, 108, 124, 135; each with at
+least 6 words). Baseline: `gemini-4-carbon` (paid tier, the plain prompt above,
+one request per unit), 12 units, **0.0240 USD**. Rating file
+`work/T6/C1-T6-rating.md`: **22 items** (10 pipeline, 10 baseline, 2 shared:
+units 32 and 52 have identical translations after normalisation), shuffled
+with seed 20261112, 4 shuffles to the first order without adjacent pairs;
+key `work/T6/C1-T6-key.json` (system per item, `shared_units`). Next: the
+owner rates the file, then `scripts/translation_check.py score`.
 
 ### History of the protocol (superseded 2026-11-11)
 
