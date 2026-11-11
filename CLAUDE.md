@@ -199,8 +199,10 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   T6: reference in two variants (J judge, M majority; 50 uncertain spans; 72 term occurrences, 6 uncertain),
   no human check; the rule is written (`docs/experiments.md`, T6 protocol: Wilson intervals, pass demonstrated
   / not demonstrated / fail / inconclusive, overfitting signal below 85.33%; "pass (demonstrated)" is out of
-  reach on T6). **Next: run `pipeline-v3` on T6 once from a clean worktree of the tag**, `eval T6 --record`,
-  then the pre-registered translation check (`scripts/translation_check.py`). translation-v3 stays an option.
+  reach on T6). **T6 run once on 2026-11-11** (d180a73, `docs/experiments.md`, T6 result): term accuracy v2
+  100% against J and M, lower bound 91.67% (Wilson 83.0%), verdict "pass (not demonstrated)", overfitting
+  signal no. **Next:** the owner rates `work/T6/C1-T6-rating.md` (pre-registered translation check, 12 units,
+  amended before the run), then `scripts/translation_check.py score`. translation-v3 stays an option.
 - **Stage 3:** the CLI tool with subtitles; external audit; v1.0.
 - **Stage 4:** dubbed audio track.
 - **v1.1:** local web UI over the same core.
@@ -217,7 +219,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 - AssemblyAI and Gemini helped build the T1/T2 references, so their WER against them is biased in their favour; compare them through the resolve protocol (docs/experiments.md, methodology).
 - faster-whisper 1.2.1 cannot decode files with PyAV 19 (`metadata_errors`); the engine reads the WAV itself and passes samples.
 - faster-whisper's segment `avg_logprob` is per 30-second decoding window, so segment `confidence` is too; word probabilities are per word.
-- T3–T5 are not selected; T6 is cut blind (25:46–35:46 of `T6.source.mp4`). Since the `pipeline-v2` tag its engine transcripts exist (`work/T6/`), but nothing derived from its content goes into chat, commits, `docs/`, printed logs or any file outside `data/test-set/` and `work/T6/`: only counts, durations and costs. The assistant never reads its transcripts and decides none of its spans. T1's speaker is assumed native (to be confirmed).
+- T3–T5 are not selected; T6 is cut blind (25:46–35:46 of `T6.source.mp4`). T6 was run once on 2026-11-11 and is no longer sealed, but the repository rules still apply: no speaker names, no transcripts or long quotes in tracked files (short term examples are fine); its glossary is tracked since the run. The owner does not watch T6 until the translation rating is done. The assistant decided none of its spans. T1's speaker is assumed native (to be confirmed).
 - AssemblyAI costs about $0.47 per hour of video in `run` (two passes, list price: $0.21 + $0.26 with key terms), drawn from the account's free credit for now.
 - Claude Haiku 5.5 costs more for prompts over 100,000 tokens; the cost estimate
   uses the lower tier.

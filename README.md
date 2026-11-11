@@ -20,8 +20,8 @@ and an external audit. What is measured so far, and what is not, is listed below
 
 - **Test set:** two scored fragments of English technical speech, about 10
   minutes each: T1 (a native speaker, to be confirmed) and T2 (a strong
-  non-native accent). The hold-out T6 (another accent, a workshop) has a
-  reference and has not been run yet; T3–T5 are not selected. All three are
+  non-native accent). The hold-out T6 (another accent, a workshop) was
+  run once on 2026-11-11 (pass, not demonstrated); T3–T5 are not selected. All three are
   about AI-assisted software development: one topic. See
   [data/test-set/README.md](data/test-set/README.md).
 - **References** are built from three engines' agreement (faster-whisper,
@@ -235,8 +235,10 @@ Python 3.13 for every push.
 ## Status and roadmap
 
 Status: **stage 2, Claude correction and translation. The pipeline is frozen
-as `pipeline-v3` (git tag, 2026-11-11) for the one hold-out run on T6, which
-has not happened yet.** External audit #1 is done:
+as `pipeline-v3` (git tag, 2026-11-11) for the one hold-out run on T6, done on
+2026-11-11: term accuracy 100% against both references, lower bound 91.7%,
+verdict "pass (not demonstrated)", no overfitting signal
+([T6 result](docs/experiments.md#t6-result-2026-11-11)).** External audit #1 is done:
 [findings and responses](docs/audit-2026-11-11.md). Every number below is in
 [results/benchmark.csv](results/benchmark.csv) or the
 [experiment log](docs/experiments.md).
@@ -301,9 +303,8 @@ speed target (at most 5% of cues above 17 cps) is not: nothing is cut for
 reading speed (owner's decision, meaning first); cues hold up to three lines
 and every `.srt` has an `.ass` twin with a smaller font.
 
-**Next:** the hold-out T6, run once from the tag, scored by the rule written
-before the run ([T6 protocol](docs/experiments.md#t6-protocol)); then T3 on a
-new domain.
+**Next:** the owner's blind rating of the T6 translation check (pre-registered),
+then T3 on a new domain.
 
 | Stage | Content | Gate |
 |---|---|---|
@@ -319,7 +320,7 @@ language measured; the code takes any language as a parameter.
 ## Known limitations
 
 - **Small, single-topic test set:** two scored fragments (T1, T2), one hold-out
-  (T6) not yet run; all about AI-assisted software development. A result on
+  (T6) run once; all about AI-assisted software development. A result on
   them says nothing yet about other domains.
 - **References are not independent.** AssemblyAI and Gemini helped build them
   (their WER is biased low); T1's was decided by a Claude model, which then

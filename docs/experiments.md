@@ -662,6 +662,73 @@ accuracy ≥ 85%, fail if the upper bound < 85%, otherwise inconclusive.
 - **Next:** the frozen `pipeline-v2` on T6 once (after the external audit
   tonight), then `eval T6 --record`.
 
+## T6 result (2026-11-11)
+
+The single run of the hold-out under the T6 protocol above (written before
+the run). One run, never repeated; nothing was tuned, re-run or re-scored
+after the numbers were seen.
+
+- **Run:** `talk-autopsy run data/test-set/T6.wav --lang ru --name T6-v3
+  --max-cost 1.0` from a clean `git worktree` of tag `pipeline-v3`, commit
+  **`d180a73ddc3c95f2b7cb79e8621e541aa36f99b5`** (status clean, hash checked),
+  keys from the main checkout's `.env` by path; fresh work folder (no cache);
+  auto-glossary only (32 terms, all 32 sent as key terms, none dropped), no
+  hand glossary, no `--domain`, no context; `.env` and shell settings that
+  select a model or a version empty; translation `translation-v2.1`. Started
+  20:06:46, ended 20:08:56, exit 0, no fallback. `--max-cost 1.0` is the
+  session's Claude budget as a stop; the estimate was 0.21 USD. Outputs in
+  `work/T6/run-pipeline-v3/` (git-ignored); the worktree was removed.
+  Scored from the main checkout: `eval T6 --hyp <run>/fixed.json --raw
+  <run>/raw2.json --record --engine pipeline-v3 --stage fix`.
+
+| | value | Wilson 95% |
+|---|---|---|
+| term accuracy v2 against J (micro) | **100.00%** (72/72, 51 terms) | 94.9–100.0% |
+| term accuracy v2 against M (micro) | **100.00%** (71/71, 50 terms) | 94.9–100.0% |
+| lower bound (6 uncertain occurrences counted as misses) | **91.67%** (66/72) | 83.0–96.1% |
+| upper bound (counted as hits) | **100.00%** (72/72) | 94.9–100.0% |
+
+- **Verdict** (threshold 85%): **pass (not demonstrated)**: the lower bound
+  is >= 85% but its Wilson lower limit, 83.0%, is < 85%. This is the best
+  verdict T6 can give (computed before the run, protocol above).
+- **Overfitting signal: no.** T6 (J, micro) 100.00% is not below 85.33% (10
+  points under the T2 mean of the three `pipeline-v3` repeats, 95.33%).
+- **Scope** (from the protocol): a pass shows transfer to an unseen speaker
+  and recording on a related topic. It does not show transfer to a new
+  domain; that is T3's job, after T6.
+- **Secondary numbers** (not used by the verdict): macro 100.00% (J and M);
+  without the top term 100.00% (J and M); term precision 100.00% against J,
+  98.61% against M (1 occurrence in place in J but not in M); WER 2.89–4.70%
+  (M 2.89%: S 14, D 41, I 4 of 2043 words; J 4.70%: S 14, D 81, I 3 of 2084
+  words); correction: 1 word edit in 1 of 145 segments (`genetic` ->
+  `agentic`), 0 false edits against J and M (false-edit rate 0%, 1 helpful
+  edit); reading speed of the Russian subtitles: 177 cues, 52.5% above 17
+  cps, 16.9% above 25 cps (the cost report rounds it to 17.0%), max 49.8 cps,
+  22 cues shorter than 1 s, 0 longer than 7 s.
+- **Cost and time per step** (wall clock; list price): stt 21.8 s, 0.0350 USD
+  AssemblyAI; glossary 19.3 s, 0.0027 USD Claude (Haiku); stt2 18.4 s, 0.0433
+  USD AssemblyAI; align 0.1 s; fix 25.6 s, 0.0645 USD; translate 40.9 s,
+  0.0728 USD; srt 0.4 s. Total 126.6 s; **0.1400 USD Claude, 0.0783 USD
+  AssemblyAI** (free credit).
+- **Missed term occurrences:** none against J (0 of 72) and none against M (0
+  of 71), so the classified list (recognition error / spelling convention /
+  reference doubt) is empty. The 6 occurrences inside uncertain spans are all
+  in place against J.
+
+**What this does and does not show.** It shows that the frozen `pipeline-v3`,
+run once on a 10-minute fragment it never saw, puts every glossary term of
+both references in place, and that the result is not below the T2 repeats
+(no overfitting signal). It does not demonstrate a pass at 85%: 72
+occurrences cannot, and the verdict is "pass (not demonstrated)". It does not
+show transfer to another domain (one topic in the whole test set). The
+references were not checked by a human; they come from three engines,
+AssemblyAI among them (the pipeline's own engine, so its numbers are biased in
+its favour, as on T1 and T2), and a Gemini audio judge that failed its
+calibration; the glossary was drafted by Gemini from reference J, so it holds
+only terms J contains. Correction changed one word, so these numbers measure
+mostly AssemblyAI with the auto-glossary as key terms. Translation quality on
+T6 is the separate pre-registered check below (rating pending).
+
 ## Freeze pipeline-v3
 
 Frozen on 2026-11-11 with the annotated git tag `pipeline-v3` on commit
@@ -947,6 +1014,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| T6 (hold-out) | 2026-11-11 | the frozen pipeline keeps term accuracy v2 >= 85% on an unseen fragment (T6 protocol: bounds, Wilson intervals, overfitting signal) | `run` once from a clean worktree of tag `pipeline-v3` (d180a73), auto-glossary only, no cache; `eval T6 --record` | J 100.00% (72/72), M 100.00% (71/71), lower 91.67% (Wilson 83.0–96.1%), upper 100.00%; WER 2.89–4.70%; correction 1 edit, 0 false; 52.5% of Russian cues above 17 cps; 0.140 USD Claude, 0.078 USD AssemblyAI | **pass (not demonstrated)**, the best verdict T6 allows; overfitting signal no; same-topic transfer only | recorded; translation check on T6 prepared, owner rates next |
 | pipeline-v3 repeats | 2026-11-11 | none: variance of the frozen path, and the T2 point of the T6 overfitting rule | `run` from a clean worktree of tag `pipeline-v3`, auto-glossary only, no cache; T2 three times, T1 once | term accuracy v2 T2 94.39–96.26% (mean 95.33%), macro 84.62–89.74%, without `Claude Code` 92.41–94.94%; WER 4.24–4.48%; T1 99.20%; correction 0 edits in all four; 0.511 USD Claude, 0.309 USD AssemblyAI | the earlier single-run 96.26% is the top of the range; correction does nothing on this path | T2 mean 95.33% is the overfitting comparison point (Freeze pipeline-v3) |
 | C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | **not adopted** (owner's blind rating 2026-11-11: v3 won 5 pairs, v2 6, ties 5; means v2 4.44, v3 4.25): v2 stays the default, v3 an option |
 | D1 (setup) | 2026-11-10 | none: sentence units before translation and display extended into pauses (subtitle-v2) | translation-v2 on units; T2 fragment, C1 input, T2.source, real-01 | T2 fragment Russian above 17 / 25 cps 74.7% / 25.3% -> 58.8% / 15.8%; on AssemblyAI input units = segments (149/149, 373/373, 428/426); Gemini input 109 -> 85 units; 0.547 USD | the C1 fragments become whole sentences; the extension does most of the reading-speed work; word timing raises speed variance in multi-cue segments | units frozen with the pipeline; display rule stays open |

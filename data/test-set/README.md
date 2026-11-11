@@ -1,7 +1,7 @@
 # Test set
 
 Six planned fragments of English technical speech, 5–10 minutes each. T1 and
-T2 are scored; T6, the hold-out, has a reference and has not been run; T3–T5
+T2 are scored; T6, the hold-out, was run once (2026-11-11); T3–T5
 are not selected. Every stage of the pipeline is measured on the same
 fragments, so results stay comparable from one experiment to the next.
 
@@ -12,7 +12,7 @@ fragments, so results stay comparable from one experiment to the next.
 | T3 | conference talk | other non-native accent | TBD | TBD | TBD |
 | T4 | screen demo / tutorial | fast speech, code identifiers, shell commands | TBD | TBD | TBD |
 | T5 | university lecture | slow pace, long sentences | TBD | TBD | TBD |
-| T6 | workshop with live demo (sealed hold-out) | non-native English accent | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | AI-assisted software development | 51 (drafted by Gemini from the reference; local until the run) |
+| T6 | workshop with live demo (sealed hold-out) | non-native English accent | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | AI-assisted software development | 51 (drafted by Gemini from the reference; tracked since the run) |
 
 ## What each fragment tests
 
@@ -35,9 +35,8 @@ fragments, so results stay comparable from one experiment to the next.
   it. After the `pipeline-v2` freeze three engines transcribed it to build the
   reference, a blind Gemini audio judge decided the disputed spans, and Gemini
   extracted the glossary; **no human has checked the reference** (no fluent
-  listener available). The pipeline has never run on it and no prompt or
-  setting was tuned on it. It runs once, with `pipeline-v3`
-  (`docs/experiments.md`, T6 protocol).
+  listener available). No prompt or setting was tuned on it. It ran once, with `pipeline-v3`,
+  on 2026-11-11 (`docs/experiments.md`, T6 protocol and T6 result).
 
 T3–T5 are not chosen yet; they will be selected deliberately to cover the cases
 above, not taken from whatever files are at hand.
