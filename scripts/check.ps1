@@ -1,5 +1,5 @@
 # Runs exactly what CI runs (.github/workflows/ci.yml, job "test"), with every secret
-# in config.SECRET_ENV_VARS removed from the environment, as on a CI runner. The
+# in the secret registry (talk_autopsy.secret_registry.ALL) removed from the environment, as on a CI runner. The
 # removed values are restored when the script ends, so the calling shell keeps them.
 # Run it before every push: pwsh scripts/check.ps1   (macOS/Linux: scripts/check.sh)
 $ErrorActionPreference = 'Stop'
@@ -16,9 +16,9 @@ try {
     # --inexact: keep optional extras installed here (the `align` extra, torch for the Gemini fallback);
     # CI syncs a fresh environment with `uv sync --locked`, so the checked packages are the same.
     Invoke-Step uv @('sync', '--locked', '--inexact')
-    # Importing config reads neither .env nor a secret, so this is safe before the clear-out.
-    $names = (uv run python -c "from talk_autopsy import config; print(' '.join(config.SECRET_ENV_VARS))").Split(' ')
-    if ($LASTEXITCODE -ne 0 -or -not $names) { throw 'could not read config.SECRET_ENV_VARS' }
+    # Importing the registry reads neither .env nor a secret, so this is safe before the clear-out.
+    $names = (uv run python -c "from talk_autopsy import secret_registry; print(' '.join(secret_registry.ALL))").Split(' ')
+    if ($LASTEXITCODE -ne 0 -or -not $names) { throw 'could not read secret_registry.ALL' }
     foreach ($name in $names) {
         $value = [Environment]::GetEnvironmentVariable($name)
         if ($null -ne $value) {

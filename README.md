@@ -32,9 +32,10 @@ and an external audit. What is measured so far, and what is not, is listed below
   Gemini audio judge that failed its calibration, so T6 is scored against two
   references with bounds. No reference was proofread in full by a fluent
   listener. Details: [who decided each reference](docs/experiments.md#who-decided-each-reference).
-- **Baseline:** raw speech recognition (faster-whisper large-v3, AssemblyAI,
-  Gemini) on the same fragments. Whisper + Google Translate and VideoLingo were
-  planned and **not run**.
+- **Baselines:** raw speech recognition (faster-whisper large-v3, AssemblyAI,
+  Gemini) on the same fragments; a plain Gemini translation in the T6
+  translation check. Whisper + Google Translate: code ready, waits for an API
+  key; VideoLingo: attempted, not run (see the comparison table below).
 - **Metrics** (definitions in one place: [Metrics](docs/experiments.md#metrics)):
 
   | Metric | What it measures |
@@ -211,6 +212,8 @@ talk_autopsy/
   correct.py               Claude correction (stage 2), prompts/correction-v2.md (v1 kept)
   translate.py             Claude translation (stage 2), prompts/translation-v2.1.md (v1, v2, v3 kept)
   translation_check.py     the pre-registered T6 translation check (evaluation tooling)
+  baselines/               Whisper + Google Translate baseline (evaluation tooling)
+  secret_registry.py       the pipeline's secret names + the evaluation tooling's
   subtitles.py             .srt and .ass output, up to 3 lines, reading speed report
   pipeline.py              run: stt, glossary, stt2, align, fix, translate, srt; fallbacks; skip-if-unchanged
   tts/                     dubbing (stage 4; a stub)
@@ -294,6 +297,22 @@ T1/T2 `pipeline-v3` runs and 1 (correct) edit on T6**, at about 0.065 USD per
 10 minutes. It stays in the pipeline as insurance for the fallback engines:
 on faster-whisper input it lifted T2 from 61.7% to 93.5% (correction-v1, B1).
 
+**Against the baselines, on one set (T2 and T6)** ([details](docs/experiments.md#baselines-on-one-set-t2-and-t6)).
+English side; the translations of all systems go to the owner's blind rating next.
+
+| | T2 term accuracy (v2) | T2 WER | T6 term accuracy (v2), J / M | T6 WER, J / M | translation rating |
+|---|---|---|---|---|---|
+| Talk Autopsy (`pipeline-v3`) | **94.4–96.3%** (3 runs) | 4.24–4.48% | **100% / 100%** (1 run) | 4.70% / 2.89% | *pending* |
+| raw Whisper (faster-whisper large-v3) | 61.7% | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | — (no translation) |
+| Whisper + Google Translate | as raw Whisper | | as raw Whisper | | *pending* (not run yet: API key) |
+| VideoLingo | attempted, not run | | attempted, not run | | *pending* |
+
+Raw Whisper's numbers are biased in its favour: it was one of the three engines
+that built both references. Whisper + Google Translate uses the same raw Whisper
+transcript, so its English side is the same; only its translation differs.
+VideoLingo (now Qwen3-ASR by default) could not be installed in this session:
+the session's permission policy refused running its downloaded installer.
+
 **Translation.** On T6, 12 random sentence units (at least 6 words each) were
 translated by the pipeline and, as a baseline, by Gemini (`gemini-4-carbon`,
 a plain "translate into natural Russian" prompt, the same corrected English);
@@ -370,7 +389,9 @@ language measured; the code takes any language as a parameter.
 - **Correction adds little** on the main path (0 edits in four T1/T2 runs, 1
   on T6) at about 0.39 USD per hour; its value is shown on fallback-engine
   input.
-- **Baselines missing:** Whisper + Google Translate and VideoLingo were not run.
+- **Baselines incomplete:** Whisper + Google Translate is coded but not run (no
+  API key yet); VideoLingo was not run; no translation of any baseline but a
+  plain Gemini one has been rated.
 - **Reading speed** is above the usual guideline on fast speakers; nothing is cut.
 - **Timing** of subtitles is not validated against hand-labelled onsets.
 - **Next-video failure modes** not handled: several speakers (no
@@ -379,8 +400,8 @@ language measured; the code takes any language as a parameter.
 
 ## Not done
 
-- Whisper + Google Translate and VideoLingo baselines (planned in the
-  specification; not run).
+- Whisper + Google Translate run (code ready) and VideoLingo run; the owner's
+  blind rating of all systems' translations.
 - Fragments T3–T5 (no fragment from another domain); hypotheses A5, B3,
   C2–C5; the specification's C1 against Google Translate and VideoLingo
   (the owner's three-system rating).

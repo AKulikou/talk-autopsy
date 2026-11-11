@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from talk_autopsy import config
+from talk_autopsy import config, secret_registry
 from talk_autopsy.config import ConfigurationError, check_lang, require_api_key
 
 
@@ -130,7 +130,7 @@ print(json.dumps({"modules": modules, "leaked": leaked, "read": read, "loaded": 
 """
 
 # Secrets and the settings .env commonly holds.
-_SENTINEL_NAMES = [*config.SECRET_ENV_VARS, "TARGET_LANG", "CORRECTION_MODEL", "GEMINI_MODELS"]
+_SENTINEL_NAMES = [*secret_registry.ALL, "TARGET_LANG", "CORRECTION_MODEL", "GEMINI_MODELS"]
 
 
 def test_importing_every_module_reads_neither_dotenv_nor_secrets(tmp_path):

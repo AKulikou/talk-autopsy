@@ -21,8 +21,8 @@ input (URL/file) -> ffmpeg audio.wav (+ audio.flac for upload) + meta.json
 
 The research question is measurement, not features: every stage is benchmarked on
 a fixed test set (six planned 5-10 minute fragments; T1 and T2 scored, T6 the hold-out, T3–T5 not
-selected) against baselines (raw speech recognition measured; Whisper + Google Translate and
-VideoLingo planned, not run). The target
+selected) against baselines (raw speech recognition measured; Whisper + Google Translate coded, waiting
+for an API key; VideoLingo attempted, not run). The target
 language is a parameter (`target_lang`); only Russian is measured and accepted.
 
 Part of the Autopsy series; repository conventions follow Startup Autopsy.
@@ -91,6 +91,8 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/align.py` — forced alignment (wav2vec2 base 960h from torchaudio, Viterbi in numpy, block by block with garbage states); `AlignedTranscriber` = the `gemini+align` engine; `start_differences` for timing comparisons. torch is the optional `align` extra; tests use a stub emitter
 - `talk_autopsy/metrics.py` — pure metric functions (definitions summarised in `docs/experiments.md`, Metrics): `tokenize` (the one normalization; drops fillers uh/um/er/ah/hmm), WER, `term_accuracy_v2` (the benchmark's: in place via the WER alignment, plural or possessive of the last word, macro, without the top term, precision; `term_accuracy` = v1, position-free, kept for the stages' occurrence checks), `false_edit_rate` (share of the correction's word edits that move away from the reference; v1 kept), Wilson interval, the T6 verdict and overfitting signal, reading speed; timing drift not implemented
 - `talk_autopsy/evaluation.py` — reads hypothesis/reference/glossary files, `evaluate`, the benchmark row (`BENCHMARK_COLUMNS`, with `status` current/superseded) and its append
+- `talk_autopsy/baselines/google_translate.py` — Whisper + Google Translate baseline (evaluation tooling): raw Whisper -> `units.make_units` -> Cloud Translation API Basic v2 (stdlib HTTP, key in the `X-goog-api-key` header) -> `ru.json` + `.srt/.ass`; `scripts/google_translate_baseline.py` runs T2 and T6 into `work/baselines/google-translate/` or prints the setup steps without a key
+- `talk_autopsy/secret_registry.py` — `ALL` = `config.SECRET_ENV_VARS` (frozen with `pipeline-v3`) + `EVALUATION_SECRET_ENV_VARS` (`GOOGLE_TRANSLATE_API_KEY`); the tests, `.env.example` check and check scripts use `ALL`. A new evaluation key goes here, a new pipeline key into config (needs a new freeze tag)
 - `talk_autopsy/translation_check.py` — the pre-registered T6 translation check (evaluation tooling): seeded sample of 20 units, plain Gemini baseline, 40 shuffled items for the owner, scorer with a bootstrap interval; `scripts/translation_check.py` runs it
 - `talk_autopsy/adjudicate.py` — reference by consensus: aligns two cloud transcripts to the faster-whisper backbone, spans of disagreement, the adjudication file, clips, `resolve` to the reference and its protocol (`other: (no words)` types an empty variant)
 - `talk_autopsy/judge.py` — blind audio judge (`audio-judge-v1`, evaluation tooling, not frozen): one Gemini request per majority/split span with the clip inline; `heard` (verbatim, written first) then `choice` among deduplicated, shuffled, unlabeled options or `none` + `final_text`; resumable `judge.jsonl` (keyed by span and model; other models' records moved to `judge.free-pilot.jsonl`); cost per span from usage metadata and `config.GEMINI_PRICING_PER_MTOK`, budget stop, spend-cap stop; filled copy `T<n>.adjudication.judged.md`; self-preference / none / consistency shares; `compare` and `classify_decision` for calibration on decided spans
@@ -106,7 +108,7 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/tts/edge.py` (stage 4) — stub with input -> output in the docstring
 - `talk_autopsy/cli.py` — typer CLI (`cut`, `transcribe`, `align`, `glossary-auto`, `fix`, `translate`, `srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval`, `run`); argument parsing and printing only
 - `talk_autopsy/core/` — shared with autopsy-template: `structured_call.py` (structured request, stop-reason checks, validation, one retry), `claude_client.py`, `batch_client.py` (Message Batches at half price), `token_summary.py` (cost)
-- `tests/` — `conftest.py` has the fake Claude client (`fake_claude`), the generated sine WAV (`sine`) and a placeholder for every secret in `config.SECRET_ENV_VARS` (autouse); `test_secrets.py` fails on an environment read of a `*_KEY`/`*_TOKEN`/`*_SECRET` name missing from the registry, and on a `.env.example` out of sync with it. A new provider key: add it to `SECRET_ENV_VARS` and `.env.example`, nothing else
+- `tests/` — `conftest.py` has the fake Claude client (`fake_claude`), the generated sine WAV (`sine`) and a placeholder for every secret in `secret_registry.ALL` (autouse); `test_secrets.py` fails on an environment read of a `*_KEY`/`*_TOKEN`/`*_SECRET` name missing from the registry, and on a `.env.example` out of sync with it. A new provider key: add it to `SECRET_ENV_VARS` and `.env.example`, nothing else
 - `data/test-set/` — media and reference transcripts are local only; `README.md` and `*.glossary.md` are tracked
 - `docs/decisions.md` — decision log; `docs/experiments.md` — experiment log and Backlog
 - `results/benchmark.csv` — one row per measured run (tracked); everything else in `results/`, `logs/`, `work/` is git-ignored

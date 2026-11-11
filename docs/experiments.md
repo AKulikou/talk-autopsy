@@ -170,6 +170,7 @@ owner's blind rating of all systems, which is the next step (*pending*).
 |---|---|---|---|---|
 | Talk Autopsy `pipeline-v3` | 94.39–96.26% (3 repeats, mean 95.33%) | 4.24–4.48% | 100.00% / 100.00% (one run) | 4.70% / 2.89% |
 | raw Whisper (faster-whisper large-v3, no glossary) | 61.68% | 6.19% | 87.50% / 88.73% | 8.01% / 5.97% |
+| Whisper + Google Translate | as raw Whisper (the same transcript) | | as raw Whisper | |
 | VideoLingo (commit 61d944a, defaults, Claude Sonnet 5.5) | attempted, not run | | attempted, not run | |
 
 **Raw Whisper (2026-11-11, no new run).** T2: the existing row (A1 (setup), re-scored with v2).
@@ -181,6 +182,18 @@ bounds 86.11–94.44%. **Bias:** on both fragments this engine was the backbone 
 that built the reference (one of three engines), so its WER and term accuracy are biased in its
 favour. Its term accuracy is much higher on T6 than on T2 (87.5% against 61.7%): T6's glossary was
 drafted by Gemini from reference J, and T2 has the strongest accent and more product names.
+
+**Whisper + Google Translate (2026-11-11): code ready, not run (no key).** `talk_autopsy/baselines/google_translate.py` (evaluation tooling, not frozen): the raw faster-whisper
+transcript above, cut into sentence units by the pipeline's own `units.make_units`, each unit sent to the
+Google Cloud Translation API, Basic edition (v2, `format: text`, the key in the `X-goog-api-key`
+header), and written as `ru.json` + `.srt/.ass` with the pipeline's subtitle layout. So its English side
+is exactly raw Whisper's and only the translation differs from what the owner will rate. Run:
+`uv run python scripts/google_translate_baseline.py` (T2 and T6, outputs in
+`work/baselines/google-translate/`, a 100,000-character cap); about 21,700 characters for both fragments
+(T2 41 units, 10,660; T6 156 units, 11,022), inside the free tier of 500,000 characters per month.
+`GOOGLE_TRANSLATE_API_KEY` is not set yet, so the script printed the setup steps and sent nothing. The key
+is registered in `talk_autopsy/secret_registry.py`, not in `config.SECRET_ENV_VARS`: `config.py` is a
+frozen path of `pipeline-v3`. Tests use a fake caller and a fake `urlopen` (no network).
 
 **VideoLingo (2026-11-11): attempted, not run.** VideoLingo (Apache-2.0) was cloned into
 `C:\Projects\videolingo-baseline\VideoLingo` (outside the repository), commit

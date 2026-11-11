@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from talk_autopsy import config
+from talk_autopsy import config, secret_registry
 from talk_autopsy.core import claude_client as claude_client_module
 
 
@@ -111,12 +111,13 @@ def placeholder(name: str) -> str:
 def placeholder_secrets(monkeypatch):
     """
     Every test starts with a placeholder for every secret in
-    config.SECRET_ENV_VARS, whatever the shell exports: a key a laptop has and
+    secret_registry.ALL (the pipeline's and the evaluation tooling's),
+    whatever the shell exports: a key a laptop has and
     CI lacks can then never make a test pass locally and fail in CI. A new
     provider's key needs only its registry entry. Tests that need a missing key
     still delete or blank it themselves.
     """
-    for name in config.SECRET_ENV_VARS:
+    for name in secret_registry.ALL:
         monkeypatch.setenv(name, placeholder(name))
 
 

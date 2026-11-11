@@ -1,8 +1,9 @@
 """
-The secret registry (config.SECRET_ENV_VARS) is complete: every secret the
-source reads from the environment is in it, and .env.example lists exactly the
-registry. A new provider's key without a registry entry fails here, locally,
-before a push; with an entry, conftest gives every test a placeholder for it.
+The secret registry (secret_registry.ALL: config.SECRET_ENV_VARS + the
+evaluation tooling's keys) is complete: every secret the source reads from the
+environment is in it, and .env.example lists exactly the registry. A new
+provider's key without a registry entry fails here, locally, before a push; with
+an entry, conftest gives every test a placeholder for it.
 """
 
 import ast
@@ -11,7 +12,7 @@ import re
 
 import pytest
 
-from talk_autopsy import config
+from talk_autopsy import config, secret_registry
 from tests.conftest import placeholder
 
 SOURCE_DIRS = [config.PROJECT_ROOT / "talk_autopsy", config.PROJECT_ROOT / "scripts"]
@@ -97,9 +98,9 @@ def test_every_secret_the_source_reads_is_registered():
             if name is None:
                 if (path.name, function) not in DYNAMIC_READS_ALLOWED:
                     unresolved.append(where)
-            elif SECRET_NAME.fullmatch(name) and name not in config.SECRET_ENV_VARS:
+            elif SECRET_NAME.fullmatch(name) and name not in secret_registry.ALL:
                 unregistered.append(f"{where} {name}")
-    assert not unregistered, f"add these to config.SECRET_ENV_VARS and .env.example: {unregistered}"
+    assert not unregistered, f"register (config or secret_registry) and add to .env.example: {unregistered}"
     assert not unresolved, f"environment reads the scan cannot name; use a literal: {unresolved}"
 
 
@@ -108,7 +109,7 @@ def test_the_scan_finds_reads_of_every_form():
     source = '''
 import os
 from os import environ, getenv
-from talk_autopsy import config
+from talk_autopsy import config, secret_registry
 NAME = "CONSTANT_TOKEN"
 a = os.environ["SUBSCRIPT_KEY"]
 b = os.environ.get("GET_SECRET")
@@ -143,13 +144,13 @@ def test_env_example_lists_exactly_the_registry_with_empty_values_and_a_comment(
         match = re.fullmatch(r"([A-Z][A-Z0-9_]*)=(.*)", line)
         if match and SECRET_NAME.fullmatch(match[1]):
             secrets[match[1]] = (match[2], lines[number - 1] if number else "")
-    assert sorted(secrets) == sorted(config.SECRET_ENV_VARS)
+    assert sorted(secrets) == sorted(secret_registry.ALL)
     for name, (value, previous) in secrets.items():
         assert value == "", f"{name} must be empty in .env.example"
         assert previous.startswith("#"), f"{name} needs a comment line above it in .env.example"
 
 
-@pytest.mark.parametrize("name", config.SECRET_ENV_VARS)
+@pytest.mark.parametrize("name", secret_registry.ALL)
 def test_every_secret_is_a_placeholder_inside_a_test(name):
     assert os.environ[name] == placeholder(name)
     assert "not-a-real-secret" in os.environ[name]
