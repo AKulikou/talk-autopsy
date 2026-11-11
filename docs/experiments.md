@@ -90,6 +90,46 @@ T2** (four rare terms are each missed once: daltonized, at-mention, WebFetch,
 stand-up), and the false-edit rate of correction-v1 on faster-whisper T1 input
 is 2.75%, not 0: the old definition did not see inserted words.
 
+## Spec criteria
+
+Every acceptance criterion of the project specification (hypotheses A1–A5,
+B1–B5, C1–C5, D1, the metric targets, the judge calibration rule), as the
+specification words it, next to the result. Status is `met`, `not met` or
+`not run`, nothing in between; where a decision went ahead despite `not met`,
+the last column says so and why. Written 2026-11-11 after external audit #1
+(finding 7: criteria had been reworded after results). Numbers: term accuracy
+v2 where the row was re-scored (Metrics above); T2 is the fragment that
+carries the weight (T1's reference was decided by a Claude model).
+
+| ID | Criterion (specification) | Result | Status | Decision despite "not met" |
+|---|---|---|---|---|
+| A1 | WER on the accented video below 15% | faster-whisper large-v3 on T2: 6.19% | met | |
+| A2 | glossary-term recognition up by at least 20 points with the glossary in `initial_prompt` | T2 61.7% -> 51.4% (−10.3); T1 55.1% -> 96.6% (v1) | not met (on T2, the accented fragment; met on T1) | Whisper kept only as a fallback engine |
+| A3 | cloud STT: WER gain over 5 points at up to $1 per hour | T2: AssemblyAI 6.97%, Gemini 2.34% against Whisper 6.19% (best gain 3.85 points); T1: gain 9.79 points both; references built with these engines (biased in their favour) | not met (on T2; met on T1) | AssemblyAI with key terms chosen as the main engine (owner): key terms gave T2 99.1% term accuracy with a reference glossary, 96.3% with the auto-glossary |
+| A4 | Gemini with audio: equal or better term accuracy than the best block B result at comparable price, with the same glossary | Gemini ran without a glossary, to build the references (T2 93.5% against 96.3% for the B path) | not run (as specified) | |
+| A5 | mean onset shift under 0.3 s against hand labels on 10 minutes | no hand labels exist | not run | |
+| B1 | term accuracy after correction above 90%, WER not worse | T2 AssemblyAI + auto terms + correction-v2: 96.26% (v2), WER 4.73% -> 4.73% | met | |
+| B2 | fewer than 5% of edits distort meaning (all edits on 10 minutes checked by hand) | correction-v1: 0 of 3 on T2; correction-v2: 0 edits on T2, 0 of 2 on T1 | met (on 3 and 2 edits: too few to say much) | |
+| B3 | recognition alternatives or word confidence: at least +3 points term accuracy | | not run | |
+| B4 | Sonnet enough: term-accuracy difference to Opus under 2 points | T2 Gemini+align input: Opus 100% vs Sonnet 96.3% (gap 3.7 points, v1) | not met (gap 3.7 > 2) | Sonnet kept for cost (0.060 vs 0.129 USD per fragment) |
+| B5 | auto-glossary covers at least 70% of the hand glossary | T2 74.4% / 79.5%; T1 56.8% / 62.2% (two runs each) | met on T2, not met on T1 | auto-glossary adopted as the pipeline's glossary step (an unseen video has no hand glossary) |
+| C1 | Claude's blind mean at least 1 point above Google Translate and not below VideoLingo; 20 random fragments, three systems mixed | Google Translate and VideoLingo never run. What was run: translation-v1 rated 3.85 alone (not blind); then v1 against v2 blind-pairwise (not fully blind), v1 4.40, v2 4.67 | not run (as specified) | v2 preferred to v1; absolute target not demonstrated (3.85 < 4.0); C1 re-tested on T6 (T6 protocol) |
+| C2 | one translation per glossary term across the video (20 key terms) | | not run | |
+| C3 | no lost or repeated phrases at 10 block boundaries, with and without overlap | | not run | |
+| C4 | the style instruction preferred in 2 of 3 cases, blind | | not run | |
+| C5 | Batch API: identical quality, 40–50% cheaper | | not run | |
+| D1 | (reworded 2026-11-09, after C1) no more than 10% of cues faster than 20 cps with three lines | T2 fragment: 15.8% of Russian cues above 25 cps (so more than 10% above 20); real-01 14.8% above 25 | not met | nothing is cut for reading speed (owner's decision: meaning first; `.ass` with a smaller font) |
+| WER | ≤ 10% clean speech, ≤ 15% accent | AssemblyAI + auto terms: T1 0.58%, T2 4.73% | met | |
+| Term accuracy | ≥ 85% after correction | T2 96.26% (v2; macro 89.74%, without the top term 94.94%); T6 pending | met on T2 | |
+| False edits | ≤ 3% | false-edit rate (one definition, Metrics): 0 or no edits on every current row except T1 faster-whisper + correction-v1, 2.75% | met | |
+| Translation quality | blind owner rating of 20 random lines, mean ≥ 4.0 | translation-v1 3.85 (not blind); v2 4.67 only in a pairwise comparison against v1 | not met (as specified: the only single-system rating is 3.85) | re-tested on T6 with a pre-registered single-rated check |
+| Reading speed | ≤ 17 cps, at most 5% of cues above | T2 fragment 58.8% of Russian cues above 17 cps; real-01 49.2% | not met | as D1 |
+| Timing shift | median ≤ 300 ms against hand labels | no hand labels; timing drift not implemented | not run | |
+| Cost | ≤ $3 per hour of video | 0.47 USD AssemblyAI + 0.67–0.82 USD Claude per hour (three whole videos) | met | |
+| Time | ≤ 30 min per hour of video | 9.1–9.9 min per hour (three whole videos) | met | |
+| Judge calibration | (added 2026-11-10) the audio judge is accepted for T6 if agreement on T2 ≥ 90% and WER between the T2 references ≤ 2% | 79.0% (WER 1.90%); 82.5% after a labelled post-hoc rescoring (WER 1.17%) | not met (failed twice) | deviation: the rule said T6 is not judged; T6 was judged anyway, with two references (judge / engine majority) and bounds (owner's decision 2026-11-10) |
+| Gate 2 -> 3 | term accuracy ≥ 85% on the hold-out T6, run once | | not run (T6 runs after this session) | |
+
 ## Methodology: reference transcripts
 
 WER and term accuracy are measured against a reference transcript per fragment.
@@ -148,6 +188,22 @@ clip carries 5 s of padding; neighbouring clips overlap.
   nothing and do not enter the alignment.
 
 ### Who decided each reference
+
+Decided by, per fragment (added 2026-11-11 after external audit #1, findings
+2 and 11: no human listener decided T1, and a Claude model must not be read
+as an independent check of the Claude stages):
+
+| Fragment | Disputed spans | Decided by | Spans |
+|---|---|---|---|
+| T2 | 114 | owner (by ear; 2 of them "not sure", then majority or grammar) | 19 |
+| | | rule (product name `Claude Code` for "Quadcode") | 20 |
+| | | rule (reference conventions, glossary spelling) | about 30 |
+| | | engine majority | the rest (about 45) |
+| T1 | 73 | assistant (Claude), without listening: product and model names 39, majority 26, meaning or convention 8 | 73 |
+| T6 | 86 | judge (Gemini, `audio-judge-v1`; failed its T2 calibration) in reference J; in reference M the engine majority for the 65 majority spans, the judge for the 21 split spans | 86 |
+
+Words all three engines agreed on are accepted without a decision (engine
+agreement): T2 88.3%, T1 90.7%, T6 92.8% of the backbone words.
 
 The two references were not decided the same way, and that changes what their
 numbers can carry.
@@ -865,7 +921,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | pipeline-v3 repeats | 2026-11-11 | none: variance of the frozen path, and the T2 point of the T6 overfitting rule | `run` from a clean worktree of tag `pipeline-v3`, auto-glossary only, no cache; T2 three times, T1 once | term accuracy v2 T2 94.39–96.26% (mean 95.33%), macro 84.62–89.74%, without `Claude Code` 92.41–94.94%; WER 4.24–4.48%; T1 99.20%; correction 0 edits in all four; 0.511 USD Claude, 0.309 USD AssemblyAI | the earlier single-run 96.26% is the top of the range; correction does nothing on this path | T2 mean 95.33% is the overfitting comparison point (Freeze pipeline-v3) |
 | C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | **not adopted** (owner's blind rating 2026-11-11: v3 won 5 pairs, v2 6, ties 5; means v2 4.44, v3 4.25): v2 stays the default, v3 an option |
 | D1 (setup) | 2026-11-10 | none: sentence units before translation and display extended into pauses (subtitle-v2) | translation-v2 on units; T2 fragment, C1 input, T2.source, real-01 | T2 fragment Russian above 17 / 25 cps 74.7% / 25.3% -> 58.8% / 15.8%; on AssemblyAI input units = segments (149/149, 373/373, 428/426); Gemini input 109 -> 85 units; 0.547 USD | the C1 fragments become whole sentences; the extension does most of the reading-speed work; word timing raises speed variance in multi-cue segments | units frozen with the pipeline; display rule stays open |
-| C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | both above 4.0; v2 preferred; not fully blind | **C1 met; translation-v2 adopted** |
+| C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | v2 preferred; not fully blind | translation-v2 adopted. *Relabelled 2026-11-11 (audit #1, finding 6): v2 preferred to v1; absolute target not demonstrated (3.85 < 4.0); this was recorded as "C1 met" through the wrong instrument (pairwise scores, not the specified single rating against baselines)* |
 | B2 (v2) | 2026-11-10 | correction-v2 edits distort meaning in < 5% of cases | owner checked `B2-review-v2.md` | T2 0 edits; T1 2 edits, 0 distort meaning | met on a tiny sample | correction-v2 frozen unchanged |
 | B1 (v2) | 2026-11-09 | correction-v2 with the auto-glossary keeps the realistic pipeline at >= 85% term accuracy without false edits or words moved between segments | `correction-v2`, Sonnet, on AssemblyAI + auto key terms, auto-glossary; T2, T1 | term accuracy T2 96.26% -> 96.26%, T1 98.33% -> 98.33%; WER T2 4.73% -> 4.73%, T1 0.58% -> 0.50%; false edits 0; edits 0 / 2; 0.108 USD | the realistic pipeline is at 96.3% / 98.3%; correction adds nothing measurable on this input | correction-v2 is the default; owner checks `B2-review-v2.md` |
 | B5 | 2026-11-09 | a glossary drafted by Haiku from the first transcript covers >= 70% of the reference glossary | `glossary-auto-v1`, `claude-haiku-5-5`, raw AssemblyAI T2/T1, no context; two runs; then AssemblyAI with the auto terms | coverage T2 74.4% / 79.5%, T1 56.8% / 62.2%; STT terms with auto terms T2 96.3%, T1 98.3% (reference glossary: 99.1% / 100%); 0.0096 USD Claude, 0.084 USD AssemblyAI | met on T2, not on T1; the second pass keeps most of the keyterm gain | auto-glossary is the pipeline's glossary step |
@@ -1233,8 +1289,14 @@ linger; cues never cross a segment boundary. Writing both files takes about
   one point between sessions: pairwise rating is for choosing between
   versions, single rating for "is it good enough". 15 items, one fragment,
   one rater.
-- **Conclusion:** both versions are above the 4.0 target; v2 wins more pairs
-  than it loses (8 to 3). **C1 is met.**
+- **Conclusion:** v2 wins more pairs than it loses (8 to 3): **v2 is
+  preferred to v1**. *Relabelled 2026-11-11 (external audit #1, finding 6):
+  this entry first said "both versions are above the 4.0 target; C1 is met".
+  Pairwise scores drift about one point above single ratings (see above), and
+  the specification's C1 compares against Google Translate and VideoLingo,
+  which were never run; the absolute target is not demonstrated (3.85 < 4.0,
+  the only single rating). C1 is re-tested on T6 with a pre-registered
+  single-rated check (T6 protocol).*
 - **Decision:** translation-v2 adopted (decisions, 2026-11-10). The fragment
   defect is fixed below the prompt: translation runs on sentence units
   (D1 (setup)).
