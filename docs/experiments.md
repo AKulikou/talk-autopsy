@@ -139,7 +139,7 @@ The specification's list for v1.0 (stage 3), with the state of each item.
 | Item | State |
 |---|---|
 | the owner watched two full videos and uses the tool | done (owner) |
-| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and VideoLingo on one set | in progress (baselines on T2 and T6) |
+| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and VideoLingo on one set | in progress ([Baselines on one set](#baselines-on-one-set-t2-and-t6)) |
 | CI green; README in the series structure; honest Known limitations | in progress |
 | re-run from cache within a minute | **met**: 6.7–8.9 s wall time on T2 (three re-runs, below) |
 | external audit #2 | not done |
@@ -156,6 +156,30 @@ original run's `.srt` files. Wall time from start to exit, including `uv run` an
 **7.4 s, 8.9 s, 6.7 s**; 0 USD. No code change was needed. Not covered: `--output mp4-burned`
 re-encodes the video on every run (about 0.27x the video's length; rendering, not a model call), so a
 launcher re-run with the TV file takes minutes, not seconds (Backlog).
+
+## Baselines on one set (T2 and T6)
+
+The specification's comparison for v1.0: Talk Autopsy (`pipeline-v3`) against raw Whisper,
+Whisper + Google Translate and VideoLingo on one set. The set is **T2 and T6**: both have
+references, and T6 is no longer sealed after its single run. The same metrics everywhere (Metrics
+above): term accuracy v2 (micro, macro, without the top term, precision) and WER of the English;
+on T6 against reference J, with reference M as the range. The translations are compared by the
+owner's blind rating of all systems, which is the next step (*pending*).
+
+| English side | T2 term accuracy v2 | T2 WER | T6 term accuracy v2, J / M | T6 WER, J / M |
+|---|---|---|---|---|
+| Talk Autopsy `pipeline-v3` | 94.39–96.26% (3 repeats, mean 95.33%) | 4.24–4.48% | 100.00% / 100.00% (one run) | 4.70% / 2.89% |
+| raw Whisper (faster-whisper large-v3, no glossary) | 61.68% | 6.19% | 87.50% / 88.73% | 8.01% / 5.97% |
+
+**Raw Whisper (2026-11-11, no new run).** T2: the existing row (A1 (setup), re-scored with v2).
+T6: the faster-whisper transcript made for the reference consensus
+(`work/T6/raw.whisper-large-v3.json`, large-v3, int8, CPU, no glossary prompt; 30.8 min wall
+time then), scored with `eval T6 --record --engine faster-whisper-large-v3 --stage stt`. T6
+under v2: macro 87.84% (J) / 89.60% (M), without the top term 88.06% / 89.39%, precision 100%;
+bounds 86.11–94.44%. **Bias:** on both fragments this engine was the backbone of the consensus
+that built the reference (one of three engines), so its WER and term accuracy are biased in its
+favour. Its term accuracy is much higher on T6 than on T2 (87.5% against 61.7%): T6's glossary was
+drafted by Gemini from reference J, and T2 has the strongest accent and more product names.
 
 ## Methodology: reference transcripts
 
