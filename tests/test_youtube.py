@@ -170,8 +170,12 @@ def test_missing_javascript_runtime_message():
 
 def test_doctor_reports_names_only():
     checks = youtube.doctor(which=lambda name: None, runtimes=[], version="2026.09.01", ejs=False,
-                            key_is_set=lambda name: name == "ANTHROPIC_API_KEY", today=dt.date(2026, 11, 10))
+                            key_is_set=lambda name: name == "ANTHROPIC_API_KEY", today=dt.date(2026, 11, 10),
+                            align=False)
     by_name = {c.name: c for c in checks}
+    align = by_name["align extra (Gemini fallback only)"]
+    assert not align.ok and not align.required and align.fix == "uv sync --extra align"
+    assert "Gemini fallback" in align.detail
     assert not by_name["ffmpeg"].ok and not by_name["JavaScript runtime (YouTube)"].ok
     assert by_name["yt-dlp version"].ok is False and "70 days" in by_name["yt-dlp version"].detail
     assert "uv lock --upgrade-package yt-dlp" in by_name["yt-dlp version"].fix
@@ -213,3 +217,22 @@ def test_cli_dry_run_downloads_nothing(fake_ydl):
     assert result.exit_code == 0, result.output
     assert "30.0 min of video" in result.output and "author's captions: de, en" in result.output
     assert not [c for c in fake_ydl.calls if c[0] == "download"]
+
+
+def test_cli_doctor_reports_the_align_extra_as_a_warning_with_the_command(monkeypatch):
+    real = youtube.doctor
+
+    def probed(**_):
+        return real(which=lambda name: f"/bin/{name}", runtimes=[("node", "24.15.0")], version="2026.11.01",
+                    ejs=True, key_is_set=lambda name: True, today=dt.date(2026, 11, 11), align=False)
+    monkeypatch.setattr(youtube, "doctor", probed)
+    result = runner.invoke(cli.app, ["doctor"])
+    assert result.exit_code == 0, result.output  # optional: a warning, not a failure
+    assert "warning  align extra (Gemini fallback only): not installed" in result.output
+    assert "fix: uv sync --extra align" in result.output
+    monkeypatch.setattr(youtube, "doctor", lambda **_: real(
+        which=lambda name: f"/bin/{name}", runtimes=[("node", "24.15.0")], version="2026.11.01", ejs=True,
+        key_is_set=lambda name: True, today=dt.date(2026, 11, 11), align=True))
+    installed = runner.invoke(cli.app, ["doctor"])
+    assert "ok       align extra (Gemini fallback only): installed" in installed.output
+    assert "--extra align" not in installed.output

@@ -13,7 +13,9 @@ function Invoke-Step([string]$Program, [string[]]$Arguments) {
 Push-Location (Split-Path -Parent $PSScriptRoot)
 $saved = @{}
 try {
-    Invoke-Step uv @('sync', '--locked')
+    # --inexact: keep optional extras installed here (the `align` extra, torch for the Gemini fallback);
+    # CI syncs a fresh environment with `uv sync --locked`, so the checked packages are the same.
+    Invoke-Step uv @('sync', '--locked', '--inexact')
     # Importing config reads neither .env nor a secret, so this is safe before the clear-out.
     $names = (uv run python -c "from talk_autopsy import config; print(' '.join(config.SECRET_ENV_VARS))").Split(' ')
     if ($LASTEXITCODE -ne 0 -or -not $names) { throw 'could not read config.SECRET_ENV_VARS' }

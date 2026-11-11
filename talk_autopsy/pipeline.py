@@ -62,6 +62,7 @@ from talk_autopsy import (
     term_policy,
     translate,
     units,
+    youtube,
 )
 from talk_autopsy.glossary import Glossary, load_glossary, to_markdown
 from talk_autopsy.segments import Transcript, load_transcript, save_transcript
@@ -178,6 +179,12 @@ def make_assemblyai(glossary_prompt: bool):
     return AssemblyAITranscriber(glossary_prompt=glossary_prompt)
 
 
+def _require_alignment() -> None:
+    """PipelineError with the install hint if forced alignment cannot run (no stack trace in the CLI)."""
+    if not youtube.align_extra_installed():
+        raise PipelineError(youtube.ALIGN_UNAVAILABLE)
+
+
 def _gemini_available() -> bool:
     return bool(os.getenv("GEMINI_API_KEY", "").strip())
 
@@ -214,6 +221,8 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
     if not source.is_file():
         raise FileNotFoundError(f"No such file: {source}")
     check_keys(settings)
+    if settings.engine in ("gemini", "gemini+align") and "align" in steps:
+        _require_alignment()  # before any Gemini call: its times are estimates and must be aligned
     lang = config.check_lang(settings.target_lang)
     work = settings.work_dir
     work.mkdir(parents=True, exist_ok=True)
@@ -395,6 +404,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         if not skipped:
             transcript = load_transcript(recognized)
             if transcript.meta.get("timestamps") == "model-estimated":
+                _require_alignment()
                 emit("step-start", "align", f"{len(transcript.segments)} segments")
                 transcript = align_module.align(transcript, audio, align_module.Wav2Vec2Emitter())
             else:
@@ -516,6 +526,9 @@ def _first_pass(settings: RunSettings, audio: Path, flac: Path, audio_hash: str,
         reason = f"{type(e).__name__}: {e}"
         to = "gemini+align" if _gemini_available() or settings.gemini_cache_only else "faster-whisper"
         logger.warning("stt: AssemblyAI failed (%s); falling back to %s", reason, to)
+        if to == "gemini+align" and "align" in settings.steps and not youtube.align_extra_installed():
+            raise PipelineError(f"AssemblyAI failed ({reason[:120]}) and the fallback {to} cannot run: "
+                                f"{youtube.ALIGN_UNAVAILABLE}; then rerun (finished steps are kept)") from e
         emit("fallback", "stt", f"AssemblyAI failed ({reason[:120]}); using {to}")
         fallback = make_stt(to, work / "chunks", emit_to, settings.gemini_cache_only)
         transcript = fallback.transcribe(audio, None)

@@ -1700,6 +1700,11 @@ Ideas that come up during a stage and wait for a later one.
 
 - ~~Server-side refusal fallback on the Claude calls~~ Decided 2026-11-09:
   on in `run`, off in experiments (decisions).
+- AssemblyAI key-term limit (prompt 12, 2026-11-10; frozen path, no code
+  change before the T6 run): `stt/assemblyai.py` raises an error when the
+  key-term list is above the service limit instead of truncating it. Fix
+  after the T6 run: truncate with the user's terms first, then the
+  auto-glossary's, and report how many were dropped.
 - **translation-v4 candidate** (C1b rating, 2026-11-11; not now: after the
   T6 run and within the DoD limit of 5 translation-prompt versions): keep
   v3's term classes, but glosses of at most about 3 words; no expansion of

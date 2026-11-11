@@ -25,6 +25,7 @@ its own.
 
 import datetime as dt
 import importlib
+import importlib.util
 import json
 import re
 import shutil
@@ -114,15 +115,27 @@ def ejs_installed() -> bool:
     return True
 
 
+ALIGN_EXTRA_FIX = "uv sync --extra align"
+ALIGN_UNAVAILABLE = ("forced alignment is unavailable: the optional `align` extra (torch, torchaudio) is not "
+                     "installed; it is needed only for the Gemini fallback. Install it with: "
+                     + ALIGN_EXTRA_FIX)
+
+
+def align_extra_installed() -> bool:
+    """True if the optional `align` extra (torch, torchaudio) is installed; found without importing torch."""
+    return all(importlib.util.find_spec(name) is not None for name in ("torch", "torchaudio"))
+
+
 def doctor(which: Callable[[str], str | None] = shutil.which, runtimes: list[tuple[str, str]] | None = None,
-           version: str | None = None, ejs: bool | None = None,
+           version: str | None = None, ejs: bool | None = None, align: bool | None = None,
            key_is_set: Callable[[str], bool] = config.key_is_set,
            today: dt.date | None = None) -> list[Check]:
     """
     What the tool needs on this machine: ffmpeg and ffprobe, a JavaScript runtime
-    yt-dlp can use, the solver package, the yt-dlp version and its age, and which
-    API keys are set (names only, never values). Arguments replace the real
-    probes in tests.
+    yt-dlp can use, the solver package, the yt-dlp version and its age, the
+    optional `align` extra (forced alignment, needed only for the Gemini
+    fallback), and which API keys are set (names only, never values). Arguments
+    replace the real probes in tests.
     """
     checks = []
     for tool in ("ffmpeg", "ffprobe"):
@@ -143,6 +156,11 @@ def doctor(which: Callable[[str], str | None] = shutil.which, runtimes: list[tup
     checks.append(Check("yt-dlp version", fresh,
                         f"{version}" + (f", {age} days old" if age is not None else ""),
                         UPGRADE_YT_DLP, required=False))
+    align = align_extra_installed() if align is None else align
+    checks.append(Check("align extra (Gemini fallback only)", align,
+                        "installed (torch, torchaudio)" if align
+                        else "not installed; forced alignment is needed only for the Gemini fallback",
+                        ALIGN_EXTRA_FIX, required=False))
     for name in config.SECRET_ENV_VARS:
         if name in ("ANTHROPIC_AUTH_TOKEN", "GOOGLE_API_KEY", "HF_TOKEN"):
             continue  # SDK-read credentials this project does not use

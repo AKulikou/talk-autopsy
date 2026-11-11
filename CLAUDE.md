@@ -33,7 +33,7 @@ uv sync                                    # Python 3.13 venv in .venv + depende
 uv sync --extra align                      # + CPU torch/torchaudio for forced alignment (about 0.9 GB with the model)
 uv run pytest                              # unit tests: fake Claude client, generated audio, no network
 uv run ruff check .                        # lint (config in pyproject.toml, target Python 3.13)
-pwsh scripts/check.ps1                     # before every push: exactly what CI runs, secrets cleared (scripts/check.sh elsewhere)
+pwsh scripts/check.ps1                     # before every push: what CI runs (keeps installed extras), secrets cleared (scripts/check.sh elsewhere)
 uv run talk-autopsy cut <source> --start 00:00 --end 10:00 --out <file>.wav   # 16 kHz mono WAV
 uv run talk-autopsy transcribe <file>.wav --out work/T2/raw.whisper-large-v3.json   # faster-whisper, CPU
 uv run talk-autopsy transcribe <file>.wav --engine assemblyai --out work/T2/raw.assemblyai.json  # cloud, uploads audio
@@ -54,7 +54,7 @@ uv run talk-autopsy judge-refs T6 [--force]           # T6: references J (judge)
 uv run talk-autopsy eval T6 --hyp <t>.json           # sealed: WER and term accuracy against J and M, bounds, gate verdict; counts only
 uv run talk-autopsy judge-compare T2 [--normalize-adjudication]  # judge vs the decided T2 spans + WER between references (prints span texts; refuses T6)
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
-uv run talk-autopsy doctor                         # ffmpeg, JavaScript runtime for YouTube, yt-dlp age, key names
+uv run talk-autopsy doctor                         # ffmpeg, JavaScript runtime for YouTube, yt-dlp age, align extra (Gemini fallback), key names
 uv run talk-autopsy run <youtube-url> --domain web3 --output mp4-burned   # download (<=1080p) + pipeline + outputs
 uv run talk-autopsy run <playlist-url> --max-videos N [--max-total-cost 10]  # one by one, finished ones skipped
 uv run talk-autopsy run <source> --lang ru [--context <text-or-file>] [--glossary <md>]

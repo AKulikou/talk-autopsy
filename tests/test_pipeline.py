@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from talk_autopsy import align as align_module
-from talk_autopsy import pipeline
+from talk_autopsy import pipeline, youtube
 from talk_autopsy.correct import CorrectionAnswer
 from talk_autopsy.correct import SegmentText as FixSegment
 from talk_autopsy.glossary_auto import AutoGlossaryAnswer, AutoTerm
@@ -51,6 +51,7 @@ def setup(monkeypatch, tmp_path, sine):
                         lambda engine, cache_dir, progress, cache_only=False: FakeSTT(stt_calls))
     monkeypatch.setattr(align_module, "Wav2Vec2Emitter",
                         lambda: StubEmitter(spoken([(10, "one"), (40, "two"), (70, "three")])))
+    monkeypatch.setattr(youtube, "align_extra_installed", lambda: True)  # the stub stands in for torch
     monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key")
     glossary = tmp_path / "g.md"
     glossary.write_text("| term | keep |\n|---|---|\n| Two | no |\n", encoding="utf-8")
@@ -160,6 +161,7 @@ def default_path(monkeypatch, tmp_path, sine):
 def stub_aligner(monkeypatch):
     monkeypatch.setattr(align_module, "Wav2Vec2Emitter",
                         lambda: StubEmitter(spoken([(10, "one"), (40, "two"), (70, "three")])))
+    monkeypatch.setattr(youtube, "align_extra_installed", lambda: True)  # the stub stands in for torch
 
 
 def test_default_path_runs_glossary_and_a_key_term_pass(default_path, fake_claude):
@@ -205,6 +207,41 @@ def test_assemblyai_failure_falls_back_and_skips_the_key_term_pass(default_path,
     assert "passed_through" in load_transcript(settings.work_dir / "raw2.json").meta
     assert load_transcript(settings.work_dir / "aligned.json").meta["timestamps"] == "aligned"
     assert any(e.event == "fallback" for e in events) and report.fallbacks
+
+
+def test_fallback_without_the_align_extra_stops_with_the_hint_before_gemini(default_path, fake_claude,
+                                                                            monkeypatch):
+    settings, calls = default_path
+    monkeypatch.setattr(pipeline, "make_assemblyai", FakeAssemblyAI(calls, fail=True))
+    monkeypatch.setattr(youtube, "align_extra_installed", lambda: False)
+    used = []
+    monkeypatch.setattr(pipeline, "make_stt", lambda engine, *a, **k: used.append(engine) or FakeSTT([]))
+    fake_claude(claude_handler)
+    with pytest.raises(pipeline.PipelineError) as e:
+        pipeline.run(settings)
+    assert "uv sync --extra align" in str(e.value) and "service unavailable" in str(e.value)
+    assert used == []  # no Gemini call was spent before the alignment would have failed
+
+
+def test_gemini_engine_without_the_align_extra_fails_before_any_work(setup, monkeypatch):
+    settings, stt_calls = setup
+    monkeypatch.setattr(youtube, "align_extra_installed", lambda: False)
+    with pytest.raises(pipeline.PipelineError, match="uv sync --extra align"):
+        pipeline.run(settings)
+    assert stt_calls == []
+
+
+def test_cli_run_prints_the_alignment_hint_not_a_stack_trace(setup, monkeypatch):
+    from typer.testing import CliRunner
+
+    from talk_autopsy import cli
+    settings, _ = setup
+    monkeypatch.setattr(youtube, "align_extra_installed", lambda: False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    result = CliRunner().invoke(cli.app, ["run", str(settings.source), "--engine", "gemini+align",
+                                          "--steps", "stt,align"])
+    assert result.exit_code == 1, result.output
+    assert "uv sync --extra align" in result.output and "Traceback" not in result.output
 
 
 def test_without_a_gemini_key_the_fallback_is_faster_whisper(default_path, fake_claude, monkeypatch):
