@@ -170,6 +170,7 @@ owner's blind rating of all systems, which is the next step (*pending*).
 |---|---|---|---|---|
 | Talk Autopsy `pipeline-v3` | 94.39–96.26% (3 repeats, mean 95.33%) | 4.24–4.48% | 100.00% / 100.00% (one run) | 4.70% / 2.89% |
 | raw Whisper (faster-whisper large-v3, no glossary) | 61.68% | 6.19% | 87.50% / 88.73% | 8.01% / 5.97% |
+| VideoLingo (commit 61d944a, defaults, Claude Sonnet 5.5) | attempted, not run | | attempted, not run | |
 
 **Raw Whisper (2026-11-11, no new run).** T2: the existing row (A1 (setup), re-scored with v2).
 T6: the faster-whisper transcript made for the reference consensus
@@ -180,6 +181,28 @@ bounds 86.11–94.44%. **Bias:** on both fragments this engine was the backbone 
 that built the reference (one of three engines), so its WER and term accuracy are biased in its
 favour. Its term accuracy is much higher on T6 than on T2 (87.5% against 61.7%): T6's glossary was
 drafted by Gemini from reference J, and T2 has the strongest accent and more product names.
+
+**VideoLingo (2026-11-11): attempted, not run.** VideoLingo (Apache-2.0) was cloned into
+`C:\Projectsideolingo-baseline\VideoLingo` (outside the repository), commit
+`61d944a46df6970176191606a89e646122da8f0a` (2026-11-10, version string 3.1.1 in its `config.yaml`).
+Its defaults have changed since the specification was written: local recognition is now
+**Qwen3-ASR 1.7B with Qwen3-ForcedAligner** (WhisperX is no longer installed by its installer), on
+Python 3.12 with PyTorch 2.8 CPU, installed by `uv run start.py` (`setup_env.py --yes`); scripted
+runs go through its local HTTP API (`start.py --api`, `POST /input`, `POST /run`). The plan was its
+defaults with the LLM set to `claude-sonnet-5-5` through Anthropic's OpenAI-compatible endpoint
+(`https://api.anthropic.com/v1/`; VideoLingo sends no `response_format` by default, which matters
+because the endpoint accepts only a strict `json_schema` there), behind a local logging proxy so that
+the key stays in memory and the token usage is recorded exactly. **The first installation attempt
+was refused by the session's permission policy** (Claude Code auto mode: running code downloaded from
+outside the project, "Code from External"), before any package was installed. That is a policy
+decision for the owner, not a technical failure, so it was not retried or worked around; the second
+attempt is left to the owner (below). No API key was written to any file; LLM cost 0 USD.
+
+To run it: either the owner allows this session type to run the VideoLingo installer, or runs it
+once by hand (`cd C:\Projectsideolingo-baseline\VideoLingo; uv run start.py --api`) and a later
+session drives the API on `data/test-set/T2.wav` and `T6.wav`; estimate for two 10-minute fragments
+with Sonnet 5.5: under 1 USD (its summary, term extraction, meaning split, two-step translation and
+alignment calls), Qwen3-ASR on the CPU of the order of the fragment length or more (not measured).
 
 ## Methodology: reference transcripts
 
