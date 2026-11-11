@@ -153,7 +153,8 @@ def test_web3_glossary_parses_and_fits_the_key_term_limits():
     from talk_autopsy.stt import assemblyai
     glossary = load_glossary(config.GLOSSARIES_DIR / "web3.md")
     assert len(glossary.entries) >= 100
-    assert len(assemblyai.keyterms(glossary)) == len(glossary.entries) <= assemblyai.KEYTERM_MAX_COUNT
+    assert len(assemblyai.keyterms(glossary)) == len(glossary.entries)
+    assert sum(len(e.term.split()) for e in glossary.entries) <= assemblyai.KEYTERM_MAX_TOTAL_WORDS
     assert glossary.find("msg.sender").keep and glossary.find("smart contract").translations["ru"]
 
 

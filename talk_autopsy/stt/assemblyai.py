@@ -12,9 +12,14 @@ sentences export, pricing) and the installed SDK `assemblyai` 1.8.2 on
   deprecated). Only this one model is requested: the service's default list
   falls back to `universal-2`, which would silently change the engine being
   measured. The model that actually ran (`speech_model_used`) goes to meta.
-- Vocabulary boost: `keyterms_prompt`, a list of phrases of at most 6 words
-  (up to 1,000 phrases on Universal-3.5 Pro). Off by default; on with
-  `glossary_prompt`, as in the Whisper engine (hypothesis A2).
+- Vocabulary boost: `keyterms_prompt`, a list of phrases of at most 6 words.
+  Off by default; on with `glossary_prompt`, as in the Whisper engine
+  (hypothesis A2). Limit (keyterms docs, read 2026-11-11: "up to 1,000 words or
+  phrases (maximum 6 words per phrase)"; "Each word in a multi-word phrase
+  counts towards the 1000 keyword limit"; the docs do not say what happens
+  above it): at most 1,000 words in all. `select_keyterms` truncates to that,
+  the user's terms first, then the auto-glossary's by frequency in the first
+  transcript, and reports what it dropped; it never raises.
 - English (`language_code="en"`), speaker labels off.
 - Word and sentence times are integer milliseconds; `audio_duration` is in
   seconds. The response has no separate billed-duration field: billing is the
@@ -36,9 +41,11 @@ import importlib
 import logging
 import statistics
 import time
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from talk_autopsy import config
+from talk_autopsy import config, metrics
 from talk_autopsy.glossary import Glossary
 from talk_autopsy.segments import Segment, Transcript, Word
 from talk_autopsy.stt.base import drop_wordless
@@ -47,7 +54,8 @@ logger = logging.getLogger(__name__)
 
 MODEL = "universal-3-5-pro"
 KEYTERM_MAX_WORDS = 6
-KEYTERM_MAX_COUNT = 1000
+KEYTERM_MAX_TOTAL_WORDS = 1000  # every word of a phrase counts toward the service's 1,000 limit
+HEARD_AS = "heard as: "  # glossary_auto writes the mis-recognized forms last in the notes
 
 PRICE_PER_HOUR_USD = 0.21  # Universal-3.5 Pro, pre-recorded, pricing page dated 2026-10-27
 KEYTERMS_PRICE_PER_HOUR_USD = 0.05  # pricing page only; not confirmed by the docs
@@ -56,20 +64,78 @@ PAUSE_SPLIT_SECONDS = 0.7
 MAX_SEGMENT_WORDS = 25
 
 
-def keyterms(glossary: Glossary) -> list[str]:
+@dataclass
+class KeytermSelection:
+    terms: list[str]  # what goes to keyterms_prompt, in priority order
+    dropped: list[str] = field(default_factory=list)  # left out: the total word limit was reached
+    too_long: list[str] = field(default_factory=list)  # left out: over KEYTERM_MAX_WORDS words
+
+    @property
+    def words(self) -> int:
+        return sum(len(t.split()) for t in self.terms)
+
+
+def _heard_as(notes: str) -> list[str]:
+    if HEARD_AS not in notes:
+        return []
+    return [f.strip() for f in notes.split(HEARD_AS, 1)[1].split(",") if f.strip()]
+
+
+def select_keyterms(glossary: Glossary, user_terms: Iterable[str] = (), transcript: str = "",
+                    max_words: int = KEYTERM_MAX_TOTAL_WORDS) -> KeytermSelection:
     """
-    Glossary terms for `keyterms_prompt`, in glossary order. Terms longer than the
-    service's 6-word limit are left out (and logged), not cut.
+    The glossary terms for `keyterms_prompt` within the service's limit.
+
+    Terms over `KEYTERM_MAX_WORDS` words are left out (not cut). The rest are
+    ordered: the user's terms first (`user_terms`, in glossary order), then the
+    other terms by how often they occur in `transcript` (the first pass), the
+    term itself plus the forms its notes list as "heard as" (case-insensitive),
+    most frequent first, ties in glossary order. Terms are taken in that order
+    while the total word count stays within `max_words`; a term that does not
+    fit is dropped and later, shorter terms may still fit. Nothing raises.
     """
-    terms, skipped = [], []
+    user = {t.casefold() for t in user_terms}
+    seen, candidates, too_long = set(), [], []
     for entry in glossary.entries:
-        (terms if len(entry.term.split()) <= KEYTERM_MAX_WORDS else skipped).append(entry.term)
-    if skipped:
-        logger.info("Keyterms: left out %d term(s) over %d words: %s", len(skipped), KEYTERM_MAX_WORDS,
-                    ", ".join(skipped))
-    if len(terms) > KEYTERM_MAX_COUNT:
-        raise ValueError(f"{len(terms)} keyterms; AssemblyAI accepts at most {KEYTERM_MAX_COUNT}")
-    return terms
+        key = entry.term.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        if len(entry.term.split()) > KEYTERM_MAX_WORDS:
+            too_long.append(entry.term)
+        else:
+            candidates.append(entry)
+    lowered = transcript.lower()
+
+    def frequency(entry) -> int:
+        forms = [entry.term, *_heard_as(entry.notes)]
+        return sum(len(found) for found in metrics.term_occurrences(lowered, [f.lower() for f in forms])
+                   ) if lowered and forms else 0
+
+    first = [e for e in candidates if e.term.casefold() in user]
+    rest = [e for e in candidates if e.term.casefold() not in user]
+    rest = [e for _, e in sorted(enumerate(rest), key=lambda pair: (-frequency(pair[1]), pair[0]))]
+    selection = KeytermSelection(terms=[], too_long=too_long)
+    total = 0
+    for entry in first + rest:
+        n = len(entry.term.split())
+        if total + n <= max_words:
+            selection.terms.append(entry.term)
+            total += n
+        else:
+            selection.dropped.append(entry.term)
+    if too_long:
+        logger.info("Keyterms: left out %d term(s) over %d words: %s", len(too_long), KEYTERM_MAX_WORDS,
+                    ", ".join(too_long))
+    if selection.dropped:
+        logger.warning("Keyterms: the service takes at most %d words; dropped %d term(s): %s", max_words,
+                       len(selection.dropped), ", ".join(selection.dropped))
+    return selection
+
+
+def keyterms(glossary: Glossary) -> list[str]:
+    """Glossary terms for `keyterms_prompt` in glossary order, truncated to the limit (`select_keyterms`)."""
+    return select_keyterms(glossary).terms
 
 
 def _word(w) -> Word:
@@ -116,9 +182,12 @@ class AssemblyAITranscriber:
 
     language = "en"
 
-    def __init__(self, model: str = MODEL, glossary_prompt: bool = False):
+    def __init__(self, model: str = MODEL, glossary_prompt: bool = False, user_terms: Iterable[str] = (),
+                 first_pass: str = ""):
         self.model = model
         self.glossary_prompt = glossary_prompt
+        self.user_terms = list(user_terms)  # key-term priority (select_keyterms)
+        self.first_pass = first_pass  # text of the first transcript: key-term frequency
         self.name = f"assemblyai {model}"
 
     def transcribe(self, audio_path: Path, glossary: Glossary | None) -> Transcript:
@@ -131,7 +200,9 @@ class AssemblyAITranscriber:
         aai = importlib.import_module("assemblyai")
         aai.settings.api_key = key
 
-        terms = keyterms(glossary) if self.glossary_prompt else None
+        selection = (select_keyterms(glossary, self.user_terms, self.first_pass) if self.glossary_prompt
+                     else None)
+        terms = selection.terms if selection else None
         if self.glossary_prompt and not terms:
             raise ValueError("glossary_prompt is on but the glossary has no usable term")
         settings = {"speech_models": [self.model], "language_code": self.language, "speaker_labels": False}
@@ -173,6 +244,8 @@ class AssemblyAITranscriber:
                 "model_requested": self.model,
                 "glossary_prompt": self.glossary_prompt,
                 "keyterms": terms,
+                "keyterms_dropped": selection.dropped if selection else [],
+                "keyterms_too_long": selection.too_long if selection else [],
                 "request_id": transcript.id,
                 "input": audio_path.name,
                 "audio_seconds": audio_seconds,

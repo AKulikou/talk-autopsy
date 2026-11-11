@@ -130,8 +130,9 @@ class FakeAssemblyAI:
     def __init__(self, calls, fail=False):
         self.calls, self.fail = calls, fail
 
-    def __call__(self, glossary_prompt):
+    def __call__(self, glossary_prompt, user_terms=None, first_pass=""):
         self.glossary_prompt = glossary_prompt
+        self.user_terms, self.first_pass = user_terms, first_pass
         return self
 
     def transcribe(self, audio, glossary):
@@ -308,3 +309,47 @@ def test_translate_command_stops_above_the_cost_limit(tmp_path, fake_claude):
     result = CliRunner().invoke(cli.app, args)
     assert result.exit_code == 1 and "above --max-cost" in result.output
     assert fake.requests == []
+
+
+# --- cache key: prompt and validator code (audit #1, finding 14) ----------------------
+
+
+def test_a_changed_validator_or_prompt_reruns_the_claude_steps(setup, fake_claude, monkeypatch):
+    settings, stt_calls = setup
+    fake = fake_claude(claude_handler)
+    pipeline.run(settings)
+    real = pipeline.code_hash
+    monkeypatch.setattr(pipeline, "code_hash",
+                        lambda step, prompt=None: real(step, prompt) + ("x" if step == "fix" else ""))
+    report = pipeline.run(settings)
+    assert len(stt_calls) == 1
+    # fix reruns; its output is identical here (the fake returns the input), so translate stays up to date
+    assert [s.skipped for s in report.steps[:4]] == [True, True, False, True]
+    assert len(fake.requests) == 3
+
+
+def test_code_hash_covers_the_prompt_file_and_ignores_line_endings(tmp_path, monkeypatch):
+    package = tmp_path / "pkg"
+    (package / "prompts").mkdir(parents=True)
+    for name in ("correct.py", "blocks.py", "metrics.py", "segments.py"):
+        (package / name).write_bytes(b"code\n")
+    prompt = package / "prompts" / "p-v1.md"
+    prompt.write_bytes(b"rule one\nrule two\n")
+    monkeypatch.setattr(pipeline, "PACKAGE_DIR", package)
+    before = pipeline.code_hash("fix", "p-v1")
+    prompt.write_bytes(b"rule one\r\nrule two\r\n")
+    assert pipeline.code_hash("fix", "p-v1") == before  # a CRLF checkout has the same stamps
+    prompt.write_bytes(b"rule one\nrule three\n")
+    assert pipeline.code_hash("fix", "p-v1") != before
+    prompt.write_bytes(b"rule one\nrule two\n")
+    (package / "correct.py").write_bytes(b"code, fixed\n")
+    assert pipeline.code_hash("fix", "p-v1") != before
+
+
+def test_the_key_term_pass_gets_the_user_terms_and_the_first_pass(default_path, fake_claude):
+    settings, calls = default_path
+    fake_claude(claude_handler)
+    pipeline.run(settings)
+    fake = pipeline.make_assemblyai
+    assert fake.user_terms == ["Two"]
+    assert fake.first_pass  # the first transcript's text ranks the auto-glossary's terms

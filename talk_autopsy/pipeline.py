@@ -10,7 +10,7 @@ gate and in B5, 2026-11-09):
       stt2       -> raw2.json       AssemblyAI again, the glossary as key terms
       align      -> aligned.json    forced alignment, only for model-estimated times (fallback)
       fix        -> fixed.json      Claude correction (correction-v2)
-      translate  -> <lang>.json     Claude translation (translation-v2) of sentence units (units.py)
+      translate  -> <lang>.json     Claude translation (translation-v2.1) of sentence units (units.py)
       srt        -> <video-id>.<lang>.srt/.ass and <video-id>.en.srt/.ass
 
 - **Engines and fallbacks.** `engine="assemblyai"` (default): if the first
@@ -26,8 +26,11 @@ gate and in B5, 2026-11-09):
 - **Upload.** Only the compressed audio (`audio.flac`) goes to AssemblyAI,
   never the video.
 - **Skip when unchanged.** Every output has a stamp file `<output>.stamp.json`
-  with the hashes of its inputs and the settings that shape it. A step whose
-  output exists with a matching stamp is skipped; anything else reruns it.
+  with the hashes of its inputs and the settings that shape it, including
+  `code`: a hash of the step's prompt file and of the modules that validate
+  or post-process its output (`code_hash`, `STEP_CODE`). A step whose output
+  exists with a matching stamp is skipped; anything else reruns it, so a
+  prompt or validator fix invalidates the old results.
 - **Fail fast.** Keys a selected step needs are checked before any work.
 - **Cost.** Before the first Claude step the estimate of all Claude steps is
   emitted; above `max_cost_usd` the run stops before spending. `RunReport` has
@@ -93,7 +96,7 @@ class RunSettings:
     max_cost_usd: float = config.COST_CONFIRMATION_USD
     correction_model: str = field(default_factory=config.correction_model)
     translation_model: str = field(default_factory=config.translation_model)
-    translation_version: str = field(default_factory=config.translation_version)  # translation-v2 | -v3
+    translation_version: str = field(default_factory=config.translation_version)  # translation-v2.1 | -v3
     helper_model: str = field(default_factory=config.helper_model)
     gemini_cache_only: bool = False  # no Gemini call; uncached chunks go to faster-whisper
     refusal_fallback: bool = True
@@ -142,6 +145,36 @@ def _text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+PACKAGE_DIR = Path(__file__).resolve().parent
+CRLF, LF = bytes([13, 10]), bytes([10])
+# The modules whose code shapes each step's output (validators, post-processing, segmentation).
+# metrics.py is in the Claude steps' list because their validators count terms with it.
+STEP_CODE = {
+    "stt": ("stt/assemblyai.py", "stt/base.py", "stt/chunked.py", "stt/gemini.py", "stt/faster_whisper.py",
+            "align.py"),
+    "glossary": ("glossary_auto.py", "glossary.py", "metrics.py"),
+    "stt2": ("stt/assemblyai.py", "stt/base.py"),
+    "align": ("align.py",),
+    "fix": ("correct.py", "blocks.py", "metrics.py", "segments.py"),
+    "translate": ("translate.py", "blocks.py", "units.py", "metrics.py", "segments.py", "term_policy.py"),
+}
+
+
+def code_hash(step: str, prompt: str | None = None) -> str:
+    """
+    SHA-256 (first 16 hex digits) of the step's prompt file (`prompts/<prompt>.md`)
+    and of its modules (`STEP_CODE`), with line endings normalized, so the stamp
+    of a checkout with CRLF files equals that of one with LF files.
+    """
+    digest = hashlib.sha256()
+    files = [PACKAGE_DIR / "prompts" / f"{prompt}.md"] if prompt else []
+    files += [PACKAGE_DIR / name for name in STEP_CODE[step]]
+    for path in files:
+        digest.update(path.name.encode("utf-8") + bytes(1))
+        digest.update(path.read_bytes().replace(CRLF, LF))
+    return digest.hexdigest()[:16]
+
+
 def _stamp_path(output: Path) -> Path:
     return output.with_name(output.name + ".stamp.json")
 
@@ -174,9 +207,10 @@ def make_stt(engine: str, cache_dir: Path, progress: Callable[[ProgressEvent], N
     raise ValueError(f"unknown engine {engine!r}; known: {', '.join(ENGINES)}")
 
 
-def make_assemblyai(glossary_prompt: bool):
+def make_assemblyai(glossary_prompt: bool, user_terms: list[str] | None = None, first_pass: str = ""):
     from talk_autopsy.stt.assemblyai import AssemblyAITranscriber
-    return AssemblyAITranscriber(glossary_prompt=glossary_prompt)
+    return AssemblyAITranscriber(glossary_prompt=glossary_prompt, user_terms=user_terms or [],
+                                 first_pass=first_pass)
 
 
 def _require_alignment() -> None:
@@ -283,7 +317,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
             write_stamp(audio, source_stamp)
         audio_hash = file_sha256(audio)
         inputs = {"audio": audio_hash, "engine": settings.engine,
-                  "gemini_cache_only": str(settings.gemini_cache_only)}
+                  "gemini_cache_only": str(settings.gemini_cache_only), "code": code_hash("stt")}
         skipped = up_to_date(raw, inputs)
         stt_cost, detail = 0.0, ""
         if not skipped:
@@ -334,7 +368,8 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         t0 = time.perf_counter()
         inputs = {"raw": file_sha256(need(raw, "glossary")), "context": _text_hash(settings.context),
                   "user_glossary": user_glossary_hash, "model": settings.helper_model, "lang": lang,
-                  "prompt": glossary_auto.PROMPT_VERSION}
+                  "prompt": glossary_auto.PROMPT_VERSION,
+                  "code": code_hash("glossary", glossary_auto.PROMPT_VERSION)}
         skipped = up_to_date(glossary_path, inputs)
         cost, detail = 0.0, ""
         if not skipped:
@@ -364,7 +399,8 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         glossary_now, glossary_hash = current_glossary()
         first = load_transcript(need(raw, "stt2"))
         inputs = {"audio": file_sha256(need(audio, "stt2")), "raw": file_sha256(raw),
-                  "glossary": glossary_hash, "engine": settings.engine}
+                  "glossary": glossary_hash, "engine": settings.engine, "code": code_hash("stt2"),
+                  "user_glossary": user_glossary_hash}
         skipped = up_to_date(raw2, inputs)
         stt_cost, detail = 0.0, ""
         if not skipped:
@@ -382,7 +418,10 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
                 try:
                     if not flac.is_file():
                         ingest.compress_audio(audio, flac)
-                    transcript = make_assemblyai(glossary_prompt=True).transcribe(flac, glossary_now)
+                    user_terms = [e.term for e in user_glossary.entries] if user_glossary else []
+                    first_text = " ".join(seg.text for seg in first.segments)
+                    transcript = make_assemblyai(glossary_prompt=True, user_terms=user_terms,
+                                                 first_pass=first_text).transcribe(flac, glossary_now)
                 except Exception as e:  # the service failed: keep the first pass, say so
                     logger.warning("stt2: AssemblyAI failed (%s); keeping the first pass", e)
                     _copy_transcript(raw, raw2, f"AssemblyAI failed: {e}")
@@ -399,7 +438,8 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
     recognized = raw2 if raw2.is_file() and ("stt2" in steps or "stt" not in steps) else raw
     if "align" in steps:
         t0 = time.perf_counter()
-        inputs = {"input": file_sha256(need(recognized, "align")), "audio": file_sha256(need(audio, "align"))}
+        inputs = {"input": file_sha256(need(recognized, "align")), "audio": file_sha256(need(audio, "align")),
+                  "code": code_hash("align")}
         skipped = up_to_date(aligned, inputs)
         if not skipped:
             transcript = load_transcript(recognized)
@@ -420,7 +460,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         glossary_now, glossary_hash = current_glossary()
         inputs = {"input": file_sha256(need(english, "fix")), "glossary": glossary_hash,
                   "context": context_hash, "model": settings.correction_model,
-                  "prompt": correct.PROMPT_VERSION}
+                  "prompt": correct.PROMPT_VERSION, "code": code_hash("fix", correct.PROMPT_VERSION)}
         skipped = up_to_date(fixed, inputs)
         cost = 0.0
         if not skipped:
@@ -446,7 +486,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
                 settings, work, lang, glossary_now, glossary_hash, user_glossary, user_glossary_hash, emit)
         inputs = {"input": file_sha256(source_file), "glossary": glossary_hash, "context": context_hash,
                   "lang": lang, "model": settings.translation_model, "prompt": version,
-                  "units": units.VERSION}
+                  "units": units.VERSION, "code": code_hash("translate", version)}
         skipped = up_to_date(translated, inputs)
         if not skipped:
             emit("step-start", "translate", f"{version}, {settings.translation_model}")

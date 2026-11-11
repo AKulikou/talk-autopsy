@@ -533,8 +533,8 @@ def run(
         help=f"Comma-separated outputs: {', '.join(outputs.FORMATS)}, or all. mp4-burned is for TVs.")]
     = outputs.DEFAULT,
     translation: Annotated[str | None, typer.Option(
-        help="Translation prompt: v2 (default) or v3 (term classes keep / both / translate / ui). "
-             "Default: TRANSLATION_VERSION.")] = None,
+        help="Translation prompt: v2 (default: translation-v2.1) or v3 (term classes keep / both / "
+             "translate / ui). Default: TRANSLATION_VERSION.")] = None,
     max_cost: Annotated[float, typer.Option(
         help="Stop before the Claude steps of a video if their estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
