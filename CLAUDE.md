@@ -190,7 +190,8 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   `data/test-set/T6.adjudication.md` prepared; the owner withdrew from adjudication and the blind
   audio judge failed its T2 calibration (79.0% < 90%; 82.5% after a post-hoc rescoring), so T6's reference waits for an owner decision;
   then the tagged pipeline on T6 once; then the external audit. translation-v3 (term classes, C1b) is built as an
-  option; the owner's blind rating (`work/C1-v3-blind.md`) decides whether it replaces v2 (new freeze tag).
+  option; the owner's blind rating (2026-11-11: v3 won 5 pairs, v2 6, ties 5) kept v2 as the default, no new
+  freeze tag; a translation-v4 candidate is in the Backlog (after the T6 run).
 - **Stage 3:** the CLI tool with subtitles; external audit; v1.0.
 - **Stage 4:** dubbed audio track.
 - **v1.1:** local web UI over the same core.

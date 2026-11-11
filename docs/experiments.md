@@ -577,7 +577,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
-| C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | v3 is an option, v2 stays the default until the owner's blind rating (`work/C1-v3-blind.md`) |
+| C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | **not adopted** (owner's blind rating 2026-11-11: v3 won 5 pairs, v2 6, ties 5; means v2 4.44, v3 4.25): v2 stays the default, v3 an option |
 | D1 (setup) | 2026-11-10 | none: sentence units before translation and display extended into pauses (subtitle-v2) | translation-v2 on units; T2 fragment, C1 input, T2.source, real-01 | T2 fragment Russian above 17 / 25 cps 74.7% / 25.3% -> 58.8% / 15.8%; on AssemblyAI input units = segments (149/149, 373/373, 428/426); Gemini input 109 -> 85 units; 0.547 USD | the C1 fragments become whole sentences; the extension does most of the reading-speed work; word timing raises speed variance in multi-cue segments | units frozen with the pipeline; display rule stays open |
 | C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | both above 4.0; v2 preferred; not fully blind | **C1 met; translation-v2 adopted** |
 | B2 (v2) | 2026-11-10 | correction-v2 edits distort meaning in < 5% of cases | owner checked `B2-review-v2.md` | T2 0 edits; T1 2 edits, 0 distort meaning | met on a tiny sample | correction-v2 frozen unchanged |
@@ -595,7 +595,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | A3 (setup) | 2026-11-09 | none: AssemblyAI transcripts for the consensus reference | Universal-3.5 Pro, no keyterms; T2, T1 | 39 s / 35 s wall; 0.035 / 0.033 USD list price (free credit); agreement with the backbone 91.8% / 92.4% | runs end to end, about 15x faster than real time | transcripts feed the T1 and T2 adjudication |
 | A1 (setup) | 2026-11-09 | none: first run of the engine, for timings and drafts | faster-whisper large-v3, int8, CPU, no prompt; T1, T2 | about 22 min per 10-min fragment (realtime factor 0.44–0.46); no quality numbers | runs end to end; slower than real time on this laptop | drafts go to the owner for proofreading (superseded: the transcripts are the backbone of the consensus reference) |
 
-### C1b: translation-v3, term classes (2026-11-10; owner's blind rating pending)
+### C1b: translation-v3, term classes (2026-11-10; rated 2026-11-11: not adopted)
 
 - **Problem.** The owner watched the whole [removed] interview (real-01) with
   translation-v2 subtitles: ordinary words stayed in English or became odd
@@ -684,10 +684,59 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
   adopted if, in the owner's blind scores, v3 wins more pairs than v2 and v3
   has no pair with a score of 2 or less caused by lost meaning. Otherwise v2
   stays and the comments go to the Backlog.
-- **Status:** owner's blind rating pending; translation-v3 is an option
-  (`--translation v3`), the default and the `pipeline-v2` freeze are
-  unchanged. Adopting v3 means a short follow-up: flip the default, tag the
-  freeze.
+- **Status (2026-11-11):** rated; **v3 not adopted, v2 stays the default**.
+  translation-v3 stays available as `--translation v3`; the `pipeline-v2`
+  freeze is unchanged and there is no new freeze tag.
+
+#### Owner's blind rating (2026-11-11)
+
+The owner filled in all 16 pairs of `work/C1-v3-blind.md`; the scores were
+un-blinded with `work/C1-v3-key.json` by code (`scripts/c1b_rating.py`), not
+by hand.
+
+| Pair | Source | Example word | v2 | v3 | Winner |
+|---|---|---|---|---|---|
+| 1 | real-01 (unit 126) | - | 4 | 5 | v3 |
+| 2 | real-01 (unit 218) | emergent | 4 | 4 | tie |
+| 3 | real-01 (unit 224) | tokens | 5 | 5 | tie |
+| 4 | real-01 (unit 261) | computer science | 5 | 4 | v2 |
+| 5 | real-01 (unit 339) | thinking tokens | 5 | 3 | v2 |
+| 6 | real-01 (unit 340) | frontier | 4 | 5 | v3 |
+| 7 | real-01 (unit 342) | prompt | 4 | 5 | v3 |
+| 8 | real-01 (unit 350) | alignment | 4 | 3 | v2 |
+| 9 | real-01 (unit 408) | compute | 5 | 5 | tie |
+| 10 | real-01 (unit 425) | inference | 4 | 5 | v3 |
+| 11 | T2 (unit 47) | prompt | 4 | 4 | tie |
+| 12 | T2 (unit 48) | Dictation | 3 | 5 | v3 |
+| 13 | T2 (unit 49) | Dictation | 5 | 5 | tie |
+| 14 | T2 (unit 85) | - | 5 | 4 | v2 |
+| 15 | T2 (unit 108) | - | 5 | 3 | v2 |
+| 16 | T2 (unit 109) | - | 5 | 3 | v2 |
+| **Total** | 16 pairs | | **mean 4.44** | **mean 4.25** | **v3 5, v2 6, ties 5** |
+
+- **Rule (written before the rating) and outcome.** v3 is adopted if v3
+  wins more pairs than v2 and no v3 score of 2 or less is caused by lost
+  meaning. v3 won 5 pairs, v2 won 6 (5 ties); the lowest v3 score is 3, so
+  the second condition holds but the first does not: **v3 is not adopted, v2
+  stays the default.**
+- **The owner's comment** (the only one, pair 4, given in Russian): "a
+  course in informatics" («курс по информатике») sounds unprofessional and
+  primitive, as if it were addressed to schoolchildren or non-specialists.
+- **Pattern** (observations from one rater on 16 pairs, not a measurement):
+  - v3 won where it replaced jargon with a short, natural Russian word, or
+    kept UI names as on screen with a short gloss: frontier model ->
+    «передовая модель» (6); prompt -> «запрос» (7); inference -> «запуск
+    моделей» (10); Accessibility and Dictation as on screen with a gloss (12).
+  - v3 lost where the gloss was long (alignment with a five-word gloss, 8;
+    REPL expanded into a full phrase, 16), where it replaced jargon the viewer
+    reads fluently (thinking tokens and prompt as a verb, 5; computer science
+    -> «информатика» read as a lower register, 4), and on idioms
+    ("two-shotted", 15; "I bet", 14).
+  - Caveat: the rater sees the English sentence above both translations,
+    which may favour keeping English words; while watching, the viewer only
+    hears the English.
+- **Next:** a translation-v4 candidate goes to the Backlog (after the T6 run,
+  within the limit of 5 translation-prompt versions).
 
 ### Subtitles: up to 3 lines and `.ass` (operational, not scored)
 
@@ -1595,6 +1644,13 @@ Ideas that come up during a stage and wait for a later one.
 
 - ~~Server-side refusal fallback on the Claude calls~~ Decided 2026-11-09:
   on in `run`, off in experiments (decisions).
+- **translation-v4 candidate** (C1b rating, 2026-11-11; not now: after the
+  T6 run and within the DoD limit of 5 translation-prompt versions): keep
+  v3's term classes, but glosses of at most about 3 words; no expansion of
+  acronyms (REPL, CI, API); established jargon the target viewer already
+  uses (prompt, tokens, thinking tokens, alignment, computer science) is
+  `keep`; idioms ("two-shotted", "I bet") by meaning. Needs a new blind
+  rating against v2 before it can replace it.
 - UI element names in translation (owner, 2026-11-10): names of UI elements
   are translated by meaning, not by their official localized name (Windows
   "Dictation" was rendered with a literal Russian word, while the Russian

@@ -159,7 +159,7 @@ uv run talk-autopsy run "https://www.youtube.com/playlist?list=..." --domain web
 #    and the run stops before a video that would cross --max-total-cost (default 10 USD)
 ```
 
-`--translation v3` (an option, being rated) renders ordinary words in Russian
+`--translation v3` (an option; the owner's blind rating kept v2 as the default) renders ordinary words in Russian
 and keeps only names and code in English; jargon gets the English term in
 brackets once per video.
 

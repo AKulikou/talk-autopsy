@@ -6,6 +6,28 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-11 — translation-v3 not adopted; v2 stays the default
+
+Context: translation-v3 (term classes keep / both / translate / ui) was built
+as an option on 2026-11-10, with a decision rule written before the owner's
+blind rating of 16 v2/v3 pairs: v3 is adopted if it wins more pairs than v2
+and none of its scores of 2 or less is caused by lost meaning.
+
+Decision: **translation-v3 is not adopted**. The owner's blind scores
+(un-blinded by `scripts/c1b_rating.py`): v3 won 5 pairs, v2 won 6, 5 ties;
+mean v2 4.44, v3 4.25; the lowest v3 score is 3. The first condition fails.
+translation-v2 stays the default and the frozen version (`pipeline-v2`); no
+new freeze tag. translation-v3 remains available as `--translation v3`.
+
+Why: by the rule fixed in advance. The rating suggests v3's idea works where
+the Russian word is short and natural (frontier model, prompt as a noun,
+inference, UI names with a short gloss) and fails where the gloss is long, an
+acronym is expanded, or familiar jargon is replaced (experiments, C1b, Owner's
+blind rating). A translation-v4 along those lines is in the Backlog, after
+the T6 run.
+
+What it rules out: changing the default translation before the T6 run.
+
 ## 2026-11-10 — Translation term policy (keep / both / translate / ui)
 
 Context: the owner watched the [removed] interview (real-01) with
