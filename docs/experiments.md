@@ -20,6 +20,76 @@ Limits (from CLAUDE.md): at most 3 runs per hypothesis; stage 1 at most 10
 test-set runs and $5; stage 2 at most 10 correction-prompt and 5 translation-prompt
 versions and $20; a cost estimate before every full-video run.
 
+## Metrics
+
+The one place where the metrics are defined; the README and the other entries
+refer here. Code: `talk_autopsy/metrics.py`; columns of
+[results/benchmark.csv](../results/benchmark.csv): `evaluation.BENCHMARK_COLUMNS`.
+Every text is normalized by `metrics.tokenize` (fillers removed, edge
+punctuation stripped, nothing expanded).
+
+- **WER:** (substitutions + deletions + insertions) / reference words, from the
+  minimum-edit word alignment of the lower-cased tokens (jiwer). Unchanged.
+- **Term accuracy (v2, the headline since 2026-11-11):** for each occurrence of
+  a glossary term in the reference, a hit only if the hypothesis has the same
+  term **in the same place**: the reference tokens of the occurrence are
+  aligned (the WER alignment) to consecutive hypothesis tokens that form an
+  occurrence of the term. Identifiers match case-sensitively, the last word
+  may be a regular plural or a possessive (`Anthropic's`). Reported as
+  - `term_accuracy_v2`: micro-average, hits / occurrences;
+  - `term_accuracy_v2_macro`: the mean of each term's hit share, every term
+    weighing the same;
+  - `term_accuracy_v2_without_top`: the micro-average without the most frequent
+    term (on T1 and T2 that is `Claude Code`: 42 of 125 and 28 of 107
+    occurrences);
+  - `term_precision` and `term_false_positives`: term occurrences in the
+    hypothesis (any glossary term, also those absent from the reference) that
+    match no reference occurrence in place.
+- **Term accuracy v1 (superseded, column `term_accuracy_v1`):** position-free:
+  per term min(occurrences in the reference, occurrences in the hypothesis), no
+  possessives. A term missed where it was said but written elsewhere counted
+  as a hit (external audit #1, finding 3). Kept for the record.
+- **False-edit rate (column `false_edit_rate_v2`):** the share of the
+  correction's word edits that move the text further from the reference. The
+  edits are the word substitutions, deletions and **insertions** of the
+  minimum-edit alignment of the correction's input to its output, one per
+  word; an edit is false if applying it alone to the input increases the
+  input's word errors against the reference. Empty when the correction changed
+  no word (a rate of 0 then would be meaningless). Invented inserted words are
+  false edits.
+- **False-edit rate v1 (superseded, column `false_edit_rate_v1`):** the share of
+  the reference words the raw transcript had right that the correction broke.
+  Not a share of edits, and blind to inserted words (finding 9).
+- **Reading speed:** characters per second per subtitle cue (shares above 17
+  and 25 cps), reported by the `srt` step; not in the benchmark table.
+- **Blind translation score:** the owner's 1–5 rating (C1 entries).
+- **Not implemented:** timing drift (`metrics.timing_drift` raises; no
+  hand-labelled timestamps exist) and term accuracy of the translation. The
+  never-filled `timing_median_ms` column was removed from the table on
+  2026-11-11.
+
+**Re-scoring, 2026-11-11** (`scripts/rescore_benchmark_v2.py`, no API call).
+Every current T1/T2 row was re-scored from the cached output it was recorded
+from; before writing, the script recomputed WER and term accuracy v1 and
+checked that both equal the recorded values (all 19 did), so the file is the
+one that was scored. Superseded rows (draft glossary, T1 before the `@claude`
+fix) keep their v1 numbers, get `status` = superseded and no v2 numbers.
+
+| Row | v1 | v2 micro | v2 macro | v2 without `Claude Code` | precision | false-edit v1 -> v2 |
+|---|---|---|---|---|---|---|
+| T2 AssemblyAI + auto terms + correction-v2 (B1 v2) | 96.26% | 96.26% | 89.74% | 94.94% | 99.04% | 0.00% -> no edits |
+| T1 AssemblyAI + auto terms + correction-v2 (B1 v2) | 98.33% | 98.40% | 97.30% | 97.59% | 100.00% | 0.00% -> 0.00% (1 word edit; the case-only edit is not a word edit) |
+| T2 faster-whisper + correction-v1 (B1) | 94.39% | 93.46% | 84.25% | 97.59% | 98.04% | 0.00% -> 0.00% (0 of 65 word edits) |
+| T1 faster-whisper + correction-v1 (B1) | 98.33% | 98.40% | 97.30% | 97.59% | 95.35% | 0.00% -> 2.75% (3 of 109 word edits) |
+| T2 AssemblyAI, no key terms (A3 (setup)) | 80.37% | 80.37% | 81.78% | 89.87% | 98.85% | |
+| T1 faster-whisper (A1 (setup)) | 54.17% | 52.80% | 78.83% | 79.52% | 100.00% | |
+
+The micro-average barely moves (position-awareness changes at most 1 point,
+possessives add occurrences on T1); the **macro-average is 6.5 points lower on
+T2** (four rare terms are each missed once: daltonized, at-mention, WebFetch,
+stand-up), and the false-edit rate of correction-v1 on faster-whisper T1 input
+is 2.75%, not 0: the old definition did not see inserted words.
+
 ## Methodology: reference transcripts
 
 WER and term accuracy are measured against a reference transcript per fragment.

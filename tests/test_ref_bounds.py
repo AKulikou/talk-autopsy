@@ -27,12 +27,20 @@ def text_with(terms: dict[str, int], filler: str = "and") -> str:
     return f" {filler} ".join(term for term, n in terms.items() for _ in range(n))
 
 
-def test_pass_when_the_lower_bound_reaches_the_threshold():
+def test_pass_not_demonstrated_when_the_lower_bound_reaches_the_threshold_on_few_occurrences():
     j = text_with({"Docker": 10, "Kubernetes": 1})  # Docker at tokens 0, 2, ..., 18; Kubernetes at 20
     result = metrics.bounded_term_accuracy(j, j, j, ["Docker", "Kubernetes"], [(20, 21)])
-    assert (result.occurrences, result.uncertain_occurrences) == (11, 1)
+    assert (result.occurrences, result.uncertain_occurrences, result.certain_hits) == (11, 1, 10)
     assert result.lower == pytest.approx(10 / 11) and result.upper == 1.0
-    assert result.verdict == "pass"
+    assert result.interval_lower[0] < 0.85 <= result.lower  # 10 of 11: the interval is wide
+    assert result.verdict == metrics.PASS_NOT_DEMONSTRATED
+
+
+def test_pass_demonstrated_when_the_wilson_lower_limit_reaches_the_threshold():
+    j = text_with({"Docker": 100})
+    result = metrics.bounded_term_accuracy(j, j, j, ["Docker"], [])
+    assert result.lower == 1.0 and result.interval_lower[0] >= 0.85
+    assert result.verdict == metrics.PASS_DEMONSTRATED
 
 
 def test_fail_when_the_upper_bound_is_below_the_threshold():

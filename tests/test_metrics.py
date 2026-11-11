@@ -156,25 +156,60 @@ def test_no_term_in_the_reference_gives_no_average():
 # --- false-edit rate -------------------------------------------------------
 
 
-def test_false_edit_is_a_raw_hit_that_the_fix_broke():
+def test_false_edit_rate_v1_is_a_raw_hit_that_the_fix_broke():
     ref = tokenize("we run the claude code agent today")
     raw = tokenize("we run the cloud code agent today")  # 6 hits, one error
     fixed = tokenize("we ran the claude code agent today")  # fixes cloud, breaks run
-    result = false_edit_rate(raw, fixed, ref)
+    result = metrics.false_edit_rate_v1(raw, fixed, ref)
     assert (result.false_edits, result.raw_hits) == (1, 6)
     assert result.rate == pytest.approx(1 / 6)
+
+
+def test_false_edit_rate_is_a_share_of_the_corrections_edits():
+    ref = tokenize("we run the claude code agent today")
+    raw = tokenize("we run the cloud code agent today")
+    fixed = tokenize("we ran the claude code agent today")  # two edits: one helps, one hurts
+    result = false_edit_rate(raw, fixed, ref)
+    assert (result.edits, result.false_edits, result.helpful_edits) == (2, 1, 1)
+    assert result.rate == pytest.approx(1 / 2)
 
 
 def test_a_fix_that_only_corrects_has_no_false_edits():
     ref = tokenize("we run the claude code agent")
     raw = tokenize("we run the cloud code agent")
     result = false_edit_rate(raw, ref, ref)
-    assert result.false_edits == 0 and result.rate == 0
+    assert result.false_edits == 0 and result.rate == 0 and result.edits == 1
 
 
-def test_false_edit_rate_without_raw_hits_is_undefined():
-    result = false_edit_rate(["x", "y"], ["a", "b"], ["a", "b"])
-    assert result.raw_hits == 0 and result.rate is None
+def test_invented_insertions_are_false_edits():
+    # The auditor's probe: v1 scored a correction that only inserts invented words as 0.
+    ref = tokenize("we run the agent")
+    raw = list(ref)
+    fixed = tokenize("we run the shiny new agent")
+    assert metrics.false_edit_rate_v1(raw, fixed, ref).rate == 0
+    result = false_edit_rate(raw, fixed, ref)
+    assert (result.edits, result.false_edits) == (2, 2) and result.rate == 1.0
+
+
+def test_inserted_words_that_the_reference_has_are_helpful():
+    ref = tokenize("open Claude Code now")
+    raw = tokenize("open Quadcode now")
+    fixed = tokenize("open Claude Code now")  # Quadcode -> Claude, + Code
+    result = false_edit_rate(raw, fixed, ref)
+    assert (result.edits, result.false_edits, result.helpful_edits) == (2, 0, 2)
+
+
+def test_false_edit_rate_without_edits_is_undefined():
+    result = false_edit_rate(["a", "b"], ["a", "b"], ["a", "c"])
+    assert result.edits == 0 and result.rate is None
+    assert metrics.false_edit_rate_v1(["x", "y"], ["a", "b"], ["a", "b"]).rate is None
+
+
+def test_correction_edits_lists_substitutions_deletions_and_insertions():
+    edits = metrics.correction_edits(["a", "b", "c"], ["a", "x", "c", "d"])
+    assert sorted(edits) == [("ins", 3, "d"), ("sub", 1, "x")]
+    assert metrics.correction_edits(["a", "b"], ["b"]) == [("del", 0, None)]
+    assert metrics.correction_edits([], ["a"]) == [("ins", 0, "a")]
 
 
 # --- timing drift, reading speed -------------------------------------------

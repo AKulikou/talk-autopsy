@@ -169,7 +169,8 @@ def load_uncertain(path: Path, reference_j: str, reference_m: str) -> list[tuple
 
 def term_occurrences_inside(reference_j: str, terms: list[str],
                             ranges: list[tuple[int, int]]) -> tuple[int, int]:
-    """(glossary-term occurrences in J, how many of them overlap an uncertain range)."""
-    found = [occ for per_term in metrics.term_occurrences(reference_j, terms) for occ in per_term]
+    """(glossary-term occurrences in J as term_accuracy_v2 finds them, how many overlap an uncertain span)."""
+    per_term = metrics.term_occurrences(reference_j, terms, possessive=True)
+    found = [occ for occurrences in per_term for occ in occurrences]
     inside = sum(1 for occ in found if any(occ[0] < r[1] and r[0] < occ[1] for r in ranges))
     return len(found), inside

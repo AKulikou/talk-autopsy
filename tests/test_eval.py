@@ -18,8 +18,7 @@ def plain(output: str) -> str:
     """CLI output without ANSI colours: on GitHub Actions Typer colours the usage errors."""
     return ANSI.sub("", output)
 
-HEADER = ("date,fragment,stage,engine_or_prompt,wer,term_accuracy,false_edit_rate,"
-          "timing_median_ms,cost_usd,minutes,notes")
+HEADER = ",".join(evaluation.BENCHMARK_COLUMNS)
 GLOSSARY = """<!-- draft: not yet reviewed -->
 | term | keep | ru | notes |
 |---|---|---|---|
@@ -77,7 +76,9 @@ def test_eval_with_raw_reports_false_edits(test_set, tmp_path):
     fixed.write_text("open claude code then pip install claude code runs it", encoding="utf-8")
     result = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(fixed), "--raw", str(raw)])
     assert result.exit_code == 0, result.output
-    assert "1 of 9 correct raw words changed" in result.output
+    # two word edits: cloud -> claude moves closer to the reference, npm -> pip away from it
+    assert "50.00%" in result.output
+    assert "1 of 2 word edits move the text away from the reference; 1 move it closer" in result.output
 
 
 def test_record_appends_one_row_with_the_existing_header(test_set, tmp_path):
@@ -93,8 +94,13 @@ def test_record_appends_one_row_with_the_existing_header(test_set, tmp_path):
     assert list(row) == HEADER.split(",")
     assert row["fragment"] == "T9" and row["stage"] == "stt" and row["engine_or_prompt"] == "fw-test"
     assert row["wer"] == "0.1000"
-    assert row["term_accuracy"] == "0.6667"  # Claude Code 1/2 + npm 1/1
-    assert row["false_edit_rate"] == "" and row["timing_median_ms"] == ""
+    assert row["term_accuracy_v2"] == "0.6667"  # Claude Code 1/2 + npm 1/1, in place
+    assert row["term_accuracy_v1"] == "0.6667"
+    assert row["term_accuracy_v2_macro"] == "0.7500"  # (1/2 + 1/1) / 2
+    assert row["term_accuracy_v2_without_top"] == "1.0000"  # without Claude Code: npm 1/1
+    assert row["term_precision"] == "1.0000" and row["term_false_positives"] == "0"
+    assert row["false_edit_rate_v2"] == "" and row["false_edit_rate_v1"] == ""
+    assert row["status"] == "current"
     assert row["minutes"] == "5.0" and row["cost_usd"] == "0.0000"
     assert row["notes"] == "draft glossary"
     assert config.BENCHMARK_CSV.read_bytes().count(b"\r") == 0
@@ -143,4 +149,5 @@ def test_append_keeps_a_crlf_file_crlf(tmp_path):
 def test_unmeasured_numbers_stay_empty():
     report = evaluation.evaluate("a b c", "a b c")
     row = evaluation.benchmark_row(report, fragment="T1", stage="stt", engine="e", meta={})
-    assert row["minutes"] == "" and row["cost_usd"] == "" and row["term_accuracy"] == ""
+    assert row["minutes"] == "" and row["cost_usd"] == "" and row["term_accuracy_v2"] == ""
+    assert row["term_accuracy_v1"] == "" and row["false_edit_rate_v2"] == ""

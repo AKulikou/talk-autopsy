@@ -52,25 +52,41 @@ def is_draft_glossary(text: str) -> bool:
     return bool(lines) and lines[0].strip().startswith(DRAFT_MARKER)
 
 
+# The columns of results/benchmark.csv, in order. Rates are fractions with four decimals.
+# term_accuracy_v1 and false_edit_rate_v1 are the superseded measures, kept for the record
+# (docs/experiments.md, Metrics); `status` is current or superseded (the reason in `notes`).
+BENCHMARK_COLUMNS = (
+    "date", "fragment", "stage", "engine_or_prompt", "status", "wer",
+    "term_accuracy_v2", "term_accuracy_v2_macro", "term_accuracy_v2_without_top", "term_precision",
+    "term_false_positives", "false_edit_rate_v2", "term_accuracy_v1", "false_edit_rate_v1",
+    "cost_usd", "minutes", "notes",
+)
+
+
 @dataclass(frozen=True)
 class EvalReport:
     wer: metrics.WerResult
-    terms: metrics.TermAccuracyResult | None  # None without a glossary
+    terms: metrics.TermAccuracyV2 | None  # the benchmark's term accuracy; None without a glossary
     false_edits: metrics.FalseEditResult | None  # None without a raw transcript
+    terms_v1: metrics.TermAccuracyResult | None = None  # superseded, for the record
+    false_edits_v1: metrics.FalseEditResultV1 | None = None  # superseded, for the record
 
 
 def evaluate(reference: str, hypothesis: str, glossary: Glossary | None = None,
              raw: str | None = None) -> EvalReport:
-    """WER always; term accuracy with a glossary; false-edit rate with the raw transcript."""
-    terms = None
+    """WER always; term accuracy (v2, v1) with a glossary; false-edit rate (v2, v1) with the raw text."""
+    terms = terms_v1 = None
     if glossary is not None:
-        terms = metrics.term_accuracy(reference, hypothesis, [e.term for e in glossary.entries])
-    false_edits = None
+        names = [e.term for e in glossary.entries]
+        terms = metrics.term_accuracy_v2(reference, hypothesis, names)
+        terms_v1 = metrics.term_accuracy_v1(reference, hypothesis, names)
+    false_edits = false_edits_v1 = None
     if raw is not None:
-        false_edits = metrics.false_edit_rate(
-            metrics.tokenize(raw), metrics.tokenize(hypothesis), metrics.tokenize(reference)
-        )
-    return EvalReport(metrics.word_error_rate(reference, hypothesis), terms, false_edits)
+        tokens = metrics.tokenize(raw), metrics.tokenize(hypothesis), metrics.tokenize(reference)
+        false_edits = metrics.false_edit_rate(*tokens)
+        false_edits_v1 = metrics.false_edit_rate_v1(*tokens)
+    return EvalReport(metrics.word_error_rate(reference, hypothesis), terms, false_edits, terms_v1,
+                      false_edits_v1)
 
 
 def _fraction(value: float | None) -> str:
@@ -78,24 +94,31 @@ def _fraction(value: float | None) -> str:
 
 
 def benchmark_row(report: EvalReport, *, fragment: str, stage: str, engine: str, meta: dict,
-                  notes: str = "", date: dt.date | None = None) -> dict[str, str]:
+                  notes: str = "", date: dt.date | None = None, status: str = "current") -> dict[str, str]:
     """
-    One row of results/benchmark.csv. Rates are fractions with four decimals.
-    `minutes` and `cost_usd` come from the hypothesis meta (`wall_seconds`,
-    `cost_usd`) and stay empty when it does not record them: no number that was
-    not measured. `timing_median_ms` stays empty until timing drift exists.
+    One row of results/benchmark.csv (`BENCHMARK_COLUMNS`). Rates are fractions
+    with four decimals. `minutes` and `cost_usd` come from the hypothesis meta
+    (`wall_seconds`, `cost_usd`) and stay empty when it does not record them: no
+    number that was not measured.
     """
     wall = meta.get("wall_seconds")
     cost = meta.get("cost_usd")
+    t, f = report.terms, report.false_edits
     return {
         "date": (date or dt.date.today()).isoformat(),
         "fragment": fragment,
         "stage": stage,
         "engine_or_prompt": engine,
+        "status": status,
         "wer": _fraction(report.wer.wer),
-        "term_accuracy": _fraction(report.terms.accuracy if report.terms else None),
-        "false_edit_rate": _fraction(report.false_edits.rate if report.false_edits else None),
-        "timing_median_ms": "",
+        "term_accuracy_v2": _fraction(t.accuracy if t else None),
+        "term_accuracy_v2_macro": _fraction(t.macro if t else None),
+        "term_accuracy_v2_without_top": _fraction(t.micro_without_top if t else None),
+        "term_precision": _fraction(t.precision if t else None),
+        "term_false_positives": "" if t is None else str(t.false_positives),
+        "false_edit_rate_v2": _fraction(f.rate if f else None),
+        "term_accuracy_v1": _fraction(report.terms_v1.accuracy if report.terms_v1 else None),
+        "false_edit_rate_v1": _fraction(report.false_edits_v1.rate if report.false_edits_v1 else None),
         "cost_usd": "" if cost is None else f"{float(cost):.4f}",
         "minutes": "" if wall is None else f"{float(wall) / 60:.1f}",
         "notes": notes,

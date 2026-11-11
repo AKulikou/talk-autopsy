@@ -775,18 +775,26 @@ def eval_command(
     else:
         t = report.terms
         draft = "; glossary is a draft, not yet reviewed" if draft_glossary else ""
-        typer.echo(f"  {'term accuracy':<16} {_percent(t.accuracy):>8}   "
-                   f"({t.found}/{t.expected} occurrences of {len(t.rows)} terms{draft})")
+        typer.echo(f"  {'term accuracy':<16} {_percent(t.accuracy):>8}   (v2, in place: "
+                   f"{t.found}/{t.expected} occurrences of {len(t.rows)} terms{draft})")
+        typer.echo(f"  {'  macro':<16} {_percent(t.macro):>8}   (each term weighs the same)")
+        typer.echo(f"  {'  without top':<16} {_percent(t.micro_without_top):>8}   (without {t.top_term})")
+        typer.echo(f"  {'  precision':<16} {_percent(t.precision):>8}   ({t.false_positives} of "
+                   f"{t.hypothesis_occurrences} term occurrences in the hypothesis not in place)")
+        if report.terms_v1 is not None:
+            typer.echo(f"  {'  v1 (old)':<16} {_percent(report.terms_v1.accuracy):>8}   "
+                       "(position-free, superseded)")
         for row in t.rows:
             mark = "" if row.found == row.expected else "   <-"
+            extra = f"   +{row.false_positives} elsewhere" if row.false_positives else ""
             kind = "id" if row.identifier else ""
-            typer.echo(f"      {row.term:<36} {kind:<3} {row.found}/{row.expected}{mark}")
+            typer.echo(f"      {row.term:<36} {kind:<3} {row.found}/{row.expected}{mark}{extra}")
         if t.absent:
             typer.echo(f"      not in the reference (excluded): {', '.join(t.absent)}")
     if report.false_edits is not None:
         f = report.false_edits
-        typer.echo(f"  {'false-edit rate':<16} {_percent(f.rate):>8}   "
-                   f"({f.false_edits} of {f.raw_hits} correct raw words changed)")
+        typer.echo(f"  {'false-edit rate':<16} {_percent(f.rate):>8}   ({f.false_edits} of {f.edits} word "
+                   f"edits move the text away from the reference; {f.helpful_edits} move it closer)")
 
     if record:
         if draft_glossary:
@@ -835,23 +843,39 @@ def _eval_sealed(fragment: str, ref_path: Path, glossary_path: Path, hyp: Path, 
     for name, w in (("WER against J", report.wer), ("WER against M", wer_m)):
         typer.echo(f"  {name:<26} {_percent(w.wer):>8}   (S {w.substitutions}, D {w.deletions}, "
                    f"I {w.insertions}; {w.reference_words} reference words)")
-    for name, t in (("term accuracy against J", bounds.against_j),
-                    ("term accuracy against M", bounds.against_m)):
+    for name, t, interval in (("term accuracy against J", bounds.against_j, bounds.interval_j),
+                              ("term accuracy against M", bounds.against_m, bounds.interval_m)):
         typer.echo(f"  {name:<26} {_percent(t.accuracy):>8}   ({t.found}/{t.expected} occurrences of "
-                   f"{len(t.rows)} terms)")
+                   f"{len(t.rows)} terms, in place; Wilson 95% {_interval(interval)}; macro "
+                   f"{_percent(t.macro)}; without the top term {_percent(t.micro_without_top)}; "
+                   f"precision {_percent(t.precision)})")
     typer.echo(f"  {'term accuracy, lower bound':<26} {_percent(bounds.lower):>8}   "
                f"({bounds.uncertain_occurrences} of {bounds.occurrences} occurrences inside uncertain "
-               "spans counted as misses)")
-    typer.echo(f"  {'term accuracy, upper bound':<26} {_percent(bounds.upper):>8}   (counted as hits)")
+               f"spans counted as misses; Wilson 95% {_interval(bounds.interval_lower)})")
+    typer.echo(f"  {'term accuracy, upper bound':<26} {_percent(bounds.upper):>8}   (counted as hits; "
+               f"Wilson 95% {_interval(bounds.interval_upper)})")
     typer.echo(f"  gate: term accuracy >= {bounds.threshold:.0%}: {bounds.verdict.upper()}   "
-               "(pass: lower bound >= threshold; fail: upper bound < threshold; otherwise inconclusive)")
+               "(docs/experiments.md, T6 protocol)")
+    t2 = _t2_reference_values()
+    if t2:
+        signal = metrics.overfitting_signal(bounds.against_j.accuracy or 0.0, t2)
+        typer.echo(f"  overfitting signal: {'YES' if signal else 'no'}   "
+                   f"(J {_percent(bounds.against_j.accuracy)} against the T2 mean "
+                   f"{_percent(sum(t2) / len(t2))} of {len(t2)} pipeline-v3 repeats; "
+                   f"signal if more than {metrics.OVERFITTING_MARGIN:.0%} below)")
+    else:
+        typer.echo("  overfitting signal: not computed (no current pipeline-v3 T2 rows in "
+                   "results/benchmark.csv)")
     if report.false_edits is not None:
         f = report.false_edits
         typer.echo(f"  {'false-edit rate (J)':<26} {_percent(f.rate):>8}   "
-                   f"({f.false_edits} of {f.raw_hits} correct raw words changed)")
+                   f"({f.false_edits} of {f.edits} word edits move the text away from J)")
     if record:
-        summary = (f"reference J; M: WER {wer_m.wer:.4f}, terms {bounds.against_m.accuracy:.4f}; "
-                   f"term bounds [{bounds.lower:.4f}, {bounds.upper:.4f}]; gate {bounds.verdict}")
+        m_terms = bounds.against_m.accuracy
+        summary = (f"reference J; M: WER {wer_m.wer:.4f}, terms v2 "
+                   f"{'n/a' if m_terms is None else f'{m_terms:.4f}'}; term bounds v2 "
+                   f"[{bounds.lower:.4f}, {bounds.upper:.4f}], Wilson lower limit of the lower bound "
+                   f"{bounds.interval_lower[0]:.4f}; gate {bounds.verdict}")
         notes = "; ".join(n for n in (notes, summary) if n)
         row = evaluation.benchmark_row(report, fragment=fragment, stage=stage.strip(), engine=engine.strip(),
                                        meta=hypothesis.meta, notes=notes)
@@ -860,6 +884,26 @@ def _eval_sealed(fragment: str, ref_path: Path, glossary_path: Path, hyp: Path, 
         except (FileNotFoundError, ValueError) as e:
             _fail(str(e))
         typer.echo(f"Recorded in {config.BENCHMARK_CSV}")
+
+
+def _interval(interval: tuple[float, float]) -> str:
+    return f"[{interval[0] * 100:.1f}%, {interval[1] * 100:.1f}%]"
+
+
+PIPELINE_V3 = "pipeline-v3"
+
+
+def _t2_reference_values() -> list[float]:
+    """Term accuracy v2 (micro) of the current pipeline-v3 rows on T2: the overfitting comparison point."""
+    import csv
+
+    if not config.BENCHMARK_CSV.is_file():
+        return []
+    with config.BENCHMARK_CSV.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    return [float(r["term_accuracy_v2"]) for r in rows
+            if r.get("fragment") == "T2" and r.get("engine_or_prompt") == PIPELINE_V3
+            and r.get("status") == "current" and r.get("term_accuracy_v2")]
 
 
 def _fragment(fragment: str) -> str:
