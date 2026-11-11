@@ -285,10 +285,11 @@ speed (owner's decision): cues hold up to three lines and every `.srt` has an
 timing cues by the English words, which makes reading speed uneven inside a
 long sentence (D1 (setup)); subtitle layout stays open after the freeze.
 
-**Pending for the stage 2 gate:** the owner adjudicates the sealed hold-out T6
-(`data/test-set/T6.adjudication.md`, prepared 2026-11-10 from three engines);
-a later session resolves the reference and runs the frozen `pipeline-v2` on T6
-once; then the external audit. Dubbing is a stub.
+**Pending for the stage 2 gate:** the sealed hold-out T6 has a reference in
+two variants built by the blind audio judge (2026-11-11), with uncertain spans
+marked; the frozen `pipeline-v2` runs on T6 once and term accuracy is reported
+with a lower and an upper bound (pass, fail or inconclusive); then the
+external audit. Dubbing is a stub.
 
 | Stage | Content | Gate |
 |---|---|---|

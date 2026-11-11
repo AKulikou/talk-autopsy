@@ -431,6 +431,9 @@ def parse_choices(text: str) -> dict[int, Choice]:
 class Resolution:
     reference: str
     protocol: dict
+    # listed span number -> (start, end) character range of its chosen text in `reference`;
+    # an empty variant gets an empty range after the preceding text
+    ranges: dict[int, tuple[int, int]] = field(default_factory=dict)
 
 
 def resolve(consensus: Consensus, choices: dict[int, Choice],
@@ -441,7 +444,8 @@ def resolve(consensus: Consensus, choices: dict[int, Choice],
     missing from the file, nothing chosen, or more than one box ticked without an
     `other:` text. `postprocess` (e.g. `judge.normalize_for_adjudication`, for a
     reference built from a judged file) is applied to every listed span's chosen
-    text; the protocol keeps where the text came from.
+    text; the protocol keeps where the text came from. `ranges` gives each
+    listed span's character range in the reference.
     """
     chosen_text: dict[int, str] = {}
     span_rows = []
@@ -496,8 +500,9 @@ def resolve(consensus: Consensus, choices: dict[int, Choice],
 
     totals["consensus_words"] += sum(1 for piece in consensus.pieces if "word" in piece)
     breaks = set(consensus.paragraph_breaks)
-    paragraphs: list[list[str]] = [[]]
+    paragraphs: list[list[tuple[str, int | None]]] = [[]]  # (text, listed span number or None)
     for piece in consensus.pieces:
+        number = None
         if "word" in piece:
             pos, text = piece["pos"], piece["word"]
         else:
@@ -505,16 +510,45 @@ def resolve(consensus: Consensus, choices: dict[int, Choice],
             positions = span.positions()
             pos = positions.start if positions else None
             text = chosen_text[piece["span"]]
-        if pos in breaks and paragraphs[-1]:
+            number = span.number
+        if pos in breaks and any(t for t, _ in paragraphs[-1]):
             paragraphs.append([])
-        if text:
-            paragraphs[-1].append(text)
-    reference = "\n\n".join(" ".join(p) for p in paragraphs if p) + "\n"
+        paragraphs[-1].append((text, number))
+    reference, ranges = _join_paragraphs(paragraphs)
     totals["reference_words"] = len(metrics.tokenize(reference))
     protocol = {"fragment": consensus.fragment, "engines": consensus.engines, "counts": consensus.counts(),
                 "totals": totals, "spans": span_rows,
                 "note": "words_by_engine and spans_by_engine overlap when engines shared the chosen variant"}
-    return Resolution(reference, protocol)
+    return Resolution(reference, protocol, ranges)
+
+
+def _join_paragraphs(
+        paragraphs: list[list[tuple[str, int | None]]]) -> tuple[str, dict[int, tuple[int, int]]]:
+    """
+    Pieces joined with spaces, paragraphs with a blank line, a final newline;
+    empty pieces are skipped (a paragraph of empty pieces only adds nothing).
+    Returns the text and each listed span's character range (an empty span:
+    an empty range right after the preceding text).
+    """
+    parts: list[str] = []
+    ranges: dict[int, tuple[int, int]] = {}
+    offset = 0
+    for paragraph in paragraphs:
+        started = False
+        for text, number in paragraph:
+            if not text:
+                if number is not None:
+                    ranges[number] = (offset, offset)
+                continue
+            separator = " " if started else ("\n\n" if parts else "")
+            parts.append(separator)
+            offset += len(separator)
+            started = True
+            if number is not None:
+                ranges[number] = (offset, offset + len(text))
+            parts.append(text)
+            offset += len(text)
+    return "".join(parts) + "\n", ranges
 
 
 # --- files -----------------------------------------------------------------

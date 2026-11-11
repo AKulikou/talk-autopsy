@@ -20,6 +20,8 @@ results/*
 data/test-set/*
 !data/test-set/README.md
 !data/test-set/*.glossary.md
+# The sealed hold-out's glossary stays local (drafted from its reference; T6 protocol).
+data/test-set/T6.glossary.md
 
 # Environment variables
 *.env

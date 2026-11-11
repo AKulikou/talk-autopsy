@@ -50,6 +50,7 @@ uv run talk-autopsy adjudicate T2 --backbone work/T2/raw.whisper-large-v3.json -
 uv run talk-autopsy resolve T2                    # after ticking data/test-set/T2.adjudication.md -> T2.ref.txt + protocol
 uv run talk-autopsy judge T6 --resume [--spent-before <usd>] [--plan-after <n>]  # blind audio judge (JUDGE_MODEL gemini-4-carbon, paid, $3 session budget): work/T6/judge.jsonl + T6.adjudication.judged.md; counts and cost only
 uv run talk-autopsy resolve T6 --adjudication data/test-set/T6.adjudication.judged.md   # reference from the judge's decisions
+uv run talk-autopsy judge-refs T6 [--force]           # T6: references J (judge) + M (majority) and work/T6/uncertain_spans.json; counts only
 uv run talk-autopsy judge-compare T2 [--normalize-adjudication]  # judge vs the decided T2 spans + WER between references (prints span texts; refuses T6)
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
 uv run talk-autopsy doctor                         # ffmpeg, JavaScript runtime for YouTube, yt-dlp age, key names
@@ -91,6 +92,7 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/adjudicate.py` — reference by consensus: aligns two cloud transcripts to the faster-whisper backbone, spans of disagreement, the adjudication file, clips, `resolve` to the reference and its protocol (`other: (no words)` types an empty variant)
 - `talk_autopsy/judge.py` — blind audio judge (`audio-judge-v1`, evaluation tooling, not frozen): one Gemini request per majority/split span with the clip inline; `heard` (verbatim, written first) then `choice` among deduplicated, shuffled, unlabeled options or `none` + `final_text`; resumable `judge.jsonl` (keyed by span and model; other models' records moved to `judge.free-pilot.jsonl`); cost per span from usage metadata and `config.GEMINI_PRICING_PER_MTOK`, budget stop, spend-cap stop; filled copy `T<n>.adjudication.judged.md`; self-preference / none / consistency shares; `compare` and `classify_decision` for calibration on decided spans
 - `talk_autopsy/ref_glossary.py` — reference glossary drafted by Gemini (`ref-glossary-v1`, not Claude, so the scored corrector does not write its own glossary): terms from `T<n>.ref.txt`, kept only if `eval` finds them in the reference, at most 60 (`talk-autopsy glossary-ref T<n>`)
+- `talk_autopsy/ref_bounds.py` — two references of a judged fragment (`two-references-v1`): J = the judge's `final_text` everywhere, M = the engines' majority where one exists; uncertain spans (splits + majority spans where J and M differ) with character/word ranges and the references' SHA-256 in `work/<ID>/uncertain_spans.json`; `metrics.bounded_term_accuracy` scores the T6 gate with a lower and an upper bound
 - `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import; superseded by `adjudicate.py` for the test set (`draft`, `ref-from-draft` still work)
 - `talk_autopsy/blocks.py` — what correction and translation share: 5-minute blocks with 3 read-only context segments, video context from `meta.json`, token and cost estimates, stage meta
 - `talk_autopsy/glossary_auto.py` — auto-glossary (`glossary-auto-v1`, helper model): terms, `keep`, suggested translation, `heard_as` mis-recognitions, evidence rule; `coverage` against a reference glossary; `merge` with a user glossary (user wins, drafted translations become "suggested" notes)
@@ -188,7 +190,9 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   AssemblyAI two passes, glossary-auto-v1, correction-v2, sentence units, translation-v2;
   a change to a frozen part needs a new tag and a new hold-out. T6: three engines run and
   `data/test-set/T6.adjudication.md` prepared; the owner withdrew from adjudication and the blind
-  audio judge failed its T2 calibration (79.0% < 90%; 82.5% after a post-hoc rescoring), so T6's reference waits for an owner decision;
+  audio judge failed its T2 calibration (79.0% < 90%; 82.5% after a post-hoc rescoring); owner's decision: T6's
+  reference is built in two variants (J: judge everywhere, M: engine majority where it exists; built 2026-11-11,
+  50 uncertain spans) and the gate uses bounds (`eval T6`: pass if the lower bound >= 85%, fail if the upper < 85%);
   then the tagged pipeline on T6 once; then the external audit. translation-v3 (term classes, C1b) is built as an
   option; the owner's blind rating (2026-11-11: v3 won 5 pairs, v2 6, ties 5) kept v2 as the default, no new
   freeze tag; a translation-v4 candidate is in the Backlog (after the T6 run).
@@ -199,7 +203,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 ## Known issues
 
 - Gemini's free tier allows 20 requests per day per project for `gemini-3.8-flash` (429 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, measured 2026-11-10; not in the docs). The project is on the paid tier since 2026-11-10 (EUR 5 monthly cap); the audio judge costs about $0.0026 per span with `gemini-4-carbon`.
-- The blind audio judge (`audio-judge-v1`) failed its T2 calibration on 2026-11-10 (agreement 79.0% against the 90% rule; it keeps repetitions the reference drops); a post-hoc rescoring with the repetition convention made explicit (`judge.normalize_for_adjudication`, both sides) gave 82.5%, still a fail, so T6 has no reference yet (docs/experiments.md, Methodology: blind audio judge).
+- The blind audio judge (`audio-judge-v1`) failed its T2 calibration on 2026-11-10 (agreement 79.0% against the 90% rule; it keeps repetitions the reference drops); a post-hoc rescoring with the repetition convention made explicit (`judge.normalize_for_adjudication`, both sides) gave 82.5%, still a fail, so T6's reference is built in two variants with uncertain spans and the gate uses bounds (docs/experiments.md, T6 protocol; built 2026-11-11).
 - T1's reference was decided by a Claude model without listening; it is secondary evidence for the Claude stages.
 - Gemini's free tier: 503 "high demand" is frequent and the daily quota can run out within one long talk (2026-11-09: on the third chunk). The chunked engine falls back per chunk on 503 and stops on quota; `run --gemini-cache-only` finishes a video with faster-whisper for the missing chunks.
 - Forced alignment places word starts 130–230 ms later than faster-whisper does; which is closer to the truth is not measured (no hand-labelled onsets yet).

@@ -347,6 +347,11 @@ non-native English accent). Its 10-minute window was cut blind on
    adjudication; the spans are decided by the blind audio judge if it passes its
    T2 calibration (Methodology: blind audio judge), and the glossary is drafted
    by Gemini from the reference (`talk-autopsy glossary-ref`), not by Claude.
+   *Changed 2026-11-10 (owner's decision, after the judge failed its
+   calibration):* the judge decides the spans anyway, but the reference is
+   built in two variants and the gate uses a lower and an upper bound, so the
+   conclusion does not depend on whether the judge is right where it alone
+   decides (decisions; "Reference and gate with bounds" below).
 3. **One run.** The frozen pipeline (`talk-autopsy run` with the tagged code,
    the auto-glossary and no hand glossary) runs on T6 once. Its numbers are
    recorded whatever they are; a prompt change after seeing them starts a new
@@ -368,6 +373,57 @@ no reference, no glossary.
 2026-11-10 (prompt 12, section A): rescored on T2 with the adjudication
 normaliser (Post-hoc rescoring above): 82.5%, still below 90%, so T6 is
 still not judged; no Gemini request was made.
+
+### Reference and gate with bounds (2026-11-11, prompt 13)
+
+Reference built 2026-11-11 by the blind audio judge (`gemini-4-carbon`,
+thinking `low`, paid tier; `audio-judge-v1` exactly as calibrated) in two
+variants (judge everywhere / engine majority where it exists); 86 spans
+judged, 50 uncertain spans containing 6 glossary-term occurrences; glossary
+of 51 terms extracted by Gemini. Gate: pass if the lower bound of term
+accuracy ≥ 85%, fail if the upper bound < 85%, otherwise inconclusive.
+
+- **The two references** (`talk-autopsy judge-refs T6`, `talk_autopsy/ref_bounds.py`):
+  **J** (`T6.ref.txt`): every judged span takes the judge's `final_text`;
+  **M** (`T6.ref.majority.txt`): majority spans take the engines' majority
+  variant, split spans the judge's `final_text`. Both pass every judged
+  span's text through the adjudication normaliser
+  (`judge.normalize_for_adjudication`). **Uncertain spans**
+  (`work/T6/uncertain_spans.json`: span numbers, verdicts, character and
+  word ranges in both references, the SHA-256 of both files; no text): the
+  split spans (decided by the judge alone) plus the majority spans where J
+  and M differ (tokens compared with case kept).
+- **Counts.** Spans judged: 65 majority, 21 split. The judge overrode the
+  majority in 29 of the 65 majority spans, so 50 spans are uncertain (21 +
+  29). In 1 span the judge's `final_text` differs from the option it chose
+  (J uses `final_text`, as specified). Words: J 2084, M 2043; WER of M
+  against J **2.45%** (6 substitutions, 43 deletions, 2 insertions). Judge
+  indicators: the Gemini engine's variant chosen in 48 of 86 spans (55.8%),
+  `none` (own text) in 18 (20.9%), `heard` contains the chosen text in 79 of
+  81 (97.5%), `heard` written before `choice` in 86 of 86.
+- **Glossary** (`talk-autopsy glossary-ref T6`, `ref-glossary-v1`, same
+  model, from J): 52 proposed, 1 dropped as absent from J, **51 kept**; every
+  kept term occurs in J (checked in code). 72 term occurrences in J, **6**
+  inside uncertain spans. `T6.glossary.md` stays local (git-ignored) until
+  the T6 run is recorded.
+- **Cost and time.** Judge $0.2206 (86 spans, $0.0026 per span, 10 min, no
+  failed spans); glossary $0.0226; Gemini total **$0.2432** by the session's
+  own counters at list price. Claude API and AssemblyAI: none.
+- **The gate** (`metrics.bounded_term_accuracy`, used by `talk-autopsy eval
+  T6`): term accuracy against J and against M; per term with `c` certain and
+  `u` uncertain occurrences in J and `h` in the hypothesis, the certain ones
+  are scored as usual (position-free, min(c, h)); **lower bound** = uncertain
+  occurrences counted as misses, **upper bound** = counted as hits, so lower
+  <= accuracy against J <= upper. With 6 of 72 occurrences uncertain the two
+  bounds are at most 8.3 points apart. Verdict: pass if lower >= 85%, fail
+  if upper < 85%, otherwise inconclusive; all four numbers (J, M, lower,
+  upper) are reported. `eval` on T6 prints counts only (no term rows) and
+  refuses `uncertain_spans.json` built for other reference files.
+- **Known limit.** A term the engines' majority has inside a span where J
+  has other words is not counted by the bounds (the glossary and the
+  occurrences come from J); the accuracy against M shows that case.
+- **Next:** the frozen `pipeline-v2` on T6 once (after the external audit
+  tonight), then `eval T6 --record`.
 
 ## Freeze pipeline-v2
 

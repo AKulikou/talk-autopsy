@@ -28,6 +28,28 @@ the T6 run.
 
 What it rules out: changing the default translation before the T6 run.
 
+## 2026-11-10 — T6 reference in two variants, gate with bounds
+
+Context: the blind audio judge failed its T2 calibration as the sole
+adjudicator (79.0% as specified, 82.5% after the labelled post-hoc
+rescoring; threshold 90%), the owner has withdrawn from adjudication, and the
+assistant cannot decide T6's spans.
+
+Decision (owner): the judge decides T6's spans anyway, and the reference is
+built two ways: J, the judge's text in every judged span; M, the engines'
+majority where one exists and the judge only on split spans. Spans where the
+judge alone decided or where J and M differ are uncertain. The term-accuracy
+gate uses bounds: glossary-term occurrences inside uncertain spans counted as
+misses (lower bound) or hits (upper bound). Pass if the lower bound >= 85%,
+fail if the upper bound < 85%, otherwise inconclusive; J, M and both bounds
+are reported. Built 2026-11-11 (experiments, T6 protocol).
+
+Why: the conclusion must not depend on whether the judge is right where it
+alone decides. An inconclusive result is reported as such.
+
+What it rules out: a single judge-decided T6 reference presented as checked;
+re-judging T6 with another prompt after seeing the T6 run.
+
 ## 2026-11-10 — Translation term policy (keep / both / translate / ui)
 
 Context: the owner watched the [removed] interview (real-01) with

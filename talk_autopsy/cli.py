@@ -1046,6 +1046,81 @@ def judge_compare_command(
     typer.echo(f"Wrote {out}")
 
 
+def _majority_ref_path(fragment: str) -> Path:
+    return config.TEST_SET_DIR / f"{fragment}.ref.majority.txt"
+
+
+def _uncertain_path(fragment: str) -> Path:
+    return config.WORK_DIR / fragment / "uncertain_spans.json"
+
+
+@app.command(name="judge-refs")
+def judge_refs_command(
+    fragment: Annotated[str, typer.Argument(help="Test-set fragment ID judged by the audio judge, e.g. T6.")],
+    force: ForceOption = False,
+) -> None:
+    """
+    Two references from the judge's records: J (the judge's text in every judged span) ->
+    <FRAGMENT>.ref.txt, M (the engines' majority where one exists, the judge on splits) ->
+    <FRAGMENT>.ref.majority.txt, and work/<FRAGMENT>/uncertain_spans.json (split spans plus majority
+    spans where J and M differ). With <FRAGMENT>.glossary.md present, also counts its term occurrences
+    in J and inside uncertain spans. Prints counts only.
+    """
+    import datetime
+
+    from talk_autopsy import ref_bounds
+
+    fragment = _fragment(fragment)
+    consensus_file = _consensus_path(fragment)
+    records_file = config.WORK_DIR / fragment / "judge.jsonl"
+    for path in (consensus_file, records_file):
+        if not path.is_file():
+            _fail(f"No {path}; run talk-autopsy adjudicate and judge {fragment} first")
+    out_j = config.TEST_SET_DIR / f"{fragment}.ref.txt"
+    out_m = _majority_ref_path(fragment)
+    try:
+        result = consensus_module.consensus_from_json(consensus_file.read_text(encoding="utf-8"))
+        records = judge.load_records(records_file)
+        refs = ref_bounds.build(result, records)
+    except (ValueError, KeyError, RuntimeError) as e:
+        _fail(str(e))
+    for path, text in ((out_j, refs.j.reference), (out_m, refs.m.reference)):
+        if path.exists() and not force and path.read_text(encoding="utf-8") != text:
+            _fail(f"{path} exists with other text. Pass --force to overwrite it.")
+    for path, resolution in ((out_j, refs.j), (out_m, refs.m)):
+        path.write_text(resolution.reference, encoding="utf-8", newline=chr(10))
+        protocol = path.with_name(path.name.removesuffix(".txt") + ".protocol.json")
+        protocol.write_text(json.dumps(resolution.protocol, ensure_ascii=False, indent=2) + chr(10),
+                            encoding="utf-8", newline=chr(10))
+    model = records[0].get("model", "?")
+    uncertain_file = _uncertain_path(fragment)
+    uncertain_file.write_text(
+        ref_bounds.uncertain_json(fragment, refs, model, out_j.as_posix(), out_m.as_posix(),
+                                  datetime.date.today().isoformat()),
+        encoding="utf-8", newline=chr(10))
+    c = refs.counts
+    typer.echo(f"{fragment}: two references from {len(records)} spans judged by {model}")
+    typer.echo(f"  spans judged: majority {c['judged']['majority']}, split {c['judged']['split']}")
+    typer.echo(f"  majority spans where the judge overrode the majority: {c['majority_overridden']}")
+    typer.echo(f"  uncertain spans (split + overridden majority): {c['uncertain_spans']}")
+    typer.echo(f"  judged spans whose final_text differs from the chosen option: "
+               f"{c['final_text_differs_from_chosen_option']}")
+    w = c["wer_j_m"]
+    typer.echo(f"  words: J {c['words_j']}, M {c['words_m']}; WER of M against J {w['wer']:.2%} "
+               f"({w['substitutions']} S, {w['deletions']} D, {w['insertions']} I)")
+    glossary_file = config.TEST_SET_DIR / f"{fragment}.glossary.md"
+    if glossary_file.is_file():
+        try:
+            terms = [e.term for e in load_glossary(glossary_file).entries]
+            ranges = [tuple(s["J"]["words"]) for s in refs.uncertain]
+            total, inside = ref_bounds.term_occurrences_inside(refs.j.reference, terms, ranges)
+        except (ValueError, GlossaryError) as e:
+            _fail(str(e))
+        typer.echo(f"  glossary: {len(terms)} terms; {total} occurrences in J, "
+                   f"{inside} inside uncertain spans")
+    typer.echo(f"Wrote {out_j}, {out_m} (+ protocols) and {uncertain_file}")
+
+
 @app.command(name="glossary-ref")
 def glossary_ref_command(
     fragment: Annotated[str, typer.Argument(help="Test-set fragment ID with a reference, e.g. T6.")],

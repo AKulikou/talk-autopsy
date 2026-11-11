@@ -205,13 +205,14 @@ def _last_token_matches(term_token: str, token: str) -> bool:
         _token_matches(plural, token) for plural in plural_forms(term_token))
 
 
-def _claim(term_tokens: list[str], tokens: list[str], claimed: list[bool]) -> int:
+def _claim(term_tokens: list[str], tokens: list[str], claimed: list[bool]) -> list[tuple[int, int]]:
     """
-    Count non-overlapping occurrences of `term_tokens` in `tokens` that use no
+    Find the non-overlapping occurrences of `term_tokens` in `tokens` that use no
     position claimed by another term, and claim the positions they use. The last
-    token of the term may be in a regular plural form (`plural_forms`).
+    token of the term may be in a regular plural form (`plural_forms`). Returns
+    each occurrence's token range (start, end), end exclusive.
     """
-    count, i, n = 0, 0, len(term_tokens)
+    found, i, n = [], 0, len(term_tokens)
     while i + n <= len(tokens):
         window = range(i, i + n)
         if not any(claimed[j] for j in window) and all(
@@ -220,20 +221,33 @@ def _claim(term_tokens: list[str], tokens: list[str], claimed: list[bool]) -> in
         ):
             for j in window:
                 claimed[j] = True
-            count += 1
+            found.append((i, i + n))
             i += n
         else:
             i += 1
-    return count
+    return found
+
+
+def _find_terms(term_tokens: list[list[str]], tokens: list[str]) -> list[list[tuple[int, int]]]:
+    """Occurrences of each term, longest terms first, so a term inside a longer one is not counted twice."""
+    claimed = [False] * len(tokens)
+    found: list[list[tuple[int, int]]] = [[] for _ in term_tokens]
+    for index in sorted(range(len(term_tokens)), key=lambda k: -len(term_tokens[k])):
+        found[index] = _claim(term_tokens[index], tokens, claimed)
+    return found
 
 
 def _count_terms(term_tokens: list[list[str]], tokens: list[str]) -> list[int]:
-    """Occurrences of each term, longest terms first, so a term inside a longer one is not counted twice."""
-    claimed = [False] * len(tokens)
-    counts = [0] * len(term_tokens)
-    for index in sorted(range(len(term_tokens)), key=lambda k: -len(term_tokens[k])):
-        counts[index] = _claim(term_tokens[index], tokens, claimed)
-    return counts
+    return [len(occurrences) for occurrences in _find_terms(term_tokens, tokens)]
+
+
+def term_occurrences(text: str, terms: Iterable[str]) -> list[list[tuple[int, int]]]:
+    """
+    Where each term occurs in `text`, as `term_accuracy` counts it: per term, the
+    token ranges (start, end exclusive) in `tokenize(text, lowercase=False)`.
+    """
+    term_tokens = [tokenize(term, lowercase=False) for term in terms]
+    return _find_terms(term_tokens, tokenize(text, lowercase=False))
 
 
 def term_accuracy(reference: str, hypothesis: str, terms: Iterable[str]) -> TermAccuracyResult:
