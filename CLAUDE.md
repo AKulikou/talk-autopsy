@@ -188,7 +188,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   engine chosen against the WER gate: AssemblyAI with key terms (owner's choice,
   decisions), Gemini + forced alignment and faster-whisper as fallbacks;
   baselines measured. Still open from the plan: prior-art survey, T3–T5.
-- **Stage 2 (current):** correction and translation prompts, measured and frozen; hold-out
+- **Stage 2 (gate passed 2026-11-11):** correction and translation prompts, measured and frozen; hold-out
   and external audit at the gate. C1: v2 preferred to v1 (blind pairwise 4.40 / 4.67); absolute target
   not demonstrated (3.85 < 4.0); re-tested on T6. B2 v2 checked. External audit #1 done 2026-11-11
   (`docs/audit-2026-11-11.md`); its fixes refroze the pipeline as git tag **`pipeline-v3`** (d180a73;
@@ -201,9 +201,13 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   / not demonstrated / fail / inconclusive, overfitting signal below 85.33%; "pass (demonstrated)" is out of
   reach on T6). **T6 run once on 2026-11-11** (d180a73, `docs/experiments.md`, T6 result): term accuracy v2
   100% against J and M, lower bound 91.67% (Wilson 83.0%), verdict "pass (not demonstrated)", overfitting
-  signal no. **Next:** the owner rates `work/T6/C1-T6-rating.md` (pre-registered translation check, 12 units,
-  amended before the run), then `scripts/translation_check.py score`. translation-v3 stays an option.
-- **Stage 3:** the CLI tool with subtitles; external audit; v1.0.
+  signal no. Translation check (blind, 12 units): pipeline 4.42, plain Gemini 4.33, +0.08 [−0.33, +0.50];
+  rule (>= 4.0) met; not shown better than Gemini. Owner passed gate 2 -> 3 (`docs/experiments.md`, Gate 2 -> 3).
+  translation-v3 stays an option.
+- **Stage 3 (current):** v1.0 per the specification's checklist (`docs/experiments.md`, v1.0 checklist):
+  baselines on one set (T2, T6: raw Whisper, Whisper + Google Translate, VideoLingo) and the owner's
+  three-system rating, Windows launcher for the owner, re-run from cache within a minute, external audit #2,
+  tag `v1.0`. The web UI stays v1.1.
 - **Stage 4:** dubbed audio track.
 - **v1.1:** local web UI over the same core.
 
@@ -219,7 +223,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
 - AssemblyAI and Gemini helped build the T1/T2 references, so their WER against them is biased in their favour; compare them through the resolve protocol (docs/experiments.md, methodology).
 - faster-whisper 1.2.1 cannot decode files with PyAV 19 (`metadata_errors`); the engine reads the WAV itself and passes samples.
 - faster-whisper's segment `avg_logprob` is per 30-second decoding window, so segment `confidence` is too; word probabilities are per word.
-- T3–T5 are not selected; T6 is cut blind (25:46–35:46 of `T6.source.mp4`). T6 was run once on 2026-11-11 and is no longer sealed, but the repository rules still apply: no speaker names, no transcripts or long quotes in tracked files (short term examples are fine); its glossary is tracked since the run. The owner does not watch T6 until the translation rating is done. The assistant decided none of its spans. T1's speaker is assumed native (to be confirmed).
+- T3–T5 are not selected; T6 is cut blind (25:46–35:46 of `T6.source.mp4`). T6 was run once on 2026-11-11 and is no longer sealed, but the repository rules still apply: no speaker names, no transcripts or long quotes in tracked files (short term examples are fine); its glossary is tracked since the run. The owner rated the T6 translation check before watching T6 (done 2026-11-11). The assistant decided none of its spans. T1's speaker is assumed native (to be confirmed).
 - AssemblyAI costs about $0.47 per hour of video in `run` (two passes, list price: $0.21 + $0.26 with key terms), drawn from the account's free credit for now.
 - Claude Haiku 5.5 costs more for prompts over 100,000 tokens; the cost estimate
   uses the lower tier.

@@ -6,6 +6,30 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-11 — Gate 2 -> 3 passed; v1.0 per the specification first, web UI stays v1.1
+
+Context: the hold-out T6 ran once on `pipeline-v3` (term accuracy v2 100%
+against both references, lower bound 91.67%, "pass (not demonstrated)", no
+overfitting signal), and the owner rated the pre-registered translation check
+blind (pipeline 4.42, plain Gemini 4.33, difference +0.08 with a bootstrap
+interval of −0.33 … +0.50; rule pipeline mean >= 4.0 met). External audit #1
+was done the same day (experiments, Gate 2 -> 3).
+
+Decision (owner): **gate 2 -> 3 is passed.** Stage 3 finishes v1.0 as the
+specification lists it: the baselines (raw Whisper, Whisper + Google
+Translate, VideoLingo) on one set, T2 and T6; re-run from cache within a
+minute; README in the series structure with honest limitations; external
+audit #2; tag `v1.0`. Until a web UI exists the owner starts the tool with a
+Windows launcher. The web UI stays v1.1. `pipeline-v3` stays frozen;
+correction stays on the main path until T3 (Backlog).
+
+Why: the specification defines v1.0 by measurement against baselines, not by
+features; the translation is only shown to be on par with a plain Gemini
+translation, so the honest claim is term recognition plus the tool.
+
+What it rules out: starting the web UI or a new prompt version before v1.0;
+claiming better translation than a plain LLM translation.
+
 ## 2026-11-11 — Speaker details out of tracked files; history rewritten before going public
 
 Context: external audit #1 (finding 13) found the speakers of the test-set and
