@@ -51,6 +51,7 @@ uv run talk-autopsy resolve T2                    # after ticking data/test-set/
 uv run talk-autopsy judge T6 --resume [--spent-before <usd>] [--plan-after <n>]  # blind audio judge (JUDGE_MODEL gemini-4-carbon, paid, $3 session budget): work/T6/judge.jsonl + T6.adjudication.judged.md; counts and cost only
 uv run talk-autopsy resolve T6 --adjudication data/test-set/T6.adjudication.judged.md   # reference from the judge's decisions
 uv run talk-autopsy judge-refs T6 [--force]           # T6: references J (judge) + M (majority) and work/T6/uncertain_spans.json; counts only
+uv run talk-autopsy eval T6 --hyp <t>.json           # sealed: WER and term accuracy against J and M, bounds, gate verdict; counts only
 uv run talk-autopsy judge-compare T2 [--normalize-adjudication]  # judge vs the decided T2 spans + WER between references (prints span texts; refuses T6)
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
 uv run talk-autopsy doctor                         # ffmpeg, JavaScript runtime for YouTube, yt-dlp age, key names

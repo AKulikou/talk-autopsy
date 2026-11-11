@@ -294,6 +294,71 @@ def term_accuracy(reference: str, hypothesis: str, terms: Iterable[str]) -> Term
     return TermAccuracyResult(rows=rows, absent=absent, accuracy=accuracy)
 
 
+# --- Term accuracy with bounds (the T6 gate) --------------------------------
+
+TERM_ACCURACY_GATE = 0.85  # stage 2 gate (CLAUDE.md, Stage gates)
+
+
+@dataclass(frozen=True)
+class BoundedTermAccuracy:
+    against_j: TermAccuracyResult  # reference J: the judge's text in every judged span
+    against_m: TermAccuracyResult  # reference M: the engines' majority where one exists
+    lower: float  # uncertain occurrences counted as misses
+    upper: float  # uncertain occurrences counted as hits
+    occurrences: int  # glossary-term occurrences in J (the denominator of J, lower and upper)
+    uncertain_occurrences: int  # of those, the ones inside an uncertain span
+    threshold: float
+    verdict: str  # pass | fail | inconclusive
+
+
+def _overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
+    return a[0] < b[1] and b[0] < a[1]
+
+
+def bounded_term_accuracy(reference_j: str, reference_m: str, hypothesis: str, terms: Iterable[str],
+                          uncertain: Iterable[tuple[int, int]],
+                          threshold: float = TERM_ACCURACY_GATE) -> BoundedTermAccuracy:
+    """
+    Term accuracy when part of the reference is uncertain (the T6 gate).
+
+    `uncertain` are token ranges (start, end exclusive) in
+    `tokenize(reference_j, lowercase=False)`: the spans where the reference is
+    one judge's decision alone or where two ways of building it disagree. A
+    glossary-term occurrence of J is uncertain if its tokens overlap such a
+    range (an empty range overlaps nothing).
+
+    Per term with `c` certain and `u` uncertain occurrences in J and `h`
+    occurrences in the hypothesis, the certain ones are scored as
+    `term_accuracy` scores them (position-free): found = min(c, h). Then
+
+        lower = sum(min(c, h)) / sum(c + u)       (uncertain occurrences are misses)
+        upper = sum(min(c, h) + u) / sum(c + u)   (uncertain occurrences are hits)
+
+    so lower <= accuracy against J <= upper. Verdict: `pass` if lower >=
+    `threshold`, `fail` if upper < `threshold`, otherwise `inconclusive`. The
+    accuracy against M (same terms; terms absent from M are excluded there, as
+    in `term_accuracy`) is reported next to them, not used by the verdict.
+    """
+    terms = list(terms)
+    ranges = list(uncertain)
+    against_j = term_accuracy(reference_j, hypothesis, terms)
+    against_m = term_accuracy(reference_m, hypothesis, terms)
+    in_hypothesis = [len(found) for found in term_occurrences(hypothesis, terms)]
+    expected = uncertain_count = certain_found = 0
+    for found, hyp_count in zip(term_occurrences(reference_j, terms), in_hypothesis, strict=True):
+        u = sum(1 for occurrence in found if any(_overlaps(occurrence, r) for r in ranges))
+        expected += len(found)
+        uncertain_count += u
+        certain_found += min(len(found) - u, hyp_count)
+    if not expected:
+        raise ValueError("no glossary term occurs in reference J; the bounds are undefined")
+    lower = certain_found / expected
+    upper = (certain_found + uncertain_count) / expected
+    verdict = "pass" if lower >= threshold else "fail" if upper < threshold else "inconclusive"
+    return BoundedTermAccuracy(against_j, against_m, lower, upper, expected, uncertain_count, threshold,
+                               verdict)
+
+
 # --- False-edit rate -------------------------------------------------------
 
 

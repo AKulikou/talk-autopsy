@@ -747,6 +747,9 @@ def eval_command(
               f"..., decide the spans in data/test-set/{fragment}.adjudication.md, then run "
               f"talk-autopsy resolve {fragment}")
     glossary_path = config.TEST_SET_DIR / f"{fragment}.glossary.md"
+    if fragment in config.SEALED_FRAGMENTS:
+        _eval_sealed(fragment, ref_path, glossary_path, hyp, raw, record, engine, stage, notes)
+        return
     try:
         reference = ref_path.read_text(encoding="utf-8")
         hypothesis = evaluation.read_transcript_text(hyp)
@@ -790,6 +793,68 @@ def eval_command(
             notes = "; ".join(n for n in (notes, "draft glossary") if n)
         row = evaluation.benchmark_row(report, fragment=fragment, stage=stage.strip(),
                                        engine=engine.strip(), meta=hypothesis.meta, notes=notes)
+        try:
+            evaluation.append_benchmark_row(config.BENCHMARK_CSV, row)
+        except (FileNotFoundError, ValueError) as e:
+            _fail(str(e))
+        typer.echo(f"Recorded in {config.BENCHMARK_CSV}")
+
+
+def _eval_sealed(fragment: str, ref_path: Path, glossary_path: Path, hyp: Path, raw: Path | None,
+                 record: bool, engine: str | None, stage: str | None, notes: str) -> None:
+    """
+    The sealed hold-out (T6): WER and term accuracy against both references (J: the judge's text,
+    M: the engines' majority where one exists), the bounds from the uncertain spans and the gate
+    verdict (metrics.bounded_term_accuracy). Counts only: no term, no transcript text.
+    """
+    from talk_autopsy import ref_bounds
+
+    majority_path, uncertain_path = _majority_ref_path(fragment), _uncertain_path(fragment)
+    for path, how in ((majority_path, f"talk-autopsy judge-refs {fragment}"),
+                      (uncertain_path, f"talk-autopsy judge-refs {fragment}"),
+                      (glossary_path, f"talk-autopsy glossary-ref {fragment}")):
+        if not path.is_file():
+            _fail(f"No {path}; the sealed fragment is scored with both references and the bounds ({how})")
+    try:
+        reference_j = ref_path.read_text(encoding="utf-8")
+        reference_m = majority_path.read_text(encoding="utf-8")
+        ranges = ref_bounds.load_uncertain(uncertain_path, reference_j, reference_m)
+        glossary = parse_glossary(glossary_path.read_text(encoding="utf-8"))
+        hypothesis = evaluation.read_transcript_text(hyp)
+        raw_text = evaluation.read_transcript_text(raw).text if raw is not None else None
+        report = evaluation.evaluate(reference_j, hypothesis.text, glossary, raw_text)
+        bounds = metrics.bounded_term_accuracy(reference_j, reference_m, hypothesis.text,
+                                               [e.term for e in glossary.entries], ranges)
+        wer_m = metrics.word_error_rate(reference_m, hypothesis.text)
+    except (FileNotFoundError, ValueError, KeyError, GlossaryError) as e:
+        _fail(str(e))
+
+    typer.echo(f"Fragment {fragment} (sealed: counts only): {hyp}")
+    if hypothesis.meta:
+        typer.echo(f"Run: {evaluation.describe_meta(hypothesis.meta)}")
+    for name, w in (("WER against J", report.wer), ("WER against M", wer_m)):
+        typer.echo(f"  {name:<26} {_percent(w.wer):>8}   (S {w.substitutions}, D {w.deletions}, "
+                   f"I {w.insertions}; {w.reference_words} reference words)")
+    for name, t in (("term accuracy against J", bounds.against_j),
+                    ("term accuracy against M", bounds.against_m)):
+        typer.echo(f"  {name:<26} {_percent(t.accuracy):>8}   ({t.found}/{t.expected} occurrences of "
+                   f"{len(t.rows)} terms)")
+    typer.echo(f"  {'term accuracy, lower bound':<26} {_percent(bounds.lower):>8}   "
+               f"({bounds.uncertain_occurrences} of {bounds.occurrences} occurrences inside uncertain "
+               "spans counted as misses)")
+    typer.echo(f"  {'term accuracy, upper bound':<26} {_percent(bounds.upper):>8}   (counted as hits)")
+    typer.echo(f"  gate: term accuracy >= {bounds.threshold:.0%}: {bounds.verdict.upper()}   "
+               "(pass: lower bound >= threshold; fail: upper bound < threshold; otherwise inconclusive)")
+    if report.false_edits is not None:
+        f = report.false_edits
+        typer.echo(f"  {'false-edit rate (J)':<26} {_percent(f.rate):>8}   "
+                   f"({f.false_edits} of {f.raw_hits} correct raw words changed)")
+    if record:
+        summary = (f"reference J; M: WER {wer_m.wer:.4f}, terms {bounds.against_m.accuracy:.4f}; "
+                   f"term bounds [{bounds.lower:.4f}, {bounds.upper:.4f}]; gate {bounds.verdict}")
+        notes = "; ".join(n for n in (notes, summary) if n)
+        row = evaluation.benchmark_row(report, fragment=fragment, stage=stage.strip(), engine=engine.strip(),
+                                       meta=hypothesis.meta, notes=notes)
         try:
             evaluation.append_benchmark_row(config.BENCHMARK_CSV, row)
         except (FileNotFoundError, ValueError) as e:

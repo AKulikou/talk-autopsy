@@ -19,6 +19,92 @@ runner = CliRunner()
 ENGINES = ["faster-whisper", "assemblyai", "gemini"]
 
 
+# --- bounded term accuracy on fake references ----------------------------------------
+
+
+def text_with(terms: dict[str, int], filler: str = "and") -> str:
+    """`n` occurrences of each term, separated by a filler word."""
+    return f" {filler} ".join(term for term, n in terms.items() for _ in range(n))
+
+
+def test_pass_when_the_lower_bound_reaches_the_threshold():
+    j = text_with({"Docker": 10, "Kubernetes": 1})  # Docker at tokens 0, 2, ..., 18; Kubernetes at 20
+    result = metrics.bounded_term_accuracy(j, j, j, ["Docker", "Kubernetes"], [(20, 21)])
+    assert (result.occurrences, result.uncertain_occurrences) == (11, 1)
+    assert result.lower == pytest.approx(10 / 11) and result.upper == 1.0
+    assert result.verdict == "pass"
+
+
+def test_fail_when_the_upper_bound_is_below_the_threshold():
+    j = text_with({"Docker": 10, "Kubernetes": 1})
+    hypothesis = text_with({"Docker": 5})
+    result = metrics.bounded_term_accuracy(j, j, hypothesis, ["Docker", "Kubernetes"], [(20, 21)])
+    assert result.lower == pytest.approx(5 / 11) and result.upper == pytest.approx(6 / 11)
+    assert result.verdict == "fail"
+
+
+def test_inconclusive_when_the_threshold_lies_between_the_bounds():
+    j = text_with({"Docker": 4, "Kubernetes": 2})  # Kubernetes at tokens 8 and 10
+    result = metrics.bounded_term_accuracy(j, j, j, ["Docker", "Kubernetes"], [(8, 11)])
+    assert result.against_j.accuracy == 1.0
+    assert result.lower == pytest.approx(4 / 6) and result.upper == 1.0
+    assert result.verdict == "inconclusive"
+
+
+def test_the_bounds_enclose_the_accuracy_against_j():
+    j = text_with({"Docker": 3, "Kubernetes": 2, "GitHub": 2})
+    for hypothesis in (j, text_with({"Docker": 1, "GitHub": 3}), "nothing"):
+        for ranges in ([], [(0, 1)], [(2, 9)], [(0, 13)]):
+            terms = ["Docker", "Kubernetes", "GitHub"]
+            result = metrics.bounded_term_accuracy(j, j, hypothesis, terms, ranges)
+            assert result.lower <= result.against_j.accuracy <= result.upper
+
+
+def test_without_uncertain_spans_the_bounds_equal_the_accuracy_against_j():
+    j = text_with({"Docker": 3, "Kubernetes": 2})
+    hypothesis = text_with({"Docker": 2, "Kubernetes": 2})
+    result = metrics.bounded_term_accuracy(j, j, hypothesis, ["Docker", "Kubernetes"], [])
+    assert result.lower == result.upper == result.against_j.accuracy == pytest.approx(4 / 5)
+
+
+def test_occurrence_inside_or_outside_an_uncertain_span():
+    j = "we open Claude Code and run Docker now"  # Claude Code = tokens 2-3, Docker = token 6
+    terms = ["Claude Code", "Docker"]
+
+    def inside(ranges):
+        return metrics.bounded_term_accuracy(j, j, j, terms, ranges).uncertain_occurrences
+
+    assert inside([(6, 7)]) == 1  # Docker inside
+    assert inside([(3, 4)]) == 1  # overlaps the second token of Claude Code: the occurrence is uncertain
+    assert inside([(4, 6)]) == 0  # "and run": next to both terms, overlaps neither
+    assert inside([(4, 4)]) == 0  # an empty span (nothing said) overlaps nothing
+    assert inside([(0, 8)]) == 2
+    assert ref_bounds.term_occurrences_inside(j, terms, [(3, 4)]) == (2, 1)
+
+
+def test_term_occurrences_agree_with_term_accuracy_counts():
+    text = "Claude Code and Claude and pull requests on GitHub, Github"
+    terms = ["Claude", "Claude Code", "pull request", "GitHub"]
+    found = metrics.term_occurrences(text, terms)
+    assert [len(f) for f in found] == [1, 1, 1, 1]
+    assert found[1] == [(0, 2)] and found[0] == [(3, 4)]  # the longer term claims its tokens first
+    rows = metrics.term_accuracy(text, text, terms).rows
+    assert [r.expected for r in rows] == [len(f) for f in found]
+
+
+def test_m_is_reported_but_does_not_change_the_verdict():
+    j = text_with({"Docker": 4, "Kubernetes": 2})
+    m = text_with({"Docker": 4})
+    result = metrics.bounded_term_accuracy(j, m, j, ["Docker", "Kubernetes"], [(8, 11)])
+    assert result.against_m.accuracy == 1.0 and result.against_m.absent == ["Kubernetes"]
+    assert result.verdict == "inconclusive"
+
+
+def test_no_term_in_j_is_an_error():
+    with pytest.raises(ValueError, match="no glossary term"):
+        metrics.bounded_term_accuracy("plain words", "plain words", "plain words", ["Docker"], [])
+
+
 # --- resolve keeps each span's range ---------------------------------------------------
 
 
@@ -108,6 +194,17 @@ def test_the_judges_text_passes_through_the_adjudication_normaliser():
     assert "make build zeta" in refs.j.reference and "make build zeta" in refs.m.reference
 
 
+def test_term_in_an_overridden_majority_span_is_uncertain():
+    refs = ref_bounds.build(three_spans(), judged_records())
+    ranges = [tuple(u["J"]["words"]) for u in refs.uncertain]
+    terms = ["Claude Code", "GitHub"]
+    j, m = refs.j.reference, refs.m.reference
+    result = metrics.bounded_term_accuracy(j, m, j, terms, ranges)
+    assert (result.occurrences, result.uncertain_occurrences) == (2, 1)
+    assert (result.lower, result.upper, result.verdict) == (0.5, 1.0, "inconclusive")
+    assert result.against_m.absent == ["GitHub"]
+
+
 def test_incomplete_or_mixed_records_are_refused():
     with pytest.raises(ref_bounds.BoundsError, match="not judged yet"):
         ref_bounds.build(three_spans(), judged_records()[:2])
@@ -170,3 +267,39 @@ def test_cli_judge_refs_writes_both_references_and_prints_counts_only(sealed_pro
     assert "glossary: 2 terms; 2 occurrences in J, 1 inside uncertain spans" in again.output
     (test_set / "T9.ref.txt").write_text("changed by hand\n", encoding="utf-8")
     assert runner.invoke(cli.app, ["judge-refs", "T9"]).exit_code == 1  # no silent overwrite
+
+
+def test_cli_eval_on_a_sealed_fragment_reports_both_references_bounds_and_verdict(sealed_project, tmp_path):
+    test_set, _ = sealed_project
+    hypothesis = tmp_path / "hyp.txt"
+    hypothesis.write_text(A.replace("cloud code", "Claude Code"), encoding="utf-8")
+    (test_set / "T9.ref.txt").write_text("a reference without the bounds files\n", encoding="utf-8")
+    missing = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(hypothesis)])
+    assert missing.exit_code == 1 and "judge-refs" in missing.output
+    assert runner.invoke(cli.app, ["judge-refs", "T9", "--force"]).exit_code == 0
+    no_glossary = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(hypothesis)])
+    assert no_glossary.exit_code == 1 and "glossary-ref" in no_glossary.output
+    glossary = Glossary(entries=[GlossaryEntry(term="Claude Code", keep=True),
+                                 GlossaryEntry(term="GitHub", keep=True)])
+    (test_set / "T9.glossary.md").write_text(to_markdown(glossary, languages=["ru"]), encoding="utf-8")
+    result = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(hypothesis)])
+    assert result.exit_code == 0, result.output
+    out = result.output
+    assert "term accuracy against J" in out and "term accuracy against M" in out
+    assert "lower bound" in out and "upper bound" in out
+    assert "1 of 2 occurrences inside uncertain spans" in out
+    assert "INCONCLUSIVE" in out
+    assert not any(word in out.replace(str(hypothesis), "") for word in SECRET_WORDS)
+
+
+def test_cli_eval_refuses_ranges_built_for_other_references(sealed_project, tmp_path):
+    test_set, _ = sealed_project
+    assert runner.invoke(cli.app, ["judge-refs", "T9"]).exit_code == 0
+    (test_set / "T9.glossary.md").write_text(
+        to_markdown(Glossary(entries=[GlossaryEntry(term="GitHub", keep=True)]), languages=["ru"]),
+        encoding="utf-8")
+    (test_set / "T9.ref.majority.txt").write_text("edited\n", encoding="utf-8")
+    hypothesis = tmp_path / "hyp.txt"
+    hypothesis.write_text("anything", encoding="utf-8")
+    result = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(hypothesis)])
+    assert result.exit_code == 1 and "rebuild" in result.output
