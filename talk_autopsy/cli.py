@@ -281,7 +281,7 @@ def glossary_auto_command(
     max_cost: Annotated[float, typer.Option(help="Stop if the estimate is above this (USD).")]
     = config.COST_CONFIRMATION_USD,
 ) -> None:
-    """Draft the glossary of a video from its first transcript (glossary-auto-v1, helper model)."""
+    """Draft the glossary of a video from its first transcript (glossary-auto-v2, helper model)."""
     try:
         config.require_api_key()
         target_lang = config.check_lang(lang if lang is not None else config.target_lang())

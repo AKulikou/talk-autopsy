@@ -230,18 +230,21 @@ def helper_model() -> str:
     return _setting("HELPER_MODEL", DEFAULT_HELPER_MODEL)
 
 
-TRANSLATION_VERSIONS = {"v2": "translation-v2", "v3": "translation-v3"}
-DEFAULT_TRANSLATION_VERSION = "translation-v2"  # v3 is an option until the owner's blind rating
+# v2 = translation-v2.1 (translation-v2's rules with examples from outside the test set; frozen in
+# pipeline-v3); translation-v2 itself stays selectable by its full name for the record; v3 is an option.
+TRANSLATION_VERSIONS = {"v2": "translation-v2.1", "v3": "translation-v3"}
+OTHER_TRANSLATION_VERSIONS = ("translation-v2",)
+DEFAULT_TRANSLATION_VERSION = "translation-v2.1"
 
 
 def translation_version(value: str | None = None) -> str:
     """
     The translation prompt of `run`: `value` (the CLI's --translation) or
-    TRANSLATION_VERSION, as v2 / v3 or the full name; default translation-v2.
+    TRANSLATION_VERSION, as v2 / v3 or the full name; default translation-v2.1.
     """
     raw = (value or _setting("TRANSLATION_VERSION", DEFAULT_TRANSLATION_VERSION)).strip().lower()
     version = TRANSLATION_VERSIONS.get(raw, raw)
-    if version not in TRANSLATION_VERSIONS.values():
+    if version not in (*TRANSLATION_VERSIONS.values(), *OTHER_TRANSLATION_VERSIONS):
         raise ConfigurationError(f"translation version {raw!r}: use v2 or v3")
     return version
 

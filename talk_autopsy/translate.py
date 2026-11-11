@@ -1,6 +1,8 @@
 """
 Claude translation of the corrected transcript (prompt versions `translation-v1`,
-`translation-v2`; v2 is the default since 2026-11-09: no meaning compression).
+`translation-v2`, `translation-v2.1`; v2 is the default since 2026-11-09: no meaning
+compression; v2.1, the default since 2026-11-11, is v2 with its examples replaced by
+examples from outside the test set).
 
     fixed.json + glossary + target_lang -> <target_lang>.json
 
@@ -66,8 +68,8 @@ from talk_autopsy.segments import Segment, Transcript, assert_same_ids
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "translation-v2"
-VERSIONS = ("translation-v1", "translation-v2", "translation-v3")
+PROMPT_VERSION = "translation-v2.1"  # translation-v2's rules, examples from outside the test set (2026-11-11)
+VERSIONS = ("translation-v1", "translation-v2", "translation-v2.1", "translation-v3")
 V3 = "translation-v3"
 # A well-formed marker: ⟦both:rendering|English⟧ or ⟦ui:English|gloss⟧ (no nesting, no extra bars).
 MARKER = re.compile(r"⟦(both|ui):([^|⟦⟧]+)\|([^|⟦⟧]+)⟧")

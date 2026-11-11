@@ -8,7 +8,8 @@ without anyone writing a glossary by hand.
 One structured call to the helper model (`config.helper_model()`, Haiku) with the
 whole transcript as plain text, one segment per line, and the context (video
 title, description, chapter titles) if the owner has any. For a local file the
-file name is not context. The prompt is `prompts/glossary-auto-v1.md`.
+file name is not context. The prompt is `prompts/glossary-auto-v2.md`
+(v1: the same rules with examples taken from the T2 glossary, kept for the record).
 
 The answer lists 20-60 terms, each with a canonical spelling, `keep`, a
 translation into `target_lang` when not kept, and `heard_as`: the forms in the
@@ -48,7 +49,8 @@ from talk_autopsy.segments import Transcript
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "glossary-auto-v1"
+PROMPT_VERSION = "glossary-auto-v2"  # v1 = the same rules with examples from the T2 glossary
+VERSIONS = ("glossary-auto-v1", "glossary-auto-v2")
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 MAX_TERMS = 60
 MAX_TERM_WORDS = 6  # AssemblyAI's key-term limit; longer terms would be left out of the second pass
