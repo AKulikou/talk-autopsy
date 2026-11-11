@@ -439,8 +439,8 @@ and without-top averages, precision, the false-edit rate.
 - *Fail:* the upper bound < 85%.
 - *Inconclusive:* otherwise.
 - *Overfitting signal:* T6 (reference J, micro) more than 10 points below the
-  mean of the three `pipeline-v3` repeats on T2 (Freeze pipeline-v3, Repeats)
-  is reported as a separate finding regardless of the verdict
+  mean of the three `pipeline-v3` repeats on T2 (Freeze pipeline-v3, Repeats:
+  mean 95.33%, so T6 below 85.33%) is reported as a separate finding regardless of the verdict
   (`metrics.overfitting_signal`; `eval T6` prints it).
 
 **What 72 occurrences can show.** With n = 72 the Wilson lower limit reaches
@@ -576,6 +576,83 @@ accuracy ≥ 85%, fail if the upper bound < 85%, otherwise inconclusive.
   occurrences come from J); the accuracy against M shows that case.
 - **Next:** the frozen `pipeline-v2` on T6 once (after the external audit
   tonight), then `eval T6 --record`.
+
+## Freeze pipeline-v3
+
+Frozen on 2026-11-11 with the annotated git tag `pipeline-v3` on commit
+**`d180a73ddc3c95f2b7cb79e8621e541aa36f99b5`**, after external audit #1. It
+supersedes `pipeline-v2` for the T6 run; T6 has never been run on either.
+What changed against `pipeline-v2`:
+
+- `glossary-auto-v2` and `translation-v2.1`: the same rules as
+  `glossary-auto-v1` and `translation-v2`, with every example that came from
+  the test set replaced by an example of the same kind from outside it
+  (checked by code against the T1, T2 and T6 glossaries and references;
+  `tests/test_prompt_examples.py`). `correction-v2` is unchanged (its examples
+  are discourse markers and an invented accent pair).
+- The cache key of every step includes the prompt file and a hash of the
+  validator and post-processing code (`pipeline.code_hash`), so a fix
+  invalidates cached results.
+- AssemblyAI key terms are truncated to the service's 1,000 words (every word
+  of a phrase counts), the user's terms first, then the auto-glossary's by
+  frequency in the first pass; nothing raises.
+- The metric is term accuracy v2 (Metrics above); the metric code is frozen
+  with the pipeline.
+
+Frozen paths (a change to any of them after the tag needs a new tag and a
+new hold-out): `talk_autopsy/ingest.py`, `talk_autopsy/stt/`,
+`talk_autopsy/align.py`, `talk_autopsy/glossary.py`,
+`talk_autopsy/glossary_auto.py`, `talk_autopsy/correct.py`,
+`talk_autopsy/blocks.py`, `talk_autopsy/units.py`, `talk_autopsy/translate.py`,
+`talk_autopsy/segments.py`, `talk_autopsy/pipeline.py`, `talk_autopsy/config.py`,
+`talk_autopsy/core/`, `talk_autopsy/metrics.py`, `talk_autopsy/evaluation.py`,
+`talk_autopsy/ref_bounds.py`, `talk_autopsy/prompts/glossary-auto-v2.md`,
+`talk_autopsy/prompts/correction-v2.md`, `talk_autopsy/prompts/translation-v2.1.md`,
+`uv.lock`. Check: `git diff --stat pipeline-v3 -- <these paths>` is empty.
+
+Settings: models `claude-haiku-5-5` (auto-glossary) and `claude-sonnet-5-5`
+(correction, translation) as the code's defaults, `.env` settings that select
+a model or a version empty; AssemblyAI `universal-3-5-pro`, two passes;
+translation `translation-v2.1` (`--translation v3` stays an option, not
+frozen). Not frozen: subtitle layout, the CLI's printing, the cost estimate,
+the evaluation tooling (`judge.py`, `translation_check.py`).
+
+### Repeats on T2 and T1 (2026-11-11)
+
+- **Why:** external audit #1, finding 12: no number had a repeat. These three
+  T2 runs are also the comparison point of the T6 overfitting signal.
+- **Run:** `talk-autopsy run <fragment>.wav --lang ru --name <run>` from a clean
+  `git worktree` of `pipeline-v3` (d180a73), a fresh work folder per run (no
+  cache), no context, no hand glossary, keys from the main checkout's `.env`
+  (`uv run --env-file`). Scored from the main checkout:
+  `eval <fragment> --hyp <run>/fixed.json --raw <run>/raw2.json --record
+  --engine pipeline-v3 --stage fix`. Repeats are numbered in the order they
+  ran (the work names differ: the first start of `T2-v3-r1` failed before
+  running, so it ran last). No fallback in any run.
+
+| | T2 repeat 1 | T2 repeat 2 | T2 repeat 3 | T2 range (mean) | T1 |
+|---|---|---|---|---|---|
+| term accuracy v2, micro | 95.33% (102/107) | 94.39% (101/107) | 96.26% (103/107) | 94.39–96.26% (95.33%) | 99.20% (124/125) |
+| macro | 87.18% | 84.62% | 89.74% | 84.62–89.74% | 98.65% |
+| without `Claude Code` | 93.67% | 92.41% | 94.94% | 92.41–94.94% | 98.80% |
+| precision | 98.08% | 98.06% | 99.04% | 98.06–99.04% | 100.00% |
+| WER | 4.24% | 4.43% | 4.48% | 4.24–4.48% | 0.50% |
+| false-edit rate | no edits | no edits | no edits | no edits | no edits |
+| auto-glossary terms (= key terms) | 29 | 26 | 29 | 26–29 | 26 |
+| Claude, whole run | 0.1400 USD | 0.1381 USD | 0.1369 USD | | 0.0958 USD |
+| AssemblyAI, two passes (list price) | 0.0783 USD | 0.0783 USD | 0.0783 USD | | 0.0741 USD |
+
+- **Correction:** 0 segments changed in all four runs (0 edits listed by the
+  model, 0 word edits by the metric), at 0.064–0.065 USD per T2 run. On this
+  path the key terms do the work; correction is insurance for the fallback
+  engines (B1: faster-whisper T2 input 61.7% -> 93.5%, v2).
+- **Spread:** three runs differ by 1.9 points micro and 5.1 points macro on
+  T2, from the auto-glossary (26–29 terms per run) and AssemblyAI's second
+  pass; the earlier single-run number (B1 v2, 96.26%) is the top of the range.
+- **T6 overfitting signal:** T2 mean 95.33%, so the signal fires if T6
+  (reference J, micro) is below 85.33%.
+- **Spend:** Claude 0.5108 USD, AssemblyAI 0.3090 USD (list price, free
+  credit), Gemini 0.
 
 ## Freeze pipeline-v2
 
@@ -785,6 +862,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| pipeline-v3 repeats | 2026-11-11 | none: variance of the frozen path, and the T2 point of the T6 overfitting rule | `run` from a clean worktree of tag `pipeline-v3`, auto-glossary only, no cache; T2 three times, T1 once | term accuracy v2 T2 94.39–96.26% (mean 95.33%), macro 84.62–89.74%, without `Claude Code` 92.41–94.94%; WER 4.24–4.48%; T1 99.20%; correction 0 edits in all four; 0.511 USD Claude, 0.309 USD AssemblyAI | the earlier single-run 96.26% is the top of the range; correction does nothing on this path | T2 mean 95.33% is the overfitting comparison point (Freeze pipeline-v3) |
 | C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | **not adopted** (owner's blind rating 2026-11-11: v3 won 5 pairs, v2 6, ties 5; means v2 4.44, v3 4.25): v2 stays the default, v3 an option |
 | D1 (setup) | 2026-11-10 | none: sentence units before translation and display extended into pauses (subtitle-v2) | translation-v2 on units; T2 fragment, C1 input, T2.source, real-01 | T2 fragment Russian above 17 / 25 cps 74.7% / 25.3% -> 58.8% / 15.8%; on AssemblyAI input units = segments (149/149, 373/373, 428/426); Gemini input 109 -> 85 units; 0.547 USD | the C1 fragments become whole sentences; the extension does most of the reading-speed work; word timing raises speed variance in multi-cue segments | units frozen with the pipeline; display rule stays open |
 | C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | both above 4.0; v2 preferred; not fully blind | **C1 met; translation-v2 adopted** |
