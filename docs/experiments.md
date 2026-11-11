@@ -183,7 +183,7 @@ favour. Its term accuracy is much higher on T6 than on T2 (87.5% against 61.7%):
 drafted by Gemini from reference J, and T2 has the strongest accent and more product names.
 
 **VideoLingo (2026-11-11): attempted, not run.** VideoLingo (Apache-2.0) was cloned into
-`C:\Projectsideolingo-baseline\VideoLingo` (outside the repository), commit
+`C:\Projects\videolingo-baseline\VideoLingo` (outside the repository), commit
 `61d944a46df6970176191606a89e646122da8f0a` (2026-11-10, version string 3.1.1 in its `config.yaml`).
 Its defaults have changed since the specification was written: local recognition is now
 **Qwen3-ASR 1.7B with Qwen3-ForcedAligner** (WhisperX is no longer installed by its installer), on
@@ -199,7 +199,7 @@ decision for the owner, not a technical failure, so it was not retried or worked
 attempt is left to the owner (below). No API key was written to any file; LLM cost 0 USD.
 
 To run it: either the owner allows this session type to run the VideoLingo installer, or runs it
-once by hand (`cd C:\Projectsideolingo-baseline\VideoLingo; uv run start.py --api`) and a later
+once by hand (`cd C:\Projects\videolingo-baseline\VideoLingo; uv run start.py --api`) and a later
 session drives the API on `data/test-set/T2.wav` and `T6.wav`; estimate for two 10-minute fragments
 with Sonnet 5.5: under 1 USD (its summary, term extraction, meaning split, two-step translation and
 alignment calls), Qwen3-ASR on the CPU of the order of the fragment length or more (not measured).
