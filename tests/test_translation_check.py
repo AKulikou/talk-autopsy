@@ -85,6 +85,30 @@ def test_the_rating_file_shuffles_both_systems_and_names_neither():
     assert systems != ["pipeline"] * 4 + ["baseline"] * 4
     assert "pipeline" not in text and "baseline" not in text and "Gemini" not in text
     assert text.count("Score (1-5):") == 8 and text.count("EN: English sentence 1.") == 2
+    assert text.startswith("# Оценка перевода")
+
+
+def test_the_two_items_of_a_unit_are_never_adjacent():
+    chosen = items(20)
+    text, key = tc.rating_file(chosen, {i.unit: f"базовый {i.unit}" for i in chosen})
+    units = [key["items"][str(n)]["unit"] for n in range(1, 41)]
+    assert all(a != b for a, b in zip(units, units[1:], strict=False))
+    # the registered seed's first order has 2 adjacent pairs, its second none
+    assert key["seed"] == tc.SEED + 1 and key["shuffles"] == 2
+
+
+def test_the_order_does_not_depend_on_the_text():
+    chosen = items(20)
+    _, key_a = tc.rating_file(chosen, {i.unit: "a" for i in chosen})
+    other = [tc.Item(i.unit, "other English", "другой") for i in chosen]
+    _, key_b = tc.rating_file(other, {i.unit: "b" for i in chosen})
+    assert key_a == key_b
+
+
+def test_one_unit_cannot_be_rated_without_adjacency():
+    chosen = items(1)
+    with pytest.raises(tc.CheckError):
+        tc.rating_file(chosen, {1: "б"})
 
 
 def filled(text, score_of):

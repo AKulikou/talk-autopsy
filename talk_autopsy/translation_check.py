@@ -7,7 +7,8 @@ the frozen pipeline.
       -> sample: SAMPLE_SIZE sentence units drawn at random with SEED -> sample.json
       -> baseline: the same English units translated by Gemini with a plain prompt -> baseline.json
       -> rating file: 2 x SAMPLE_SIZE items (pipeline and baseline) shuffled together, one at a
-         time, English above each, no system named -> rating.md + rating.key.json
+         time, English above each, no system named, a unit's two items never adjacent
+         -> C1-T6-rating.md + C1-T6-key.json
       -> score (after the owner rates): un-blind, means, the paired difference with a bootstrap
          interval, and the rule: C1 on the fragment is met if the pipeline's mean >= C1_TARGET.
 
@@ -99,26 +100,46 @@ def baseline_translations(items: list[Item], caller,
     return out, round(float(getattr(caller, "spent_usd", 0.0)), 6)
 
 
+MAX_SHUFFLES = 1000
+
+RATING_INSTRUCTIONS = [  # for the owner, who rates in Russian (prompt 15)
+    "# Оценка перевода",
+    "",
+    "Оцените каждый пункт отдельно, от 1 до 5: 5 — субтитр, который вы приняли бы как есть;",
+    "1 — неверно или непригодно. Пункты от двух разных систем идут в случайном порядке; один и тот же",
+    "английский текст может встретиться дважды. Оценку поставьте в строке Score, комментарий — по желанию.",
+    "",
+]
+
+
+def _pairs_adjacent(entries: list) -> bool:
+    return any(a[0].unit == b[0].unit for a, b in zip(entries, entries[1:], strict=False))
+
+
 def rating_file(items: list[Item], baseline: dict[int, str], seed: int = SEED + 1) -> tuple[str, dict]:
     """
     The owner's rating file and its key: every unit twice (pipeline, baseline),
     shuffled together with `random.Random(seed)`, numbered 1..2n, the English
-    above each item, no system named. Returns (Markdown, key).
+    above each item, no system named. The two items of one unit are never
+    adjacent: the same generator shuffles the original order again until none
+    are (amendment of
+    2026-11-11, written before the T6 run; the order never depends on the
+    text). Returns (Markdown, key).
     """
     missing = [i.unit for i in items if i.unit not in baseline]
     if missing:
         raise CheckError(f"no baseline translation for units {missing}")
-    entries = [(i, PIPELINE, i.translation) for i in items] + [(i, BASELINE, baseline[i.unit]) for i in items]
-    random.Random(seed).shuffle(entries)
-    lines = [
-        "# Translation rating",
-        "",
-        "Rate each translation alone, 1-5 (5: natural and complete; 1: wrong or unusable). Items come",
-        "from two different systems in random order; the same English may appear twice. Write the",
-        "score on the score line of each item. A comment is optional.",
-        "",
-    ]
-    key = {"version": VERSION, "seed": seed, "items": {}}
+    original = ([(i, PIPELINE, i.translation) for i in items]
+                + [(i, BASELINE, baseline[i.unit]) for i in items])
+    rng, shuffles, entries = random.Random(seed), 0, None
+    while entries is None or _pairs_adjacent(entries):
+        if shuffles == MAX_SHUFFLES:
+            raise CheckError(f"no order without adjacent pairs in {MAX_SHUFFLES} shuffles")
+        entries = list(original)  # each attempt shuffles the original order with the same generator
+        rng.shuffle(entries)
+        shuffles += 1
+    lines = list(RATING_INSTRUCTIONS)
+    key = {"version": VERSION, "seed": seed, "shuffles": shuffles, "items": {}}
     for number, (item, system, text) in enumerate(entries, start=1):
         lines += [f"## {number}", "", f"EN: {item.english}", "", f"{text}", "", "Score (1-5):", "",
                   "Comment:", ""]

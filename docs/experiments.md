@@ -527,6 +527,18 @@ paired bootstrap 95% interval (10,000 resamples of the 20 units); no other
 conclusion is drawn. Implemented and tested with a fake client on
 2026-11-11; not run.
 
+*Amendment (2026-11-11, before the T6 run; prompt 15).* The owner asked that
+the two translations of one unit are never adjacent in the rating file. The
+order under seed 20261112 depends only on the seed, not on any text. Its
+first shuffle puts two units' items side by side (positions 11–12 and 30–31),
+so the rating file now takes the first shuffle without adjacent pairs from
+the same generator (`random.Random(20261112)`, each attempt shuffling the
+original order; the second attempt has none). The number of shuffles is
+written into the key. The rating file's instructions are in Russian, and it
+is written to `work/T6/C1-T6-rating.md` with the key in
+`work/T6/C1-T6-key.json`. The sample (seed 20261111), the baseline prompt,
+the rule and the scorer are unchanged.
+
 ### History of the protocol (superseded 2026-11-11)
 
 The first protocol (2026-11-09) and its changes, as written then:

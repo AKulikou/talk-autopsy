@@ -5,8 +5,8 @@ and prints counts and costs only, never text.
 
     uv run python scripts/translation_check.py sample --fixed <run>/fixed.json --translated <run>/ru.json
     uv run python scripts/translation_check.py baseline [--model gemini-4-carbon]  # paid Gemini, 20 requests
-    uv run python scripts/translation_check.py rating   # -> rating.md + rating.key.json
-    uv run python scripts/translation_check.py score    # after the owner filled rating.md
+    uv run python scripts/translation_check.py rating   # -> work/T6/C1-T6-rating.md + work/T6/C1-T6-key.json
+    uv run python scripts/translation_check.py score    # after the owner filled C1-T6-rating.md
 """
 
 import argparse
@@ -19,6 +19,8 @@ from talk_autopsy import config, translation_check
 from talk_autopsy.segments import load_transcript
 
 DEFAULT_OUT = config.WORK_DIR / "T6" / "translation-check"
+DEFAULT_RATING = config.WORK_DIR / "T6" / "C1-T6-rating.md"
+DEFAULT_KEY = config.WORK_DIR / "T6" / "C1-T6-key.json"
 
 
 def _sampled(path: Path) -> list[translation_check.Item]:
@@ -30,6 +32,8 @@ def main(argv: list[str]) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("step", choices=("sample", "baseline", "rating", "score"))
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--rating", type=Path, default=DEFAULT_RATING, help="the owner's rating file")
+    parser.add_argument("--key", type=Path, default=DEFAULT_KEY, help="the key of the rating file")
     parser.add_argument("--fixed", type=Path)
     parser.add_argument("--translated", type=Path)
     parser.add_argument("--lang", default="ru")
@@ -37,7 +41,7 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     out = args.out
     sample_path, baseline_path = out / "sample.json", out / "baseline.json"
-    rating_path, key_path = out / "rating.md", out / "rating.key.json"
+    rating_path, key_path = args.rating, args.key
 
     if args.step == "sample":
         if not (args.fixed and args.translated):
@@ -67,9 +71,10 @@ def main(argv: list[str]) -> int:
         baseline = {int(k): v for k, v in
                     json.loads(baseline_path.read_text(encoding="utf-8"))["translations"].items()}
         text, key = translation_check.rating_file(items, baseline)
+        rating_path.parent.mkdir(parents=True, exist_ok=True)
         rating_path.write_text(text, encoding="utf-8")
         translation_check.write_json(key_path, key)
-        print(f"{len(key['items'])} items -> {rating_path} (key: {key_path})")
+        print(f"{len(key['items'])} items, shuffles {key['shuffles']} -> {rating_path} (key: {key_path})")
     else:
         scores = translation_check.parse_scores(rating_path.read_text(encoding="utf-8"))
         key = json.loads(key_path.read_text(encoding="utf-8"))
