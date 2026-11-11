@@ -514,6 +514,14 @@ def _write_outputs(settings, formats: list[str], dest: Path, stem: str, video: P
     return written
 
 
+def _local_estimate(source: Path) -> str:
+    """The per-hour estimate for a local file (as for a link), or why there is none."""
+    try:
+        return youtube.estimate(ingest.probe(source)).line()
+    except RuntimeError as e:  # includes ffprobe missing
+        return f"none ({e})"
+
+
 @app.command()
 def run(
     source: Annotated[str, typer.Argument(help="YouTube video or playlist URL, or a local file.")],
@@ -595,6 +603,8 @@ def run(
     if glossary_paths:
         typer.echo(f"User glossary: {', '.join(str(p) for p in glossary_paths)} (earlier files win)")
     extra_context = glossary_auto.read_context(context)
+    if not is_url(source):  # a link's estimate is printed with its metadata
+        typer.echo(f"Estimate: {_local_estimate(Path(source))}")
 
     def settings_for(video_source: Path, run_name: str, video_context: str):
         settings = pipeline.RunSettings(source=video_source, target_lang=target_lang, steps=selected,

@@ -41,6 +41,17 @@ def test_run_dry_run_prints_the_plan(sine):
         assert step in result.output
 
 
+def test_run_dry_run_estimates_a_local_file(sine, tmp_path):
+    result = runner.invoke(cli.app, ["run", str(sine), "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "Estimate: 0.0 min of video: about 0.00 USD Claude" in result.output
+    not_media = tmp_path / "notes.txt"
+    not_media.write_text("not a video", encoding="utf-8")
+    result = runner.invoke(cli.app, ["run", str(not_media), "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "Estimate: none (ffprobe" in result.output
+
+
 def test_target_language_is_a_parameter(sine):
     args = ["run", str(sine), "--lang", "de", "--steps", "translate,srt", "--dry-run"]
     result = runner.invoke(cli.app, args)

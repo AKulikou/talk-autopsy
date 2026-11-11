@@ -124,6 +124,11 @@ Requirements: [uv](https://docs.astral.sh/uv/) (it installs Python 3.13) and
 [Anthropic API key](https://console.anthropic.com/) is needed only for the Claude
 stages.
 
+On Windows, without the command line: double-click `scripts\windows\Talk Autopsy.bat`
+(or the desktop shortcut `scripts\windows\create-shortcut.ps1` makes); it asks, in
+Russian, for a YouTube link or a video file, shows the estimate and writes a TV file and
+subtitles.
+
 ```bash
 git clone <repository-url>
 cd talk-autopsy
