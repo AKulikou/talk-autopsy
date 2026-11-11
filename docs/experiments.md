@@ -1991,7 +1991,21 @@ Ideas that come up during a stage and wait for a later one.
 
 - ~~Server-side refusal fallback on the Claude calls~~ Decided 2026-11-09:
   on in `run`, off in experiments (decisions).
-- AssemblyAI key-term limit (prompt 12, 2026-11-10; frozen path, no code
+- Next-video failure modes (external audit #1, finding 14; after the T6 run):
+  diarization (speaker labels are off, so an interview's turns are not
+  attributed), music and long non-speech stretches (no detection; AssemblyAI
+  and the auto-glossary see whatever is there), long videos (one glossary call
+  over the whole first pass; untested above about 40 minutes).
+- Hygiene (external audit #1, finding 15): split `cli.py` (about 1,300 lines)
+  by command group; the adjudication and judge tooling (`adjudicate.py`,
+  `judge.py`, `ref_bounds.py`) is large for evaluation code and could share
+  one span model. Not before the T6 run (frozen paths are not touched, and
+  these are not frozen but the run uses them).
+- One topic (external audit #1, finding 5): T1, T2 and T6 are all about
+  AI-assisted software development. T3 is chosen from a new domain after the
+  T6 run, to measure transfer the T6 result cannot show.
+- ~~AssemblyAI key-term limit~~ Fixed 2026-11-11 in `pipeline-v3`
+  (`select_keyterms`). (2026-11-10; frozen path, no code
   change before the T6 run): `stt/assemblyai.py` raises an error when the
   key-term list is above the service limit instead of truncating it. Fix
   after the T6 run: truncate with the user's terms first, then the
