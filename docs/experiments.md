@@ -141,9 +141,21 @@ The specification's list for v1.0 (stage 3), with the state of each item.
 | the owner watched two full videos and uses the tool | done (owner) |
 | `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and VideoLingo on one set | in progress (baselines on T2 and T6) |
 | CI green; README in the series structure; honest Known limitations | in progress |
-| re-run from cache within a minute | pending (measured in prompt 16) |
+| re-run from cache within a minute | **met**: 6.7–8.9 s wall time on T2 (three re-runs, below) |
 | external audit #2 | not done |
 | tag `v1.0` | not done |
+
+**Re-run from cache (2026-11-11).** The work folder of the `pipeline-v3` T2 repeat 2 (a fresh run
+from a clean worktree of the tag, Freeze pipeline-v3, Repeats) was copied to `work/T2-v3-cache/` and
+`talk-autopsy run data/test-set/T2.wav --lang ru --name T2-v3-cache` was run three times from the main
+checkout (HEAD 67bb53e, frozen paths equal to the tag), with well-formed but invalid API keys in the
+environment so that a stale step would fail instead of spending. Every model step was skipped as up to
+date (stt, glossary, stt2, align, fix, translate: the stamps are content hashes plus the code hash, so a
+copied folder counts as cached); only the subtitles were rendered (about 1 s), byte-identical to the
+original run's `.srt` files. Wall time from start to exit, including `uv run` and Python start-up:
+**7.4 s, 8.9 s, 6.7 s**; 0 USD. No code change was needed. Not covered: `--output mp4-burned`
+re-encodes the video on every run (about 0.27x the video's length; rendering, not a model call), so a
+launcher re-run with the TV file takes minutes, not seconds (Backlog).
 
 ## Methodology: reference transcripts
 
@@ -2082,6 +2094,10 @@ Money: 0.07 USD at list price, all from free credit.
 ## Backlog
 
 Ideas that come up during a stage and wait for a later one.
+
+- Burned-in MP4 on a re-run (v1.0 cache check, 2026-11-11): `outputs.write_outputs` re-encodes
+  `<stem>.<lang>.mp4` every time (0.27x real time), even when the `.ass` and the video did not
+  change. Skip it when the existing file is newer than both (outputs.py, not frozen).
 
 - **Correction on the main path** (stage 2 close, 2026-11-11): it stays in
   `pipeline-v3` at about 0.39 USD per hour of video (0.0645 USD per 10
