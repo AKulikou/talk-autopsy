@@ -125,7 +125,7 @@ def translate_units(unit_transcript: Transcript, target_lang: str, caller: Calle
                     source_lang: str = "en") -> Result:
     """Each unit's text through `caller` in batches; ids, times, words and source ids are kept."""
     todo = [s for s in unit_transcript.segments if s.text.strip()]
-    texts = [s.text.strip() for s in todo]
+    texts = unit_texts(unit_transcript)
     translated: dict[int, str] = {}
     groups = batches(texts)
     for group in groups:
@@ -149,7 +149,45 @@ def translate_units(unit_transcript: Transcript, target_lang: str, caller: Calle
 
 def run(raw_path: Path, out_dir: Path, name: str, target_lang: str, caller: Caller) -> tuple[Result, Path]:
     """Raw transcript -> units -> translation -> `<out_dir>/<lang>.json` and `<name>.<lang>.srt/.ass`."""
-    unit_transcript = units.make_units(load_transcript(raw_path))
+    return run_units(units.make_units(load_transcript(raw_path)), out_dir, name, target_lang, caller)
+
+
+def unit_texts(unit_transcript: Transcript) -> list[str]:
+    """The texts `translate_units` sends (what Google bills), for counting before any request."""
+    return [s.text.strip() for s in unit_transcript.segments if s.text.strip()]
+
+
+def words_by_span(raw: Transcript, spans: list[tuple[int, float, float]]) -> dict[int, str]:
+    """
+    The raw transcript's words that fall inside each span (rating rule of 2026-11-11,
+    docs/experiments.md, Translation rating): `spans` are (unit id, start, end) of
+    consecutive units in time order; a word belongs to the unit that contains its
+    midpoint, and a word in a pause between two units goes to the nearer one (the
+    boundary is the middle of the pause; the first and last spans are open). The
+    words are joined with single spaces as written. Returns unit id -> text ("" for a
+    span without words; the caller decides whether that is an error).
+    """
+    if not spans:
+        return {}
+    ordered = sorted(spans, key=lambda s: s[1])
+    if [s[0] for s in ordered] != [s[0] for s in spans]:
+        raise ValueError("spans must be in time order")
+    for (_, _, end), (_, start, _) in zip(ordered, ordered[1:], strict=False):
+        if start < end:
+            raise ValueError("spans overlap")
+    bounds = [(a[2] + b[1]) / 2 for a, b in zip(ordered, ordered[1:], strict=False)]
+    texts: dict[int, list[str]] = {s[0]: [] for s in ordered}
+    for segment in raw.segments:
+        for word in segment.words or []:
+            middle = (word.start + word.end) / 2
+            index = sum(1 for b in bounds if middle >= b)
+            texts[ordered[index][0]].append(word.text.strip())
+    return {unit: " ".join(w for w in words if w) for unit, words in texts.items()}
+
+
+def run_units(unit_transcript: Transcript, out_dir: Path, name: str, target_lang: str,
+              caller: Caller) -> tuple[Result, Path]:
+    """Units -> translation -> `<out_dir>/<lang>.json` and `<name>.<lang>.srt/.ass`."""
     result = translate_units(unit_transcript, target_lang, caller)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

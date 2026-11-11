@@ -138,3 +138,72 @@ def test_script_stops_at_the_character_cap():
     assert capped(["12345"], "en", "ru") == ["12345"]
     with pytest.raises(gt.GoogleTranslateError, match="--max-chars"):
         capped(["123456"], "en", "ru")
+
+
+def _words_raw(times: list[tuple[float, float, str]]) -> Transcript:
+    words = [Word(start=s, end=e, text=t) for s, e, t in times]
+    return Transcript(language="en", source="raw.json",
+                      segments=[Segment(id=0, start=words[0].start, end=words[-1].end,
+                                        text=" ".join(w.text for w in words), words=words)])
+
+
+def test_words_by_span_assigns_by_midpoint_and_splits_pauses_in_the_middle():
+    raw = _words_raw([(0.0, 0.4, " So,"), (0.5, 0.9, "we"),  # before and inside unit 1
+                      (2.0, 2.4, "run"),  # pause 1.0-3.0: middle 2.0, word midpoint 2.2 -> unit 2
+                      (1.5, 1.9, "it."),  # midpoint 1.7 -> unit 1
+                      (3.1, 3.5, "Then"), (9.0, 9.4, "done.")])  # after the last unit -> unit 2
+    out = gt.words_by_span(raw, [(1, 0.2, 1.0), (2, 3.0, 4.0)])
+    assert out == {1: "So, we it.", 2: "run Then done."}
+
+
+def test_words_by_span_leaves_an_empty_unit_empty_and_checks_the_order():
+    raw = _words_raw([(0.0, 0.4, "one")])
+    assert gt.words_by_span(raw, [(1, 0.0, 1.0), (2, 5.0, 6.0)]) == {1: "one", 2: ""}
+    with pytest.raises(ValueError, match="time order"):
+        gt.words_by_span(raw, [(2, 5.0, 6.0), (1, 0.0, 1.0)])
+    with pytest.raises(ValueError, match="overlap"):
+        gt.words_by_span(raw, [(1, 0.0, 2.0), (2, 1.0, 3.0)])
+
+
+def test_script_counts_everything_before_sending(monkeypatch, tmp_path, capsys):
+    script = _script()
+    monkeypatch.setattr(script.config, "load_environment", lambda *a, **k: False)
+    monkeypatch.setattr(script, "WORK", tmp_path)
+    (tmp_path / "T2").mkdir()
+    save_transcript(_raw(), tmp_path / "T2" / "raw.whisper-large-v3.json")
+    monkeypatch.setattr(gt, "http_caller", lambda *a, **k: pytest.fail("no request over the cap"))
+    assert script.main(["--fragment", "T2", "--max-chars", "10"]) == 1
+    assert "nothing sent" in capsys.readouterr().err
+    monkeypatch.setenv(gt.KEY_ENV_VAR, " ")  # count-only needs no key
+    assert script.main(["--fragment", "T2", "--count-only"]) == 0
+    assert "total 39" in capsys.readouterr().out
+
+
+def test_script_builds_the_rating_items_from_the_pipeline_units(monkeypatch, tmp_path):
+    from talk_autopsy import translation_check, units
+
+    script = _script()
+    monkeypatch.setattr(script.config, "load_environment", lambda *a, **k: False)
+    monkeypatch.setattr(script, "WORK", tmp_path)
+    (tmp_path / "T6").mkdir()
+    save_transcript(_raw(), tmp_path / "T6" / "raw.whisper-large-v3.json")  # Whisper = the same words here
+    fixed = tmp_path / "fixed.json"
+    save_transcript(_raw(), fixed)
+    english = units.make_units(_raw())
+    sample = tmp_path / "sample.json"
+    translation_check.write_json(sample, {"items": [
+        {"unit": s.id, "english": s.text.strip(), "translation": "x"} for s in english.segments]})
+    log = []
+    monkeypatch.setattr(gt, "http_caller", lambda key: fake_caller(log))
+    out = tmp_path / "out"
+    assert script.main(["--fragment", "T6", "--out", str(out), "--sample", str(sample),
+                        "--fixed", str(fixed)]) == 0
+    items = json.loads((out / "T6-units.json").read_text(encoding="utf-8"))["items"]
+    assert [i["whisper_en"] for i in items] == ["We run the tests first.", "Then we ship it."]
+    assert items[0]["translation"] == "[ru] We run the tests first."
+    assert len(log) == 2  # one request for the fragment's units, one for the rating items
+    wrong = tmp_path / "wrong.json"
+    translation_check.write_json(wrong, {"items": [{"unit": english.segments[0].id, "english": "other",
+                                                    "translation": "x"}]})
+    assert script.main(["--fragment", "T6", "--out", str(out), "--sample", str(wrong),
+                        "--fixed", str(fixed)]) == 1

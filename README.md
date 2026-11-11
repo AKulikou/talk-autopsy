@@ -304,7 +304,7 @@ English side; the translations of all systems go to the owner's blind rating nex
 |---|---|---|---|---|---|
 | Talk Autopsy (`pipeline-v3`) | **94.4–96.3%** (3 runs) | 4.24–4.48% | **100% / 100%** (1 run) | 4.70% / 2.89% | *pending* |
 | raw Whisper (faster-whisper large-v3) | 61.7% | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | — (no translation) |
-| Whisper + Google Translate | as raw Whisper | | as raw Whisper | | *pending* (not run yet: API key) |
+| Whisper + Google Translate | 61.7% (raw Whisper's transcript) | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | *pending* (owner's rating) |
 | VideoLingo | attempted, not run | | attempted, not run | | *pending* |
 
 Raw Whisper's numbers are biased in its favour: it was one of the three engines

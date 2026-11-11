@@ -21,8 +21,8 @@ input (URL/file) -> ffmpeg audio.wav (+ audio.flac for upload) + meta.json
 
 The research question is measurement, not features: every stage is benchmarked on
 a fixed test set (six planned 5-10 minute fragments; T1 and T2 scored, T6 the hold-out, T3–T5 not
-selected) against baselines (raw speech recognition measured; Whisper + Google Translate coded, waiting
-for an API key; VideoLingo attempted, not run). The target
+selected) against baselines (raw speech recognition measured; Whisper + Google Translate run on T2 and T6,
+its translation rated by the owner; VideoLingo attempted, not run). The target
 language is a parameter (`target_lang`); only Russian is measured and accepted.
 
 Part of the Autopsy series; repository conventions follow Startup Autopsy.
@@ -91,7 +91,7 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `talk_autopsy/align.py` — forced alignment (wav2vec2 base 960h from torchaudio, Viterbi in numpy, block by block with garbage states); `AlignedTranscriber` = the `gemini+align` engine; `start_differences` for timing comparisons. torch is the optional `align` extra; tests use a stub emitter
 - `talk_autopsy/metrics.py` — pure metric functions (definitions summarised in `docs/experiments.md`, Metrics): `tokenize` (the one normalization; drops fillers uh/um/er/ah/hmm), WER, `term_accuracy_v2` (the benchmark's: in place via the WER alignment, plural or possessive of the last word, macro, without the top term, precision; `term_accuracy` = v1, position-free, kept for the stages' occurrence checks), `false_edit_rate` (share of the correction's word edits that move away from the reference; v1 kept), Wilson interval, the T6 verdict and overfitting signal, reading speed; timing drift not implemented
 - `talk_autopsy/evaluation.py` — reads hypothesis/reference/glossary files, `evaluate`, the benchmark row (`BENCHMARK_COLUMNS`, with `status` current/superseded) and its append
-- `talk_autopsy/baselines/google_translate.py` — Whisper + Google Translate baseline (evaluation tooling): raw Whisper -> `units.make_units` -> Cloud Translation API Basic v2 (stdlib HTTP, key in the `X-goog-api-key` header) -> `ru.json` + `.srt/.ass`; `scripts/google_translate_baseline.py` runs T2 and T6 into `work/baselines/google-translate/` or prints the setup steps without a key
+- `talk_autopsy/baselines/google_translate.py` — Whisper + Google Translate baseline (evaluation tooling): raw Whisper -> `units.make_units` -> Cloud Translation API Basic v2 (stdlib HTTP, key in the `X-goog-api-key` header) -> `ru.json` + `.srt/.ass`; `words_by_span` (raw Whisper words inside a unit's span, the rating rule); `scripts/google_translate_baseline.py` counts every character first, then runs T2 and T6 into `work/baselines/google-translate/` + the 12 T6 rating items (`T6-units.json`), or prints the setup steps without a key
 - `talk_autopsy/secret_registry.py` — `ALL` = `config.SECRET_ENV_VARS` (frozen with `pipeline-v3`) + `EVALUATION_SECRET_ENV_VARS` (`GOOGLE_TRANSLATE_API_KEY`); the tests, `.env.example` check and check scripts use `ALL`. A new evaluation key goes here, a new pipeline key into config (needs a new freeze tag)
 - `talk_autopsy/translation_check.py` — the pre-registered T6 translation check (evaluation tooling): seeded sample of 20 units, plain Gemini baseline, 40 shuffled items for the owner, scorer with a bootstrap interval; `scripts/translation_check.py` runs it
 - `talk_autopsy/adjudicate.py` — reference by consensus: aligns two cloud transcripts to the faster-whisper backbone, spans of disagreement, the adjudication file, clips, `resolve` to the reference and its protocol (`other: (no words)` types an empty variant)

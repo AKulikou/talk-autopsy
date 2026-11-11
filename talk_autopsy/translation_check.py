@@ -224,5 +224,10 @@ def score(scores: dict[int, int], key: dict, seed: int = SEED,
                        pipeline_mean >= C1_TARGET)
 
 
+def load_sample(path: Path) -> list[Item]:
+    """The sampled items of `sample.json` (written by the `sample` step)."""
+    return [Item(**i) for i in json.loads(Path(path).read_text(encoding="utf-8"))["items"]]
+
+
 def write_json(path: Path, data) -> None:
     Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
