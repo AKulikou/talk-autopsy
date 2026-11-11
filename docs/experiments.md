@@ -217,6 +217,70 @@ session drives the API on `data/test-set/T2.wav` and `T6.wav`; estimate for two 
 with Sonnet 5.5: under 1 USD (its summary, term extraction, meaning split, two-step translation and
 alignment calls), Qwen3-ASR on the CPU of the order of the fragment length or more (not measured).
 
+### Translation rating (pre-registered 2026-11-11, before any Google Translate or rater call)
+
+The README's translation column: Talk Autopsy against Whisper + Google Translate and a plain Gemini
+translation on one set, rated by the owner. To keep the owner's work small, the pipeline and Gemini
+scores are the ones he already gave (T6 translation check above); the new rating adds only the
+Google Translate items and four repeated items to measure drift between the two days. Written and
+committed before any call to Cloud Translation or to the Gemini rater.
+
+- **Set:** the 12 T6 units of the T6 translation check (sample seed 20261111; unit ids 24, 32, 35,
+  52, 58, 62, 74, 76, 97, 108, 124, 135, as in `work/T6/C1-T6-key.json`).
+- **Whisper + Google Translate item of a unit:** the raw faster-whisper words (the T6 faster-whisper
+  transcript of the reference consensus, `work/T6/raw.whisper-large-v3.json`) whose timestamps fall
+  inside the unit's time span, translated by Cloud Translation (Basic/v2, `en` -> `ru`,
+  `format: text`). Mapping, fixed here: the unit spans are those of the pipeline's sentence units
+  (`units.make_units` on the T6 run's `fixed.json`; the rebuilt English must equal the sampled
+  English); a word belongs to the unit that contains its midpoint, and a word in a pause between two
+  units goes to the nearer one (the boundary is the middle of the pause; before the first unit and
+  after the last, the span is open), so a word is never lost or counted twice because the two engines
+  time a boundary word slightly differently. The words' texts are joined with single spaces as
+  faster-whisper wrote them (case and punctuation kept). The 12 texts go in one request; they are not
+  taken from the full-fragment `.srt` run, whose units are cut from Whisper's own segments. The owner
+  sees the **same English line** as for the other systems (the pipeline's corrected English, what the
+  speaker said), so recognition errors count against the baseline, as they would for a viewer.
+- **The owner's new rating file** (`work/T6/C1-T6-rating-2.md`, key `C1-T6-key-2.json`): the 12 Google
+  Translate items + 4 **anchors**, items he already rated: 2 drawn from the 10 pipeline-only items and 2
+  from the Gemini-only items of the other units (shared items excluded: their score counted for two
+  systems), with `random.Random(20261113)` (`sample` on the item numbers in ascending order, pipeline
+  first). The anchor shows exactly the text he rated before. The 16 items are shuffled with
+  `random.Random(20261114)`, reshuffling the original order until no two items of the same unit are
+  adjacent (as in the first file); single-rated 1–5, the same format and Russian instructions as the
+  first file (the sentence about "two systems" says "different systems"). A Google Translate text equal
+  to an already-rated text is still shown and gets its own score.
+- **README translation column:** the owner's mean per system over the 12 units: pipeline and Gemini from
+  the first rating (a shared item counts for both, as before), Google Translate from the new one. For
+  each difference to the pipeline (pipeline − Gemini, pipeline − Google Translate): a paired bootstrap 95%
+  interval, 10,000 resamples of the units, `random.Random(20261111)` (the first check's method and seed,
+  so pipeline − Gemini reproduces +0.08 [−0.33, +0.50]). **Drift:** the mean absolute difference between
+  the new and the old score of the 4 anchors (the signed mean is reported too). If it is **≥ 1.0**, the
+  comparison with Google Translate is reported as "rated on a different day; drift ≥ 1 point" next to
+  the numbers. The anchors' new scores do not replace the old ones.
+- **Specification C1, Google Translate part** ("Claude's blind mean at least 1 point above Google
+  Translate"): read off the means, met if pipeline mean − Google Translate mean ≥ 1.0 (point estimate,
+  as the specification words it; the interval is reported next to it). Caveats stated with it: 12 units on
+  T6 instead of 20 random fragments, the Google Translate items rated on another day. The VideoLingo part
+  stays not run.
+- **Gemini as a second rater** (`gemini-rater-v1`, informational only; **no rule uses it**): model
+  `gemini-4-carbon` (`JUDGE_MODEL`), temperature 0, thinking at the model's default, one item per
+  request, the owner's 1–5 instruction (in Russian, as he read it) with the same English line, a short
+  reason and the score as structured output. It rates all 38 items (the first file's 22 and the new
+  16, the anchors therefore twice) in an order shuffled with `random.Random(20261115)`; budget 0.30 USD
+  (stops before crossing it). Output `work/T6/gemini-rater.json` (model ID, prompt version, item id,
+  score, reason). Agreement is **not computed before the owner has rated**, and the scores go into no
+  file he opens before rating. Reported afterwards, per system (an item's system as in the keys; a
+  shared item counts for pipeline and Gemini) and over all 38 items: Spearman's rank correlation (average
+  ranks for ties), mean absolute difference, share within ±1, and the mean difference rater − owner. Its
+  rating of the Gemini-translated items is reported separately as the self-preference check: its mean
+  difference to the owner on Gemini items against that on the other systems' items.
+- **Scorer:** `uv run python scripts/translation_check.py score-baselines` after the file is filled;
+  it writes the result below and the README column (markers in both files) and prints the same numbers.
+
+<!-- translation-rating-result:start -->
+**Result:** *pending: the owner's rating of `work/T6/C1-T6-rating-2.md`.*
+<!-- translation-rating-result:end -->
+
 ## Methodology: reference transcripts
 
 WER and term accuracy are measured against a reference transcript per fragment.
