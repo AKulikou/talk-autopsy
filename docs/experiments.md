@@ -139,7 +139,7 @@ The specification's list for v1.0 (stage 3), with the state of each item.
 | Item | State |
 |---|---|
 | the owner watched two full videos and uses the tool | done (owner) |
-| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and VideoLingo on one set | in progress ([Baselines on one set](#baselines-on-one-set-t2-and-t6)) |
+| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and VideoLingo on one set | in progress ([Baselines on one set](#baselines-on-one-set-t2-and-t6)): Google Translate run 2026-11-11, its 16-item rating file waits for the owner; VideoLingo not run |
 | CI green; README in the series structure; honest Known limitations | in progress |
 | re-run from cache within a minute | **met**: 6.7–8.9 s wall time on T2 (three re-runs, below) |
 | external audit #2 | not done |
@@ -287,6 +287,17 @@ committed before any call to Cloud Translation or to the Gemini rater.
   difference to the owner on Gemini items against that on the other systems' items.
 - **Scorer:** `uv run python scripts/translation_check.py score-baselines` after the file is filled;
   it writes the result below and the README column (markers in both files) and prints the same numbers.
+
+**Prepared (2026-11-11, prompt 17).** Google Translate items: `work/baselines/google-translate/T6-units.json`
+(12 units, 668 characters, part of the Google Translate run above). Rating file
+`work/T6/C1-T6-rating-2.md` (16 items: 12 Google Translate, anchors = first-file items 1 and 5 (pipeline)
+and 9 and 22 (Gemini), four different units; shuffled in 5 attempts; checked: the anchors' text equals the
+first file's, no score shown) and key `C1-T6-key-2.json`, built by
+`uv run python scripts/translation_check.py rating-2` (no API call). Gemini rater:
+`uv run python scripts/translation_check.py rater`, 38 of 38 items, `gemini-4-carbon`, temperature 0,
+**0.0785 USD**; scores in `work/T6/gemini-rater.json`, not looked at and not printed (the script prints
+counts and cost only). Code: `talk_autopsy/translation_rating.py` (tests with fake ratings and a fake
+rater); `judge.GeminiCaller` got an optional `temperature` (default unchanged).
 
 <!-- translation-rating-result:start -->
 **Result:** *pending: the owner's rating of `work/T6/C1-T6-rating-2.md`.*

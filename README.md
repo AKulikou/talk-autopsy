@@ -298,14 +298,17 @@ T1/T2 `pipeline-v3` runs and 1 (correct) edit on T6**, at about 0.065 USD per
 on faster-whisper input it lifted T2 from 61.7% to 93.5% (correction-v1, B1).
 
 **Against the baselines, on one set (T2 and T6)** ([details](docs/experiments.md#baselines-on-one-set-t2-and-t6)).
-English side; the translations of all systems go to the owner's blind rating next.
+English side, and the owner's blind 1–5 rating of the translations on 12 T6 units (filled in by the scorer once he has rated the Google Translate items).
 
+<!-- baselines-table:start -->
 | | T2 term accuracy (v2) | T2 WER | T6 term accuracy (v2), J / M | T6 WER, J / M | translation rating |
 |---|---|---|---|---|---|
-| Talk Autopsy (`pipeline-v3`) | **94.4–96.3%** (3 runs) | 4.24–4.48% | **100% / 100%** (1 run) | 4.70% / 2.89% | *pending* |
+| Talk Autopsy (`pipeline-v3`) | **94.4–96.3%** (3 runs) | 4.24–4.48% | **100% / 100%** (1 run) | 4.70% / 2.89% | *pending* (owner's rating) |
 | raw Whisper (faster-whisper large-v3) | 61.7% | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | — (no translation) |
 | Whisper + Google Translate | 61.7% (raw Whisper's transcript) | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | *pending* (owner's rating) |
+| Gemini translation (plain prompt, of Talk Autopsy's corrected English) | as Talk Autopsy | | as Talk Autopsy | | *pending* (owner's rating) |
 | VideoLingo | attempted, not run | | attempted, not run | | *pending* |
+<!-- baselines-table:end -->
 
 Raw Whisper's numbers are biased in its favour: it was one of the three engines
 that built both references. Whisper + Google Translate uses the same raw Whisper

@@ -460,7 +460,7 @@ class GeminiCaller:
     """Structured generate_content calls with pacing and retries (the judge, the reference glossary)."""
 
     def __init__(self, model: str, pace_seconds: float, sleep: Callable[[float], None] = time.sleep,
-                 thinking_level: str | None = None):
+                 thinking_level: str | None = None, temperature: float | None = None):
         from talk_autopsy.stt import gemini
 
         self.gemini = gemini
@@ -468,6 +468,7 @@ class GeminiCaller:
         self.pace_seconds = pace_seconds
         self.sleep = sleep
         self.thinking_level = thinking_level  # None: the model's default
+        self.temperature = temperature  # None: the model's default
         key = config.require_key("GEMINI_API_KEY")
         genai = importlib.import_module("google.genai")
         self.types = importlib.import_module("google.genai.types")
@@ -495,6 +496,8 @@ class GeminiCaller:
                     "max_output_tokens": MAX_OUTPUT_TOKENS}
         if self.thinking_level:
             settings["thinking_config"] = types.ThinkingConfig(thinking_level=self.thinking_level)
+        if self.temperature is not None:
+            settings["temperature"] = self.temperature
         for attempt, wait in enumerate((*RETRY_WAIT_SECONDS, None), start=1):
             self._pace()
             self.attempts, started = attempt, time.perf_counter()

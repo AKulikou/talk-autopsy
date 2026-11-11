@@ -579,3 +579,11 @@ def test_cli_glossary_ref_writes_the_glossary_and_prints_counts(fake_genai, tmp_
     assert [(e.term, e.keep) for e in glossary.entries] == [("npm", True)]
     assert REFERENCE in fake_genai.calls[0].contents[0]
     assert runner.invoke(cli.app, ["glossary-ref", "T9"]).exit_code == 1  # no silent overwrite
+
+
+def test_gemini_caller_sends_temperature_only_when_set(fake_genai):
+    fake_genai.answers = [answer("x", "1"), answer("x", "1")]
+    judge.GeminiCaller("gemini-4-carbon", pace_seconds=0, temperature=0.0).generate(["p"], {"type": "object"})
+    judge.GeminiCaller("gemini-4-carbon", pace_seconds=0).generate(["p"], {"type": "object"})
+    assert fake_genai.calls[0].config["temperature"] == 0.0
+    assert "temperature" not in fake_genai.calls[1].config
