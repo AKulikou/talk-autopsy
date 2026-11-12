@@ -1110,6 +1110,17 @@ new hold-out): `talk_autopsy/ingest.py`, `talk_autopsy/stt/`,
 `talk_autopsy/prompts/correction-v2.md`, `talk_autopsy/prompts/translation-v2.1.md`,
 `uv.lock`. Check: `git diff --stat pipeline-v3 -- <these paths>` is empty.
 
+Exception (2026-11-12): package version 0.0.1 → 1.0.0 in `pyproject.toml`/`uv.lock`;
+no code change; T2 cached outputs byte-identical. The owner recorded this as
+an explicit exception for the release: the `uv.lock` diff against the tag is
+the project's own `version` line only (`uv lock`: "Updated talk-autopsy
+v0.0.1 -> v1.0.0", no dependency changed). Check: `talk-autopsy run
+data/test-set/T2.wav --lang ru --name T2-v3-cache` from the cached work folder
+(the same procedure as the v1.0 checklist's re-run from cache, invalid API keys
+in the environment): every model step skipped as up to date, the subtitles
+re-rendered, and all 22 files of `work/T2-v3-cache/` have the same SHA-256
+before and after; 0 USD.
+
 Settings: models `claude-haiku-5-5` (auto-glossary) and `claude-sonnet-5-5`
 (correction, translation) as the code's defaults, `.env` settings that select
 a model or a version empty; AssemblyAI `universal-3-5-pro`, two passes;
