@@ -300,11 +300,11 @@ class TimeEstimator:
                 if in_step < 0:
                     return NO_ESTIMATE  # the clock went backwards
             # real work so far: finished steps that ran, plus the running step
-            done_actual = sum(st.seconds for st in self._state.values() if st.seconds is not None
-                              and not st.skipped)
-            done_predicted = sum(self._predicted(s) for s, st in self._state.items()
-                                 if st.seconds is not None and not st.skipped and s in self._rates)
-            real_work = done_actual + in_step
+            ran = [s for s, st in self._state.items() if st.seconds is not None and not st.skipped]
+            real_work = sum(self._state[s].seconds for s in ran) + in_step  # for the one-minute threshold
+            # the measured speed compares only steps that had a prediction (not a download without history)
+            done_actual = sum(self._state[s].seconds for s in ran if s in self._rates)
+            done_predicted = sum(self._predicted(s) for s in ran if s in self._rates)
             frac = self._state[current].fraction if current else None
             if current is not None and frac and current in self._rates:
                 done_actual += in_step

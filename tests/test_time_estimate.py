@@ -281,3 +281,18 @@ def test_cache_dir_on_linux():
 
 def test_cache_dir_on_macos():
     assert te.user_cache_dir("darwin", {}, home=Path("/h")) == Path("/h/Library/Caches/talk-autopsy")
+
+
+def test_a_step_without_a_prediction_does_not_skew_the_measured_speed(tmp_path):
+    # smoke 2 (2026-11-12): a 17.5 s download without history made the rest look twice as slow
+    clock = Clock()
+    e = estimator(tmp_path, steps=["download", "stt", "fix"], clock=clock)
+    e.step_started("download")
+    clock.now += 50
+    e.step_finished("download")
+    e.step_started("stt")
+    clock.now += BUILTIN_RATES["stt"] * HOUR  # exactly as predicted
+    e.step_finished("stt")
+    left = e.remaining()
+    assert left.source == "measured"
+    assert left.seconds == pytest.approx(BUILTIN_RATES["fix"] * HOUR)
