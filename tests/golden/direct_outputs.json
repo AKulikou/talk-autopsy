@@ -1,0 +1,125 @@
+{
+ "edits": [
+  {
+   "after": "Quorvex",
+   "before": "core vex",
+   "id": 1,
+   "reason": "glossary term"
+  },
+  {
+   "after": "flinter mesh",
+   "before": "flinter mash",
+   "id": 4,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "Core vex",
+   "id": 7,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "core vex",
+   "id": 15,
+   "reason": "glossary term"
+  },
+  {
+   "after": "flinter mesh",
+   "before": "flinter mash",
+   "id": 18,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "Core vex",
+   "id": 21,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "core vex",
+   "id": 29,
+   "reason": "glossary term"
+  },
+  {
+   "after": "flinter mesh",
+   "before": "flinter mash",
+   "id": 32,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "Core vex",
+   "id": 35,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "core vex",
+   "id": 43,
+   "reason": "glossary term"
+  },
+  {
+   "after": "flinter mesh",
+   "before": "flinter mash",
+   "id": 46,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "Core vex",
+   "id": 49,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "core vex",
+   "id": 57,
+   "reason": "glossary term"
+  },
+  {
+   "after": "flinter mesh",
+   "before": "flinter mash",
+   "id": 60,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "Core vex",
+   "id": 63,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "core vex",
+   "id": 71,
+   "reason": "glossary term"
+  },
+  {
+   "after": "flinter mesh",
+   "before": "flinter mash",
+   "id": 74,
+   "reason": "glossary term"
+  },
+  {
+   "after": "Quorvex",
+   "before": "Core vex",
+   "id": 77,
+   "reason": "glossary term"
+  }
+ ],
+ "files": {
+  "fixed.json": "9eecfb38338deb12d4d4ec3b7d0ccf16449053a76a14a9cef029a7407235cd4c",
+  "ru.json": "d5acd5ad098fae371788977f25f4630d659cafa568478ac50c88cea9d4666005"
+ },
+ "units": {
+  "max_pause_seconds": 1.5,
+  "max_unit_seconds": 25.0,
+  "merged_units": 12,
+  "segments": 84,
+  "split_segments": 0,
+  "units": 72,
+  "version": "sentence-units-v1"
+ }
+}

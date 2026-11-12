@@ -1,0 +1,470 @@
+{
+ "requests": [
+  {
+   "max_tokens": 16000,
+   "messages": [
+    {
+     "content": "text:bc74d56834763755",
+     "role": "user"
+    }
+   ],
+   "model": "claude-sonnet-5-5",
+   "output_format": {
+    "class": "CorrectionAnswer",
+    "schema": {
+     "$defs": {
+      "Edit": {
+       "properties": {
+        "after": {
+         "title": "After",
+         "type": "string"
+        },
+        "before": {
+         "title": "Before",
+         "type": "string"
+        },
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "reason": {
+         "title": "Reason",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "before",
+        "after",
+        "reason"
+       ],
+       "title": "Edit",
+       "type": "object"
+      },
+      "SegmentText": {
+       "properties": {
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "text": {
+         "title": "Text",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "text"
+       ],
+       "title": "SegmentText",
+       "type": "object"
+      }
+     },
+     "properties": {
+      "edits": {
+       "items": {
+        "$ref": "#/$defs/Edit"
+       },
+       "title": "Edits",
+       "type": "array"
+      },
+      "segments": {
+       "items": {
+        "$ref": "#/$defs/SegmentText"
+       },
+       "title": "Segments",
+       "type": "array"
+      }
+     },
+     "required": [
+      "segments",
+      "edits"
+     ],
+     "title": "CorrectionAnswer",
+     "type": "object"
+    }
+   },
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "text:91d916044a35ba70",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "max_tokens": 16000,
+   "messages": [
+    {
+     "content": "text:da0f64b5f6512ab2",
+     "role": "user"
+    }
+   ],
+   "model": "claude-sonnet-5-5",
+   "output_format": {
+    "class": "CorrectionAnswer",
+    "schema": {
+     "$defs": {
+      "Edit": {
+       "properties": {
+        "after": {
+         "title": "After",
+         "type": "string"
+        },
+        "before": {
+         "title": "Before",
+         "type": "string"
+        },
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "reason": {
+         "title": "Reason",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "before",
+        "after",
+        "reason"
+       ],
+       "title": "Edit",
+       "type": "object"
+      },
+      "SegmentText": {
+       "properties": {
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "text": {
+         "title": "Text",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "text"
+       ],
+       "title": "SegmentText",
+       "type": "object"
+      }
+     },
+     "properties": {
+      "edits": {
+       "items": {
+        "$ref": "#/$defs/Edit"
+       },
+       "title": "Edits",
+       "type": "array"
+      },
+      "segments": {
+       "items": {
+        "$ref": "#/$defs/SegmentText"
+       },
+       "title": "Segments",
+       "type": "array"
+      }
+     },
+     "required": [
+      "segments",
+      "edits"
+     ],
+     "title": "CorrectionAnswer",
+     "type": "object"
+    }
+   },
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "text:91d916044a35ba70",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "max_tokens": 16000,
+   "messages": [
+    {
+     "content": "text:5dfd710feabec65f",
+     "role": "user"
+    }
+   ],
+   "model": "claude-sonnet-5-5",
+   "output_format": {
+    "class": "CorrectionAnswer",
+    "schema": {
+     "$defs": {
+      "Edit": {
+       "properties": {
+        "after": {
+         "title": "After",
+         "type": "string"
+        },
+        "before": {
+         "title": "Before",
+         "type": "string"
+        },
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "reason": {
+         "title": "Reason",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "before",
+        "after",
+        "reason"
+       ],
+       "title": "Edit",
+       "type": "object"
+      },
+      "SegmentText": {
+       "properties": {
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "text": {
+         "title": "Text",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "text"
+       ],
+       "title": "SegmentText",
+       "type": "object"
+      }
+     },
+     "properties": {
+      "edits": {
+       "items": {
+        "$ref": "#/$defs/Edit"
+       },
+       "title": "Edits",
+       "type": "array"
+      },
+      "segments": {
+       "items": {
+        "$ref": "#/$defs/SegmentText"
+       },
+       "title": "Segments",
+       "type": "array"
+      }
+     },
+     "required": [
+      "segments",
+      "edits"
+     ],
+     "title": "CorrectionAnswer",
+     "type": "object"
+    }
+   },
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "text:91d916044a35ba70",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "max_tokens": 16000,
+   "messages": [
+    {
+     "content": "text:0496d6407fa1d6e8",
+     "role": "user"
+    }
+   ],
+   "model": "claude-sonnet-5-5",
+   "output_format": {
+    "class": "TranslationAnswer",
+    "schema": {
+     "$defs": {
+      "SegmentText": {
+       "properties": {
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "text": {
+         "title": "Text",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "text"
+       ],
+       "title": "SegmentText",
+       "type": "object"
+      }
+     },
+     "properties": {
+      "segments": {
+       "items": {
+        "$ref": "#/$defs/SegmentText"
+       },
+       "title": "Segments",
+       "type": "array"
+      }
+     },
+     "required": [
+      "segments"
+     ],
+     "title": "TranslationAnswer",
+     "type": "object"
+    }
+   },
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "text:59d022768b8ed247",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "max_tokens": 16000,
+   "messages": [
+    {
+     "content": "text:8e0d1a9be23e66c1",
+     "role": "user"
+    }
+   ],
+   "model": "claude-sonnet-5-5",
+   "output_format": {
+    "class": "TranslationAnswer",
+    "schema": {
+     "$defs": {
+      "SegmentText": {
+       "properties": {
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "text": {
+         "title": "Text",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "text"
+       ],
+       "title": "SegmentText",
+       "type": "object"
+      }
+     },
+     "properties": {
+      "segments": {
+       "items": {
+        "$ref": "#/$defs/SegmentText"
+       },
+       "title": "Segments",
+       "type": "array"
+      }
+     },
+     "required": [
+      "segments"
+     ],
+     "title": "TranslationAnswer",
+     "type": "object"
+    }
+   },
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "text:59d022768b8ed247",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "max_tokens": 16000,
+   "messages": [
+    {
+     "content": "text:0dbbaca574666664",
+     "role": "user"
+    }
+   ],
+   "model": "claude-sonnet-5-5",
+   "output_format": {
+    "class": "TranslationAnswer",
+    "schema": {
+     "$defs": {
+      "SegmentText": {
+       "properties": {
+        "id": {
+         "title": "Id",
+         "type": "integer"
+        },
+        "text": {
+         "title": "Text",
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "text"
+       ],
+       "title": "SegmentText",
+       "type": "object"
+      }
+     },
+     "properties": {
+      "segments": {
+       "items": {
+        "$ref": "#/$defs/SegmentText"
+       },
+       "title": "Segments",
+       "type": "array"
+      }
+     },
+     "required": [
+      "segments"
+     ],
+     "title": "TranslationAnswer",
+     "type": "object"
+    }
+   },
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "text:59d022768b8ed247",
+     "type": "text"
+    }
+   ]
+  }
+ ],
+ "texts": {
+  "0496d6407fa1d6e8": "Segments to translate:\n[1] Welcome everyone, today we look at how Quorvex schedules small jobs.\n[2] The first idea is simple: every worker pulls from one Brindle queue, and the queue decides who gets the next piece of work.\n[3] We tried a flinter mesh between the workers last spring.\n[4] It looked clever on paper but it doubled the latency.\n[5] So we went back to the plain queue and measured again.\n[6] Quorvex now keeps a small buffer per worker, which hides most of the network jitter we saw before.\n[7] Let me show the numbers from the test cluster.\n[8] On a quiet day the median job waits about forty milliseconds.\n[9] On a busy day it is closer to two hundred.\n[10] The flinter mesh idea is not dead, though.\n[11] We think it helps when the workers sit in different regions.\n[12] That is what the next release of Quorvex will try.\n[13] Welcome everyone, today we look at how Quorvex schedules small jobs.\n[14] The first idea is simple: every worker pulls from one Brindle queue, and the queue decides who gets the next piece of work.\n[15] We tried a flinter mesh between the workers last spring.\n[16] It looked clever on paper but it doubled the latency.\n[17] So we went back to the plain queue and measured again.\n[18] Quorvex now keeps a small buffer per worker, which hides most of the network jitter we saw before.\n[19] Let me show the numbers from the test cluster.\n[20] On a quiet day the median job waits about forty milliseconds.\n[21] On a busy day it is closer to two hundred.\n[22] The flinter mesh idea is not dead, though.\n[23] We think it helps when the workers sit in different regions.\n[24] That is what the next release of Quorvex will try.\n[25] Welcome everyone, today we look at how Quorvex schedules small jobs.\n[26] The first idea is simple: every worker pulls from one Brindle queue, and the queue decides who gets the next piece of work.\n[27] We tried a flinter mesh between the workers last spring.\n[28] It looked clever on paper but it doubled the latency.\n[29] So we went back to the plain queue and measured again.\n[30] Quorvex now keeps a small buffer per worker, which hides most of the network jitter we saw before.",
+  "0dbbaca574666664": "Context segments (read-only, do not return):\n[60] That is what the next release of Quorvex will try.\n[61] Welcome everyone, today we look at how Quorvex schedules small jobs.\n[62] The first idea is simple: every worker pulls from one Brindle queue, and the queue decides who gets the next piece of work.\n\nSegments to translate:\n[63] We tried a flinter mesh between the workers last spring.\n[64] It looked clever on paper but it doubled the latency.\n[65] So we went back to the plain queue and measured again.\n[66] Quorvex now keeps a small buffer per worker, which hides most of the network jitter we saw before.\n[67] Let me show the numbers from the test cluster.\n[68] On a quiet day the median job waits about forty milliseconds.\n[69] On a busy day it is closer to two hundred.\n[70] The flinter mesh idea is not dead, though.\n[71] We think it helps when the workers sit in different regions.\n[72] That is what the next release of Quorvex will try.",
+  "59d022768b8ed247": "You translate the transcript of an English technical talk into subtitles in the\ntarget language named below.\n\nThe viewer is a developer who knows the field and reads each subtitle while the\nspeaker talks. The subtitles are laid out later (up to three lines, reading\nspeed reported, never enforced by cutting text), so your only job is a full,\nnatural translation.\n\n## Rules\n\n- Translate every segment completely. Every content clause of the English\n  appears in the translation: each statement, condition, example, number and\n  qualifier (\"under heavy load\", \"for most of our queries\", \"roughly\"). Do not\n  summarize, shorten or merge clauses to save space.\n- Drop only disfluencies: filler words and hesitations (\"you know\", \"like\" or\n  \"I mean\" when they carry nothing), repeated words, false starts and\n  self-corrections (keep the corrected version). Nothing else is dropped.\n- Natural phrasing: write what a fluent speaker of the target language would\n  say in a talk, not a word-for-word rendering. Translate idioms, set phrases\n  and job titles by meaning, with the established equivalent in the target\n  language (a job title as people in that field call it; an idiom by an idiom\n  or by plain words with the same meaning), never as a calque.\n- Glossary terms marked \"keep as is\" always stay exactly in their English form.\n  Commands, code, file names, key combinations and anything that is typed stay\n  as they are.\n- Glossary terms with an agreed translation (`term -> translation`) use that\n  translation, inflected as the grammar requires. A glossary note \"suggested\n  ...\" is only a suggestion; use it unless the form developers actually say\n  fits better.\n- Other technical terms: use the form developers who speak the target language\n  actually use. Many terms are normally said in English in the IT speech of\n  the target language (in Russian, for example: \"staging\", \"feature flag\",\n  \"sharding\", \"merge request\"); keep those in English rather than inventing a\n  translation.\n- Each segment stays a separate unit: never move content from one segment to\n  another, never merge or split segments, never leave a segment empty.\n\n## Input\n\n- The target language, the glossary and the video context.\n- Context segments (read-only): the end of the previous block, so the block\n  starts in context. Never return them.\n- Segments to translate: one per line, as `[id] text`.\n\n## Output\n\n`segments`: every segment to translate, exactly once, in the given order, with\nits id and its translation.\n\n\n## Target language\n\nru (ISO 639 code)\n\n## Glossary\n\n- Quorvex (keep as is, do not translate) (invented product name)\n- Brindle queue (keep as is, do not translate) (invented component)\n- flinter mesh -> сетка флинтера (invented networking idea)\n\n## Video context\n\nTitle: Scheduling small jobs (invented)\n",
+  "5dfd710feabec65f": "Context segments (read-only, do not return):\n[70] That is what the next release of Quorvex will try.\n[71] Welcome everyone, today we look at how core vex schedules small jobs.\n[72] The first idea is simple: every worker pulls from one Brindle queue,\n\nSegments to correct:\n[73] and the queue decides who gets the next piece of work.\n[74] We tried a flinter mash between the workers last spring.\n[75] It looked clever on paper but it doubled the latency.\n[76] So we went back to the plain queue and measured again.\n[77] Core vex now keeps a small buffer per worker,\n[78] which hides most of the network jitter we saw before.\n[79] Let me show the numbers from the test cluster.\n[80] On a quiet day the median job waits about forty milliseconds.\n[81] On a busy day it is closer to two hundred.\n[82] The flinter mesh idea is not dead, though.\n[83] We think it helps when the workers sit in different regions.\n[84] That is what the next release of Quorvex will try.",
+  "8e0d1a9be23e66c1": "Context segments (read-only, do not return):\n[28] It looked clever on paper but it doubled the latency.\n[29] So we went back to the plain queue and measured again.\n[30] Quorvex now keeps a small buffer per worker, which hides most of the network jitter we saw before.\n\nSegments to translate:\n[31] Let me show the numbers from the test cluster.\n[32] On a quiet day the median job waits about forty milliseconds.\n[33] On a busy day it is closer to two hundred.\n[34] The flinter mesh idea is not dead, though.\n[35] We think it helps when the workers sit in different regions.\n[36] That is what the next release of Quorvex will try.\n[37] Welcome everyone, today we look at how Quorvex schedules small jobs.\n[38] The first idea is simple: every worker pulls from one Brindle queue, and the queue decides who gets the next piece of work.\n[39] We tried a flinter mesh between the workers last spring.\n[40] It looked clever on paper but it doubled the latency.\n[41] So we went back to the plain queue and measured again.\n[42] Quorvex now keeps a small buffer per worker, which hides most of the network jitter we saw before.\n[43] Let me show the numbers from the test cluster.\n[44] On a quiet day the median job waits about forty milliseconds.\n[45] On a busy day it is closer to two hundred.\n[46] The flinter mesh idea is not dead, though.\n[47] We think it helps when the workers sit in different regions.\n[48] That is what the next release of Quorvex will try.\n[49] Welcome everyone, today we look at how Quorvex schedules small jobs.\n[50] The first idea is simple: every worker pulls from one Brindle queue, and the queue decides who gets the next piece of work.\n[51] We tried a flinter mesh between the workers last spring.\n[52] It looked clever on paper but it doubled the latency.\n[53] So we went back to the plain queue and measured again.\n[54] Quorvex now keeps a small buffer per worker, which hides most of the network jitter we saw before.\n[55] Let me show the numbers from the test cluster.\n[56] On a quiet day the median job waits about forty milliseconds.\n[57] On a busy day it is closer to two hundred.\n[58] The flinter mesh idea is not dead, though.\n[59] We think it helps when the workers sit in different regions.\n[60] That is what the next release of Quorvex will try.\n[61] Welcome everyone, today we look at how Quorvex schedules small jobs.\n[62] The first idea is simple: every worker pulls from one Brindle queue, and the queue decides who gets the next piece of work.",
+  "91d916044a35ba70": "You correct speech-recognition errors in the transcript of an English technical talk.\n\nThe transcript comes from an automatic speech recognizer. It is mostly right. Your\njob is to fix the words the recognizer got wrong, and nothing else: the corrected\ntranscript is measured word by word against what the speaker actually said, and\nevery change to a word that was already right counts as an error.\n\n## What to fix\n\n- Technical terms, product names, company names, tools, commands and\n  identifiers that were heard wrong: a product name split into ordinary words, a\n  command written as plain words, a known term replaced by a similar-sounding\n  word. Spell them as the glossary and the video context spell them.\n- Words distorted by the speaker's accent or by unclear audio, when the context\n  makes the intended word certain.\n- Obvious mis-hearings that make a sentence nonsense, when one specific word\n  clearly fits.\n\n## What to leave alone\n\n- The speaker's own wording, grammar, word order, repetitions, false starts and\n  informal phrasing. A non-native speaker's grammar is part of what was said; do\n  not correct it.\n- Style. Do not rewrite, shorten, smooth, paraphrase or reorder anything.\n- Filler words have already been removed; do not add or remove words like \"so\",\n  \"you know\", \"like\".\n- Punctuation and capitalization, except where a term's spelling requires it.\n- Anything you are unsure about. When in doubt, keep the original text and do\n  not add an edit. A missed fix costs less than a wrong one.\n\nNever add content that is not in the transcript, never drop a segment, never\nmerge or split segments.\n\n## Every edit stays inside its segment\n\nEach segment is a separate subtitle with its own time span. A word may not move\ninto a segment from a neighbouring segment, or out of a segment into its\nneighbour, even when the sentence seems to continue across the boundary.\nCorrect each segment using only its own words; the neighbours are there to\nhelp you understand it, not as material.\n\nA garbled segment (a short, broken question from the audience, a sentence\nthat makes no sense) is left as it is, or fixed only where one specific word\nis certainly wrong. Never rebuild it from the words around it: a segment that\nsuddenly holds a whole sentence is shown for its original second or two and\nbecomes unreadable.\n\n## Input\n\n- The glossary of the video: terms as they must be spelled. It was drafted\n  automatically from this transcript, so it can miss terms and can list a word\n  that is not a term. A note \"heard as: ...\" lists forms in the transcript that\n  were judged to be mis-recognitions of the term; replace such a form only\n  where the context confirms it means the term.\n- The video context: title, description and chapter titles, if known.\n- Context segments (read-only): the end of the previous block, so you know how\n  the current block starts. Never return them.\n- Segments to correct: one per line, as `[id] text`.\n\n## Output\n\n- `segments`: every segment to correct, exactly once, in the given order, with\n  its id and its text, corrected or unchanged. Return unchanged segments as they\n  are, character for character.\n- `edits`: one entry per segment you changed: its `id`, the text `before` and\n  `after` your change (the changed words with a few words around them, enough to\n  find the place), and a short `reason` (for example \"product name\", \"accent:\n  'sink' for 'think'\"). No edit for a segment you did not change.\n\n\n## Glossary\n\n- Quorvex (invented product name)\n- Brindle queue (invented component)\n- flinter mesh (invented networking idea)\n\n## Video context\n\nTitle: Scheduling small jobs (invented)\n",
+  "bc74d56834763755": "Segments to correct:\n[1] Welcome everyone, today we look at how core vex schedules small jobs.\n[2] The first idea is simple: every worker pulls from one Brindle queue,\n[3] and the queue decides who gets the next piece of work.\n[4] We tried a flinter mash between the workers last spring.\n[5] It looked clever on paper but it doubled the latency.\n[6] So we went back to the plain queue and measured again.\n[7] Core vex now keeps a small buffer per worker,\n[8] which hides most of the network jitter we saw before.\n[9] Let me show the numbers from the test cluster.\n[10] On a quiet day the median job waits about forty milliseconds.\n[11] On a busy day it is closer to two hundred.\n[12] The flinter mesh idea is not dead, though.\n[13] We think it helps when the workers sit in different regions.\n[14] That is what the next release of Quorvex will try.\n[15] Welcome everyone, today we look at how core vex schedules small jobs.\n[16] The first idea is simple: every worker pulls from one Brindle queue,\n[17] and the queue decides who gets the next piece of work.\n[18] We tried a flinter mash between the workers last spring.\n[19] It looked clever on paper but it doubled the latency.\n[20] So we went back to the plain queue and measured again.\n[21] Core vex now keeps a small buffer per worker,\n[22] which hides most of the network jitter we saw before.\n[23] Let me show the numbers from the test cluster.\n[24] On a quiet day the median job waits about forty milliseconds.\n[25] On a busy day it is closer to two hundred.\n[26] The flinter mesh idea is not dead, though.\n[27] We think it helps when the workers sit in different regions.\n[28] That is what the next release of Quorvex will try.\n[29] Welcome everyone, today we look at how core vex schedules small jobs.\n[30] The first idea is simple: every worker pulls from one Brindle queue,\n[31] and the queue decides who gets the next piece of work.\n[32] We tried a flinter mash between the workers last spring.\n[33] It looked clever on paper but it doubled the latency.\n[34] So we went back to the plain queue and measured again.\n[35] Core vex now keeps a small buffer per worker,\n[36] which hides most of the network jitter we saw before.",
+  "da0f64b5f6512ab2": "Context segments (read-only, do not return):\n[34] So we went back to the plain queue and measured again.\n[35] Core vex now keeps a small buffer per worker,\n[36] which hides most of the network jitter we saw before.\n\nSegments to correct:\n[37] Let me show the numbers from the test cluster.\n[38] On a quiet day the median job waits about forty milliseconds.\n[39] On a busy day it is closer to two hundred.\n[40] The flinter mesh idea is not dead, though.\n[41] We think it helps when the workers sit in different regions.\n[42] That is what the next release of Quorvex will try.\n[43] Welcome everyone, today we look at how core vex schedules small jobs.\n[44] The first idea is simple: every worker pulls from one Brindle queue,\n[45] and the queue decides who gets the next piece of work.\n[46] We tried a flinter mash between the workers last spring.\n[47] It looked clever on paper but it doubled the latency.\n[48] So we went back to the plain queue and measured again.\n[49] Core vex now keeps a small buffer per worker,\n[50] which hides most of the network jitter we saw before.\n[51] Let me show the numbers from the test cluster.\n[52] On a quiet day the median job waits about forty milliseconds.\n[53] On a busy day it is closer to two hundred.\n[54] The flinter mesh idea is not dead, though.\n[55] We think it helps when the workers sit in different regions.\n[56] That is what the next release of Quorvex will try.\n[57] Welcome everyone, today we look at how core vex schedules small jobs.\n[58] The first idea is simple: every worker pulls from one Brindle queue,\n[59] and the queue decides who gets the next piece of work.\n[60] We tried a flinter mash between the workers last spring.\n[61] It looked clever on paper but it doubled the latency.\n[62] So we went back to the plain queue and measured again.\n[63] Core vex now keeps a small buffer per worker,\n[64] which hides most of the network jitter we saw before.\n[65] Let me show the numbers from the test cluster.\n[66] On a quiet day the median job waits about forty milliseconds.\n[67] On a busy day it is closer to two hundred.\n[68] The flinter mesh idea is not dead, though.\n[69] We think it helps when the workers sit in different regions.\n[70] That is what the next release of Quorvex will try.\n[71] Welcome everyone, today we look at how core vex schedules small jobs.\n[72] The first idea is simple: every worker pulls from one Brindle queue,"
+ }
+}

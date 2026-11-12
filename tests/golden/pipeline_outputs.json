@@ -1,0 +1,174 @@
+{
+ "events": [
+  [
+   "fix",
+   "estimate",
+   0,
+   3,
+   "pipeline",
+   "3 block(s), about 4,740 input and 3,582 output tokens, about 0.045 USD"
+  ],
+  [
+   "translate",
+   "estimate",
+   0,
+   3,
+   "pipeline",
+   "3 block(s), about 4,051 input and 4,245 output tokens, about 0.051 USD"
+  ],
+  [
+   "fix",
+   "step-start",
+   0,
+   3,
+   "pipeline",
+   "correction-v2, claude-sonnet-5-5"
+  ],
+  [
+   "fix",
+   "block-done",
+   0,
+   3,
+   "pipeline",
+   "block 1/3"
+  ],
+  [
+   "fix",
+   "block-done",
+   0,
+   3,
+   "pipeline",
+   "block 2/3"
+  ],
+  [
+   "fix",
+   "block-done",
+   0,
+   3,
+   "pipeline",
+   "block 3/3"
+  ],
+  [
+   "fix",
+   "step-done",
+   0,
+   3,
+   "pipeline",
+   "fixed.json, 0.0337 USD"
+  ],
+  [
+   "translate",
+   "step-start",
+   0,
+   3,
+   "pipeline",
+   "translation-v2.1, claude-sonnet-5-5"
+  ],
+  [
+   "translate",
+   "block-done",
+   0,
+   3,
+   "pipeline",
+   "block 1/3"
+  ],
+  [
+   "translate",
+   "block-done",
+   0,
+   3,
+   "pipeline",
+   "block 2/3"
+  ],
+  [
+   "translate",
+   "block-done",
+   0,
+   3,
+   "pipeline",
+   "block 3/3"
+  ],
+  [
+   "translate",
+   "step-done",
+   0,
+   3,
+   "pipeline",
+   "ru.json, 0.0384 USD"
+  ],
+  [
+   "srt",
+   "srt",
+   0,
+   3,
+   "pipeline",
+   "talk.ru.srt + .ass: 222 cues; reading speed max 7.1 cps, 0.0% above 17 cps, 0.0% above 25 cps; shorter than 1 s: 60, longer than 7 s: 0"
+  ],
+  [
+   "srt",
+   "srt",
+   0,
+   3,
+   "pipeline",
+   "talk.en.srt + .ass: 168 cues; reading speed max 10.2 cps, 0.0% above 17 cps, 0.0% above 25 cps; shorter than 1 s: 0, longer than 7 s: 0"
+  ],
+  [
+   "srt",
+   "step-done",
+   0,
+   3,
+   "pipeline",
+   "talk.ru.srt"
+  ],
+  [
+   "pipeline",
+   "done",
+   0,
+   3,
+   "pipeline",
+   "0.0722 USD Claude, 0.0000 USD speech recognition"
+  ]
+ ],
+ "files": {
+  "fixed.json": "4ca69bf85c97de794c7df7ddbb376bc377c8a49cac37a16a5c12053c86f550ef",
+  "fixed.json.stamp.json": "b575116cccbfcb90860df30c6075a6eae73d47801b0b3444e77edaf56d1e1184",
+  "glossary.md": "7a040ce205c5729f0644d35e288f7e15b6bdadca3db043ac1f45c6062c7c5542",
+  "meta.json": "1de10048c62f4e6ac98408cc7d50113e1b6f8d6b72e15b5184d48d863b44ff49",
+  "raw2.json": "26be2b37280be4e18aad03a9ad2a36965b72ae7fde1fdc94a165f70c7406163c",
+  "ru.json": "3b3633011563f3092b13b27740fa0acc40fae3989b770afced1a3c145c36ad22",
+  "ru.json.stamp.json": "fd161bda456b94060f92a7b55fde0a5218dedd3894ae9143d33128112b030da0",
+  "talk.en.ass": "86e7e7008b57f8cda67bbf393a6462710ec506147b33286288ca5f22a83e1e90",
+  "talk.en.srt": "d3e5eabb1f5c78d36364398c549add60bee36a65ff6ee1614e162556407ebe41",
+  "talk.ru.ass": "e836ac98d285625c61b62247dd79ec0e8288db18879a0d9a51babe38363563d3",
+  "talk.ru.srt": "1675b4c1c56067d553d8f79544cb6f74341cf202c13d27817b0a91c2f491f156"
+ },
+ "report": {
+  "cost_usd": 0.072172,
+  "estimate_usd": 0.0959,
+  "fallbacks": [],
+  "steps": [
+   [
+    "fix",
+    "fixed.json",
+    false,
+    0.033722,
+    ""
+   ],
+   [
+    "translate",
+    "ru.json",
+    false,
+    0.03845,
+    ""
+   ],
+   [
+    "srt",
+    "talk.ru.srt",
+    false,
+    0.0,
+    ""
+   ]
+  ],
+  "stt_cost_usd": 0.0
+ }
+}
