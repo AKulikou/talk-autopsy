@@ -381,3 +381,10 @@ def test_summary_for_a_page_reload(tmp_path, media):
 def test_full_run_script_matches_the_pipeline_steps():
     steps = {e.stage for e in FULL_RUN if e.event in ("step-done", "step-skipped")}
     assert steps == set(pipeline.STEPS)
+
+
+def test_output_step_names_keep_slow_and_fast_outputs_apart():
+    assert jobs.output_step(["srt", "mp4-burned"]) == "outputs_burn"
+    assert jobs.output_step(["srt", "ass", "bilingual", "mp4-soft"]) == "outputs_soft"
+    assert jobs.output_step(["srt", "ass", "bilingual"]) == "outputs_subs"
+    assert jobs.estimator_steps("url", ["srt"])[0] == "download"

@@ -227,9 +227,16 @@ def job_steps(mode: str, formats: list[str]) -> list[str]:
     return (["download"] if mode == "url" else []) + PIPELINE_STEPS + ["outputs"]
 
 
+def output_step(formats: list[str]) -> str:
+    """The time-history name of the outputs step: burn-in, a subtitle-track MP4 or subtitle files take
+    very different times, so each has its own rate."""
+    if "mp4-burned" in formats:
+        return "outputs_burn"
+    return "outputs_soft" if "mp4-soft" in formats else "outputs_subs"
+
+
 def estimator_steps(mode: str, formats: list[str]) -> list[str]:
-    tail = "outputs_burn" if "mp4-burned" in formats else "outputs"
-    return (["download"] if mode == "url" else []) + PIPELINE_STEPS + [tail]
+    return (["download"] if mode == "url" else []) + PIPELINE_STEPS + [output_step(formats)]
 
 
 # --- events and jobs -----------------------------------------------------------------------
@@ -709,7 +716,7 @@ class JobRunner:
             last_step = "pipeline"
             report = core.run_pipeline(settings, progress)
             last_step = "outputs"
-            out_step = "outputs_burn" if "mp4-burned" in preview.formats else "outputs"
+            out_step = output_step(preview.formats)
             t0 = job.clock()
             job.add("step_started", step="outputs", detail=", ".join(preview.formats))
             estimator.step_started(out_step)

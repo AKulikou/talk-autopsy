@@ -197,7 +197,7 @@ class TimeEstimator:
     The time estimate of one run. Tell it what happens (`step_started`,
     `step_progress`, `step_finished`) and ask `remaining()` at any time; call
     `record()` once after a successful run. `steps` are the run's steps in order
-    (pipeline steps plus "download", "outputs_burn" or "outputs").
+    (pipeline steps plus "download" and one of "outputs_burn", "outputs_soft", "outputs_subs").
     """
 
     key: MachineKey | None

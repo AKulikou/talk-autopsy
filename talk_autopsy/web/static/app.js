@@ -175,7 +175,7 @@ function timeText(time) {
   let text = `≈ ${duration(time.seconds)}`;
   if (time.first_run_rough) text += ` (${t("est_time_rough")})`;
   if (time.excludes?.length) {
-    const names = [...new Set(time.excludes.map((s) => t(`step_${s === "outputs_burn" ? "outputs" : s}`)))];
+    const names = [...new Set(time.excludes.map((s) => t(`step_${s.startsWith("outputs") ? "outputs" : s}`)))];
     text += `; ${t("est_time_excludes", { steps: names.join(", ") })}`;
   }
   return text;
