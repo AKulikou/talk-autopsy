@@ -207,6 +207,22 @@ def test_docs_and_readme_are_updated_between_markers_only():
     assert out.startswith("x\n") and out.endswith(f"{tr.TABLE_END}\ny\n")
 
 
+def test_readme_update_keeps_empty_cells():
+    """Regression: splitting on ' | ' merged an empty cell into the last one and dropped a column."""
+    scores1, key1, scores2, key2 = scored()
+    result = tr.score_baselines(scores1, key1, scores2, key2)
+    readme = (f"{tr.TABLE_START}\n| | a | b | c | rating |\n|---|---|---|---|---|\n"
+              "| Talk Autopsy (v3) | 1 | | 3 | *pending* |\n"
+              "| Whisper + Google Translate | | | | *pending* |\n"
+              f"| Gemini translation (plain) | as above | | as above | | *pending* |\n{tr.TABLE_END}\n")
+    out = tr.update_readme_table(readme, result).split("\n")
+    rows = [line for line in out if line.startswith(("| Talk", "| Whisper", "| Gemini"))]
+    assert rows[0] == "| Talk Autopsy (v3) | 1 | | 3 | **5.00** |"
+    assert rows[1].startswith("| Whisper + Google Translate | | | | 3.00 (pipeline")
+    assert rows[2].startswith("| Gemini translation (plain) | as above | | as above | | ")
+    assert [row.count("|") for row in rows] == [6, 6, 7]
+
+
 def test_real_docs_carry_the_markers():
     for name, (start, end) in (("docs/experiments.md", (tr.START, tr.END)),
                                ("README.md", (tr.TABLE_START, tr.TABLE_END))):

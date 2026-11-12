@@ -34,8 +34,8 @@ and an external audit. What is measured so far, and what is not, is listed below
   listener. Details: [who decided each reference](docs/experiments.md#who-decided-each-reference).
 - **Baselines:** raw speech recognition (faster-whisper large-v3, AssemblyAI,
   Gemini) on the same fragments; a plain Gemini translation in the T6
-  translation check. Whisper + Google Translate: code ready, waits for an API
-  key; VideoLingo: attempted, not run (see the comparison table below).
+  translation check; Whisper + Google Translate on T2 and T6, its translation
+  rated on T6; VideoLingo: attempted, not run (see the comparison table below).
 - **Metrics** (definitions in one place: [Metrics](docs/experiments.md#metrics)):
 
   | Metric | What it measures |
@@ -250,8 +250,12 @@ glossary drafted from a first transcript, sent back to the speech recognition
 service as key terms, puts the technical terms, product names and commands in
 place (T2 94–96%, hold-out T6 100%), and the end-to-end tool around it
 (YouTube link in, subtitles or a TV-ready MP4 out, 1.1–1.3 USD and about 10
-minutes per hour of video). The **translation is on par with a plain Gemini
-translation** of the same English, not better (T6, blind, 4.42 against 4.33).
+minutes per hour of video). **On random sentences the three systems were rated
+equal by one viewer** (T6, 12 units, blind: Talk Autopsy 4.42, Whisper + Google
+Translate 4.42, a plain Gemini translation 4.33); the translation is not better.
+The difference lies in **technical terms and accented speech**: term accuracy
+on T2, the accented fragment, 95% against 62% for raw Whisper (the transcript
+Google Translate translates); on the hold-out T6, 100% against 88%.
 The references had no native English listener, and T6's topic is close to T1
 and T2: transfer to another domain is not measured yet.
 
@@ -297,16 +301,18 @@ T1/T2 `pipeline-v3` runs and 1 (correct) edit on T6**, at about 0.065 USD per
 10 minutes. It stays in the pipeline as insurance for the fallback engines:
 on faster-whisper input it lifted T2 from 61.7% to 93.5% (correction-v1, B1).
 
-**Against the baselines, on one set (T2 and T6)** ([details](docs/experiments.md#baselines-on-one-set-t2-and-t6)).
-English side, and the owner's blind 1–5 rating of the translations on 12 T6 units (filled in by the scorer once he has rated the Google Translate items).
+**Against the baselines, on one set (T2 and T6)** ([details](docs/experiments.md#baselines-on-one-set-t2-and-t6)):
+term accuracy and WER of the English side, and the owner's blind 1–5 rating of
+the translations on 12 random T6 units (the last column; pipeline − baseline
+with a paired bootstrap 95% interval).
 
 <!-- baselines-table:start -->
 | | T2 term accuracy (v2) | T2 WER | T6 term accuracy (v2), J / M | T6 WER, J / M | translation rating |
 |---|---|---|---|---|---|
-| Talk Autopsy (`pipeline-v3`) | **94.4–96.3%** (3 runs) | 4.24–4.48% | **100% / 100%** (1 run) | 4.70% / 2.89% | *pending* (owner's rating) |
+| Talk Autopsy (`pipeline-v3`) | **94.4–96.3%** (3 runs) | 4.24–4.48% | **100% / 100%** (1 run) | 4.70% / 2.89% | **4.42** |
 | raw Whisper (faster-whisper large-v3) | 61.7% | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | — (no translation) |
-| Whisper + Google Translate | 61.7% (raw Whisper's transcript) | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | *pending* (owner's rating) |
-| Gemini translation (plain prompt, of Talk Autopsy's corrected English) | as Talk Autopsy | | as Talk Autopsy | | *pending* (owner's rating) |
+| Whisper + Google Translate | 61.7% (raw Whisper's transcript) | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | 4.42 (pipeline +0.00, −0.42 … +0.42) |
+| Gemini translation (plain prompt, of Talk Autopsy's corrected English) | as Talk Autopsy | | as Talk Autopsy | | 4.33 (pipeline +0.08, −0.33 … +0.50) |
 | VideoLingo | attempted, not run | | attempted, not run | | *pending* |
 <!-- baselines-table:end -->
 
@@ -329,7 +335,21 @@ watched T6 ([T6 translation check](docs/experiments.md#t6-translation-check-resu
 | difference | +0.08, bootstrap 95% interval −0.33 … +0.50 | 2 units each way, 8 ties |
 
 The pre-registered rule (pipeline mean ≥ 4.0) is met. The pipeline is **not
-shown to be better** than a plain Gemini translation. Earlier, on T2:
+shown to be better** than a plain Gemini translation. On 2026-11-12 the owner
+rated Whisper + Google Translate on the same 12 units, blind, with 4 repeated
+items to check drift between the days (4 of 4 scored the same): **4.42, equal
+to the pipeline** (difference 0.00, interval −0.42 … +0.42). The
+specification's C1 (pipeline at least 1 point above Google Translate) is
+**not met**. Random sentences carry few technical terms; the systems differ
+in the terms, which the table above measures on the English side.
+
+A Gemini model rating the same items as a second rater is **not usable**: its
+ranking does not agree with the owner's (Spearman 0.05), and it rates
+Gemini's own translations 4.93 against 3.93 for the pipeline and 3.83 for
+Google Translate, where the owner gave 4.36, 4.50 and 4.42
+([LLM-as-rater self-preference](docs/experiments.md#finding-llm-as-rater-self-preference-measured-2026-11-12)).
+
+Earlier, on T2:
 translation-v1 alone scored 3.85; translation-v2 was preferred to v1 in a
 blind pairwise comparison (8 pairs to 3).
 
@@ -358,8 +378,8 @@ external audit #1 is done ([findings and responses](docs/audit-2026-11-11.md)).
 `pipeline-v3` stays frozen.
 
 **Next** (the specification's [v1.0 checklist](docs/experiments.md#v10-checklist)):
-the baselines on one set (T2 and T6) and the owner's blind rating of all
-systems' translations, external audit #2, tag `v1.0`. Then T3 on a new domain.
+VideoLingo on the baseline set (T2 and T6; Google Translate is done),
+external audit #2, tag `v1.0`. Then T3 on a new domain.
 
 | Stage | Content | Gate |
 |---|---|---|
@@ -387,14 +407,17 @@ language measured; the code takes any language as a parameter.
 - **One rater** for translation (the owner, not a native English speaker), on
   12 units of T6 (single-rated, blind) and earlier T2 comparisons that were
   pairwise and not fully blind; the rater reads the English first.
-- **Translation is not better than a plain Gemini translation** (T6: +0.08,
-  interval −0.33 … +0.50); the pipeline's measured edge is term recognition.
+- **Translation is not better than a plain Gemini translation or Whisper +
+  Google Translate** on random T6 sentences (+0.08, interval −0.33 … +0.50;
+  0.00, −0.42 … +0.42); the pipeline's measured edge is term recognition.
+  The Google Translate items were rated on a different day from the others.
+- **No second rater:** a Gemini rater was tried and showed self-preference
+  (its own translations 4.93, the others about 3.9; Spearman 0.05 with the
+  owner), so it is not used.
 - **Correction adds little** on the main path (0 edits in four T1/T2 runs, 1
   on T6) at about 0.39 USD per hour; its value is shown on fallback-engine
   input.
-- **Baselines incomplete:** Whisper + Google Translate is coded but not run (no
-  API key yet); VideoLingo was not run; no translation of any baseline but a
-  plain Gemini one has been rated.
+- **Baselines incomplete:** VideoLingo was not run.
 - **Reading speed** is above the usual guideline on fast speakers; nothing is cut.
 - **Timing** of subtitles is not validated against hand-labelled onsets.
 - **Next-video failure modes** not handled: several speakers (no
@@ -403,11 +426,10 @@ language measured; the code takes any language as a parameter.
 
 ## Not done
 
-- Whisper + Google Translate run (code ready) and VideoLingo run; the owner's
-  blind rating of all systems' translations.
+- VideoLingo run and the owner's rating of its translations.
 - Fragments T3–T5 (no fragment from another domain); hypotheses A5, B3,
-  C2–C5; the specification's C1 against Google Translate and VideoLingo
-  (the owner's three-system rating).
+  C2–C5; the specification's C1 against VideoLingo (against Google Translate:
+  rated, not met).
 - Timing drift and term accuracy of the translation (metrics not implemented).
 - A human check of the T6 reference (no fluent listener available).
 - Dubbing (stage 4; a stub) and the web UI (v1.1).

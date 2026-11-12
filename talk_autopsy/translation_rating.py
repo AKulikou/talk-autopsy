@@ -377,7 +377,7 @@ def result_markdown(result: BaselineResult, date: str) -> str:
             if name not in result.agreement:
                 continue
             a = result.agreement[name]
-            rho = "—" if a.spearman is None else f"{a.spearman:.2f}"
+            rho = "—" if a.spearman is None else f"{a.spearman:.2f}".replace("-", "−")
             lines.append(f"| {label} | {a.n} | {rho} | {a.mean_abs_diff:.2f} | {a.within_one:.0%} "
                          f"| {_f(a.bias)} |")
         if GEMINI in result.agreement and PIPELINE in result.agreement and GOOGLE in result.agreement:
@@ -424,7 +424,11 @@ def update_readme_table(text: str, result: BaselineResult) -> str:
         hits = [i for i, line in enumerate(lines) if line.startswith(prefix)]
         if len(hits) != 1:
             raise RatingError(f"README table: {len(hits)} rows start with {prefix!r}")
-        parts = lines[hits[0]].split(" | ")
-        parts[-1] = f"{cells[system]} |"
-        lines[hits[0]] = " | ".join(parts)
+        row = lines[hits[0]].rstrip()
+        if not row.endswith("|"):
+            raise RatingError(f"README table: row {prefix!r} does not end with '|'")
+        # Split on bare '|' so empty cells ("| |") keep their place.
+        parts = row[:-1].split("|")
+        parts[-1] = f" {cells[system]} "
+        lines[hits[0]] = "|".join(parts) + "|"
     return f"{head}{TABLE_START}{chr(10).join(lines)}{TABLE_END}{tail}"

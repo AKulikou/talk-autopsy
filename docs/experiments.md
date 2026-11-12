@@ -99,7 +99,7 @@ specification words it, next to the result. Status is `met`, `not met` or
 the last column says so and why. Written 2026-11-11 after external audit #1
 (finding 7: criteria had been reworded after results); C1, term accuracy,
 translation quality and the gate rows updated after the T6 translation check
-(2026-11-11). Numbers: term accuracy
+(2026-11-11); C1 updated after the Google Translate rating (2026-11-12). Numbers: term accuracy
 v2 where the row was re-scored (Metrics above); T2 is the fragment that
 carries the weight (T1's reference was decided by a Claude model).
 
@@ -115,7 +115,7 @@ carries the weight (T1's reference was decided by a Claude model).
 | B3 | recognition alternatives or word confidence: at least +3 points term accuracy | | not run | |
 | B4 | Sonnet enough: term-accuracy difference to Opus under 2 points | T2 Gemini+align input: Opus 100% vs Sonnet 96.3% (gap 3.7 points, v1) | not met (gap 3.7 > 2) | Sonnet kept for cost (0.060 vs 0.129 USD per fragment) |
 | B5 | auto-glossary covers at least 70% of the hand glossary | T2 74.4% / 79.5%; T1 56.8% / 62.2% (two runs each) | met on T2, not met on T1 | auto-glossary adopted as the pipeline's glossary step (an unseen video has no hand glossary) |
-| C1 | Claude's blind mean at least 1 point above Google Translate and not below VideoLingo; 20 random fragments, three systems mixed | Google Translate and VideoLingo not rated yet. What was run: translation-v1 rated 3.85 alone (not blind); v1 against v2 blind-pairwise (not fully blind), v1 4.40, v2 4.67; **C1 on T6** (pre-registered, 12 units, blind, single-rated, against a plain Gemini translation): pipeline 4.42, Gemini 4.33, difference +0.08 [−0.33, +0.50] | not run (as specified: no Google Translate or VideoLingo rating); the pre-registered C1 on T6 (pipeline mean >= 4.0) met | gate 2 -> 3 passed on C1 on T6; the three-system rating is the next step of stage 3 |
+| C1 | Claude's blind mean at least 1 point above Google Translate and not below VideoLingo; 20 random fragments, three systems mixed | **Against Google Translate** (2026-11-12, pre-registered, 12 T6 units instead of 20 fragments, blind, single-rated; Google Translate items rated on another day, anchor drift 0.00): pipeline 4.42, Whisper + Google Translate 4.42, difference 0.00 [−0.42, +0.42] ([result](#translation-rating-pre-registered-2026-11-11-before-any-google-translate-or-rater-call)). VideoLingo not run. Earlier: translation-v1 rated 3.85 alone (not blind); v1 against v2 blind-pairwise (not fully blind), v1 4.40, v2 4.67; **C1 on T6** against a plain Gemini translation: pipeline 4.42, Gemini 4.33, difference +0.08 [−0.33, +0.50] | **not met** against Google Translate (difference 0.00 < 1.0); VideoLingo part not run; the pre-registered C1 on T6 (pipeline mean >= 4.0) met | gate 2 -> 3 had passed on C1 on T6 (2026-11-11, before this rating); no decision on this result yet (owner) |
 | C2 | one translation per glossary term across the video (20 key terms) | | not run | |
 | C3 | no lost or repeated phrases at 10 block boundaries, with and without overlap | | not run | |
 | C4 | the style instruction preferred in 2 of 3 cases, blind | | not run | |
@@ -139,7 +139,7 @@ The specification's list for v1.0 (stage 3), with the state of each item.
 | Item | State |
 |---|---|
 | the owner watched two full videos and uses the tool | done (owner) |
-| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and VideoLingo on one set | in progress ([Baselines on one set](#baselines-on-one-set-t2-and-t6)): Google Translate run 2026-11-11, its 16-item rating file waits for the owner; VideoLingo not run |
+| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and VideoLingo on one set | in progress ([Baselines on one set](#baselines-on-one-set-t2-and-t6)): Google Translate run 2026-11-11 and rated by the owner 2026-11-12 (4.42, equal to the pipeline); VideoLingo not run |
 | CI green; README in the series structure; honest Known limitations | in progress |
 | re-run from cache within a minute | **met**: 6.7–8.9 s wall time on T2 (three re-runs, below) |
 | external audit #2 | not done |
@@ -164,7 +164,8 @@ Whisper + Google Translate and VideoLingo on one set. The set is **T2 and T6**: 
 references, and T6 is no longer sealed after its single run. The same metrics everywhere (Metrics
 above): term accuracy v2 (micro, macro, without the top term, precision) and WER of the English;
 on T6 against reference J, with reference M as the range. The translations are compared by the
-owner's blind rating of all systems, which is the next step (*pending*).
+owner's blind rating on 12 T6 units ([Translation rating](#translation-rating-pre-registered-2026-11-11-before-any-google-translate-or-rater-call),
+rated 2026-11-12): pipeline 4.42, Whisper + Google Translate 4.42, plain Gemini 4.33. VideoLingo not run.
 
 | English side | T2 term accuracy v2 | T2 WER | T6 term accuracy v2, J / M | T6 WER, J / M |
 |---|---|---|---|---|
@@ -300,8 +301,51 @@ counts and cost only). Code: `talk_autopsy/translation_rating.py` (tests with fa
 rater); `judge.GeminiCaller` got an optional `temperature` (default unchanged).
 
 <!-- translation-rating-result:start -->
-**Result:** *pending: the owner's rating of `work/T6/C1-T6-rating-2.md`.*
+**Result (2026-11-12).** The owner rated `work/T6/C1-T6-rating-2.md` (16 items) blind, one at a time; scored with `uv run python scripts/translation_check.py score-baselines`.
+
+| 12 units, single-rated 1–5 | mean | scores 5 / 4 / 3 / 2 / 1 | pipeline − system, paired bootstrap 95% |
+|---|---|---|---|
+| Talk Autopsy (`pipeline-v3`) | **4.42** | 8 / 1 / 3 / 0 / 0 |  |
+| Gemini translation (plain prompt) | **4.33** | 7 / 2 / 3 / 0 / 0 | +0.08 (−0.33 … +0.50) |
+| Whisper + Google Translate | **4.42** | 6 / 5 / 1 / 0 / 0 | +0.00 (−0.42 … +0.42) |
+
+- **Drift** on the 4 anchors (first-file item: old -> new score; item 1: 5 -> 5; item 5: 5 -> 5; item 9: 5 -> 5; item 22: 4 -> 4): mean absolute difference **0.00**, signed +0.00; below 1.0, so the two days are comparable by the rule.
+- **Specification C1, Google Translate part** (pipeline mean at least 1 point above Google Translate): difference +0.00 (−0.42 … +0.42): **not met** (12 units on T6, not 20 fragments; Google Translate rated on another day). The VideoLingo part stays not run.
+- Google Translate translates raw Whisper; the owner saw the corrected English above it, so recognition errors count against it. Pipeline and Gemini scores are the first rating's.
+
+**Gemini as a second rater** (`gemini-rater-v1`, informational; no rule uses it):
+
+| items | n | Spearman | mean abs. difference | within ±1 | rater − owner |
+|---|---|---|---|---|---|
+| Talk Autopsy (`pipeline-v3`) | 14 | 0.12 | 1.00 | 71% | −0.57 |
+| Gemini translation (plain prompt) (self) | 14 | −0.23 | 0.71 | 79% | +0.57 |
+| Whisper + Google Translate | 12 | 0.43 | 0.92 | 75% | −0.58 |
+| all items | 38 | 0.05 | 0.92 | 74% | −0.18 |
+
+Self-preference check: rater − owner on Gemini-translated items +0.57, on the other systems' items −0.58 (mean of the two). A shared item counts for pipeline and Gemini; the anchors are rated twice by both.
 <!-- translation-rating-result:end -->
+
+**Reading (2026-11-12).** On random sentences of T6 the three systems were rated equal by one viewer
+(4.42 / 4.42 / 4.33; all differences inside about ±0.4). Random sentence units of at least 6 words carry
+few technical terms, so this rating says little about where the systems differ: term recognition on
+accented speech (T2 term accuracy v2: pipeline 95.3% mean of 3 runs, raw Whisper 61.7%, the transcript
+Google Translate translates; T6: 100% against 87.5% / 88.7%).
+
+### Finding: LLM-as-rater self-preference (measured 2026-11-12)
+
+Gemini (`gemini-rater-v1`, run before the owner's rating, scores held back until the owner had rated) rated
+the same 38 items as the owner. Measured, not assumed:
+
+- **No agreement with the owner:** Spearman 0.05 over all 38 items (per system 0.12, −0.23, 0.43; n 12–14);
+  within ±1 point on 74%.
+- **Self-preference:** the rater's mean on Gemini's own translations **4.93** (14 items) against **3.93**
+  for the pipeline (14) and **3.83** for Google Translate (12); the owner's means on the same item
+  groups are 4.36, 4.50 and 4.42. Rater − owner: +0.57 on Gemini items, −0.57 / −0.58 on the others. Raw means from
+  `work/T6/gemini-rater.json` with the keys' system per item (a shared item counts for pipeline and Gemini).
+- **Consequence:** the Gemini rater is **not usable** as a second rater of translations, least of all for
+  comparing against a Gemini translation. Translation quality stays on the owner's single rating. The same
+  bias was looked for in the audio judge ([Methodology: blind audio judge](#methodology-blind-audio-judge),
+  share of spans where the judge chose the Gemini engine's text); here it is measured on ratings.
 
 ## Methodology: reference transcripts
 
@@ -1252,6 +1296,8 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| C1 (baselines) | 2026-11-12 | the pipeline's blind mean is at least 1 point above Whisper + Google Translate (spec C1, Google Translate part) | owner rated `C1-T6-rating-2.md` (12 Google Translate items + 4 anchors) blind; pipeline and Gemini from the first T6 rating; `translation_check.py score-baselines` | pipeline 4.42, Google Translate 4.42, Gemini 4.33; pipeline − Google Translate 0.00 [−0.42, +0.42]; anchor drift 0.00 (4/4 identical) | **not met** (0.00 < 1.0): on random sentences the three systems rate equal; the measured difference is in terms on accented speech | recorded; no decision yet (owner) |
+| LLM rater | 2026-11-12 | none: can Gemini serve as a second translation rater? | `gemini-rater-v1` on all 38 items, compared with the owner after the owner rated | Spearman 0.05; Gemini's own translations 4.93 vs pipeline 3.93, Google Translate 3.83; rater − owner +0.57 on Gemini items, −0.58 on the others | self-preference measured; no agreement with the owner | Gemini rater not usable; owner's rating stays the only one |
 | T6 (hold-out) | 2026-11-11 | the frozen pipeline keeps term accuracy v2 >= 85% on an unseen fragment (T6 protocol: bounds, Wilson intervals, overfitting signal) | `run` once from a clean worktree of tag `pipeline-v3` (d180a73), auto-glossary only, no cache; `eval T6 --record` | J 100.00% (72/72), M 100.00% (71/71), lower 91.67% (Wilson 83.0–96.1%), upper 100.00%; WER 2.89–4.70%; correction 1 edit, 0 false; 52.5% of Russian cues above 17 cps; 0.140 USD Claude, 0.078 USD AssemblyAI | **pass (not demonstrated)**, the best verdict T6 allows; overfitting signal no; same-topic transfer only | recorded; translation check on T6 prepared, owner rates next |
 | pipeline-v3 repeats | 2026-11-11 | none: variance of the frozen path, and the T2 point of the T6 overfitting rule | `run` from a clean worktree of tag `pipeline-v3`, auto-glossary only, no cache; T2 three times, T1 once | term accuracy v2 T2 94.39–96.26% (mean 95.33%), macro 84.62–89.74%, without `Claude Code` 92.41–94.94%; WER 4.24–4.48%; T1 99.20%; correction 0 edits in all four; 0.511 USD Claude, 0.309 USD AssemblyAI | the earlier single-run 96.26% is the top of the range; correction does nothing on this path | T2 mean 95.33% is the overfitting comparison point (Freeze pipeline-v3) |
 | C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | **not adopted** (owner's blind rating 2026-11-11: v3 won 5 pairs, v2 6, ties 5; means v2 4.44, v3 4.25): v2 stays the default, v3 an option |
