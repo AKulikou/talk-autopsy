@@ -616,7 +616,8 @@ language as a parameter.
 - **A failed translation block stays in English as a whole:** if the model's
   answer for a block (about five minutes) fails the checks twice, every
   segment of that block keeps its English text, not only the one that failed.
-  Running the video again sends that block again.
+  The page says which minutes; running the video again sends that block
+  again.
 - **Reading speed** is above the usual guideline on fast speakers; nothing is cut.
 - **Timing** of subtitles is not validated against hand-labelled onsets.
 - **Next-video failure modes** not handled: several speakers (no
