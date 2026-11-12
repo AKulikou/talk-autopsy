@@ -52,6 +52,11 @@ def target_codes() -> list[str]:
     return [code for code, _ in TARGET_LANGUAGES]
 
 
+def language_name(code: str) -> str:
+    """The offered target language's own name ("Русский"), or "" for a code not offered."""
+    return dict(TARGET_LANGUAGES).get(code, "")
+
+
 def ui_codes() -> list[str]:
     return [code for code, _ in UI_LANGUAGES]
 

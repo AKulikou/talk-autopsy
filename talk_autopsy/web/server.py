@@ -4,7 +4,10 @@
 Binds 127.0.0.1 only (there is no option to bind elsewhere: the server spends
 money and opens folders), on the default port or the next free one, opens the
 default browser once the server is up, prints the address, and stops cleanly
-on Ctrl+C. The socket is bound here and handed to uvicorn, so the port the
+on Ctrl+C (or when its console window is closed). Started a second time, it
+finds the running page (`/api/hello` on the usual ports) and opens it in the
+browser instead of starting another server. The socket is bound here and handed
+to uvicorn, so the port the
 page's Host check expects is the port actually served. Logs go to
 logs/web/web-<date>.log (git-ignored); the console shows warnings only. Every
 job's events are recorded to logs/web/events/ (git-ignored, the last 20 kept)
@@ -13,10 +16,12 @@ no network and no cost.
 """
 
 import datetime as dt
+import json
 import logging
 import socket
 import threading
 import time
+import urllib.request
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
@@ -42,6 +47,21 @@ def bind_socket(preferred: int = DEFAULT_PORT, tries: int = PORT_TRIES) -> socke
         except OSError:
             sock.close()
     raise OSError("no free port on 127.0.0.1")
+
+
+def running_instance(preferred: int = DEFAULT_PORT, tries: int = PORT_TRIES,
+                     timeout: float = 0.5) -> str | None:
+    """The address of a Talk Autopsy page already running on this computer, or None."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # never through a proxy
+    for port in range(preferred, preferred + tries):
+        url = f"http://{HOST}:{port}/"
+        try:
+            with opener.open(url + "api/hello", timeout=timeout) as response:
+                if json.loads(response.read(200)).get("app") == "talk-autopsy":
+                    return url
+        except Exception:  # nothing there, or something else: try the next port
+            continue
+    return None
 
 
 def setup_logging(log_dir: Path | None = None) -> Path:
@@ -70,10 +90,18 @@ def make_runner(replay: Path | None, speed: float, record_dir: Path | None):
 
 def serve(port: int | None = None, open_browser: bool = True, echo: Callable[[str], None] = print,
           browser_open: Callable[[str], object] = webbrowser.open, server_factory=None,
-          replay: Path | None = None, speed: float = 1.0) -> None:
+          replay: Path | None = None, speed: float = 1.0, reuse: bool = False) -> None:
     import uvicorn
 
     from talk_autopsy.web.app import create_app
+
+    if reuse and replay is None:
+        existing = running_instance(port or DEFAULT_PORT)
+        if existing:
+            echo(f"Talk Autopsy is already running: {existing}")
+            if open_browser:
+                browser_open(existing)
+            return
 
     runner = make_runner(replay, speed, config.LOGS_DIR / "web" / "events")  # a bad recording fails first
     log_file = setup_logging()

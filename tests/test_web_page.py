@@ -33,11 +33,12 @@ def test_every_static_string_key_exists():
 def test_dynamic_string_keys_exist():
     steps = ["download", "stt", "glossary", "stt2", "align", "fix", "translate", "srt", "outputs"]
     states = ("waiting", "running", "done", "skipped", "failed")
-    purposes = ("tv", "subtitles", "subtitles_styled", "bilingual", "video_tracks")
+    purposes = ("tv", "subtitles", "subtitles_styled", "bilingual", "video_tracks", "audio")
     hints = ("doctor", "youtube", "outputs", "cost_limit", "input", "log")
     dynamic = ([f"step_{s}" for s in steps] + [f"state_{s}" for s in states]
                + [f"purpose_{p}" for p in purposes] + [f"hint_{h}" for h in hints]
-               + [f"doctor_{d}" for d in ("ok", "missing", "warning")] + ["unit_block", "unit_chunk"])
+               + [f"doctor_{d}" for d in ("ok", "missing", "warning")]
+               + [f"unit_{u}" for u in ("block", "chunk", "byte", "second")])
     assert set(dynamic) <= set(STRINGS), sorted(set(dynamic) - set(STRINGS))
 
 
@@ -45,7 +46,7 @@ def test_error_codes_of_the_server_have_strings():
     codes = {"neither_given", "both_given", "bad_url", "playlist", "not_absolute", "no_such_file",
              "not_a_file", "bad_extension", "bad_path", "unreadable_file", "bad_language", "youtube", "busy",
              "confirm_cost", "cost_mismatch", "confirm_no_estimate", "bad_token", "network", "outside_output",
-             "internal"}
+             "internal", "no_result"}
     assert {f"err_{c}" for c in codes} <= set(STRINGS)
 
 

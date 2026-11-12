@@ -708,7 +708,8 @@ def web(
     from talk_autopsy.web.replay import RecordingError
     from talk_autopsy.web.server import serve
     try:
-        serve(port, open_browser=not no_browser, echo=typer.echo, replay=replay, speed=speed)
+        serve(port, open_browser=not no_browser, echo=typer.echo, replay=replay, speed=speed,
+              reuse=replay is None)
     except RecordingError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(2) from None

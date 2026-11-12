@@ -5,6 +5,7 @@ import { applyStrings, clock, duration, errorText, setStrings, t, usd } from "./
 import { followJob } from "./events.js";
 import * as steps from "./steps.js";
 import * as transcript from "./transcript.js";
+import * as player from "./player.js";
 
 const $ = (id) => document.getElementById(id);
 const VIEWS = ["view-form", "view-estimate", "view-run", "view-done", "view-failed"];
@@ -313,9 +314,21 @@ function onEnd(event) {
 
 // --- done / failed ---------------------------------------------------------------------------------
 
-function showDone(event) {
+function playerElements() {
+  return { box: $("player-box"), media: $("player-media"), text: $("player-text"), note: $("player-note"),
+    none: $("player-none") };
+}
+
+function costText(claude, stt) {
+  return `${usd(claude, 4)} Claude + ${usd(stt, 4)} (${t("step_stt")})`;
+}
+
+async function showDone(event) {
   state.doneFolder = event.folder;
-  $("done-cost").textContent = `${usd(event.cost_usd, 4)} Claude + ${usd(event.stt_cost_usd, 4)} (${t("step_stt")})`;
+  $("done-title").textContent = state.job?.preview?.title || "";
+  $("done-cost-row").hidden = false;
+  $("done-cost").textContent = costText(event.cost_usd, event.stt_cost_usd);
+  player.clear(playerElements());
   $("done-files").replaceChildren(...event.files.map((f) => {
     const li = document.createElement("li");
     const name = document.createElement("strong");
@@ -329,6 +342,63 @@ function showDone(event) {
   $("done-folder").textContent = event.folder;
   setError("done-error", "");
   show("view-done");
+  if (event.result) player.show(playerElements(), await player.fetchResult(event.result));
+  else player.show(playerElements(), null);
+}
+
+// A result from the start page's list: the same Done screen, read from the folder.
+async function watch(id) {
+  const info = await player.fetchResult(id);
+  if (!info) {
+    setError("recent-error", t("err_no_result"));
+    return;
+  }
+  state.doneFolder = info.folder;
+  $("done-title").textContent = info.title;
+  const known = info.cost_usd !== null && info.cost_usd !== undefined;
+  $("done-cost-row").hidden = !known;
+  if (known) $("done-cost").textContent = costText(info.cost_usd, info.stt_cost_usd || 0);
+  $("done-files").replaceChildren(...info.files.map((name) => {
+    const li = document.createElement("li");
+    li.append(Object.assign(document.createElement("strong"), { textContent: name }));
+    return li;
+  }));
+  $("done-folder").textContent = info.folder;
+  setError("done-error", "");
+  show("view-done");
+  player.show(playerElements(), info);
+}
+
+function shortDate(iso) {
+  return iso ? iso.replace("T", " ").slice(0, 16) : "";
+}
+
+async function loadRecent() {
+  const items = await player.fetchRecent();
+  setError("recent-error", "");
+  $("recent").hidden = !items.length;
+  $("recent-list").replaceChildren(...items.map((r) => {
+    const li = document.createElement("li");
+    const text = document.createElement("div");
+    const title = Object.assign(document.createElement("strong"), { textContent: r.title });
+    const lang = state.config?.languages.target.find((l) => l.code === r.target_lang)?.name || r.target_lang;
+    const meta = [shortDate(r.finished), lang ? t("recent_lang", { lang }) : ""].filter(Boolean).join(" · ");
+    text.append(title, Object.assign(document.createElement("span"), { className: "meta", textContent: meta }));
+    const actions = document.createElement("div");
+    actions.className = "recent-actions";
+    const watchButton = Object.assign(document.createElement("button"), {
+      type: "button", className: "secondary", textContent: t("recent_watch"), disabled: !r.media });
+    watchButton.addEventListener("click", () => watch(r.id));
+    const open = Object.assign(document.createElement("button"), {
+      type: "button", className: "secondary", textContent: t("open_folder") });
+    open.addEventListener("click", async () => {
+      const { ok, data } = await api("POST", "/api/open-folder", { path: r.folder });
+      setError("recent-error", ok ? "" : errorText(data));
+    });
+    actions.append(watchButton, open);
+    li.append(text, actions);
+    return li;
+  }));
 }
 
 async function showFailed(event) {
@@ -370,7 +440,9 @@ async function openFolder() {
 function backToForm() {
   state.stop?.();
   clearInterval(state.timer);
+  player.clear(playerElements());
   show("view-form");
+  loadRecent();
 }
 
 // --- wiring ---------------------------------------------------------------------------------------
@@ -394,6 +466,7 @@ function wire() {
     await loadConfig(ui);
     api("POST", "/api/settings", { ui_lang: ui });
     if (state.preview && !$("view-estimate").hidden) renderEstimate(state.preview);
+    if (!$("view-form").hidden) loadRecent();
   });
   $("confirm").addEventListener("change", updateStart);
   $("start").addEventListener("click", start);
@@ -411,6 +484,7 @@ async function main() {
   setMode("url");
   const { ok, data } = await api("GET", "/api/jobs/current");
   if (ok && data.job && data.job.state === "running") attach(data.job); // a reload reattaches
+  else loadRecent(); // the last results stay reachable after a reload
 }
 
 main();

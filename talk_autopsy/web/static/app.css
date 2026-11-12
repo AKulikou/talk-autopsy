@@ -29,6 +29,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* a layout rule never shows a hidden view */
 html { font-size: 100%; }
 body {
   margin: 0;
@@ -205,3 +206,30 @@ button.jump {
 .doctor .warning { color: var(--warn); }
 .doctor .fix { display: block; color: var(--muted); font-size: 0.9rem; }
 code { overflow-wrap: anywhere; }
+
+/* Done: the player (a video, or audio with its text beside it). */
+.player { display: grid; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.player video { width: 100%; max-height: 70vh; background: #000; border-radius: var(--radius); }
+.player audio { width: 100%; }
+.cues {
+  list-style: none; margin: 0; padding: 0.25rem 0.6rem; max-height: 22rem; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg);
+}
+.cues li { padding: 0.3rem 0.2rem; border-bottom: 1px solid var(--line); cursor: pointer; }
+.cues li.active { font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); padding-left: 0.6rem; }
+@media (min-width: 62rem) {
+  .player:has(audio) { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+
+/* Start page: recent results. */
+.recent { margin-top: 1.75rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.recent h2 { font-size: 1.1rem; }
+.recent-list { list-style: none; padding: 0; margin: 0; }
+.recent-list li {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; justify-content: space-between; align-items: center;
+  padding: 0.6rem 0; border-bottom: 1px solid var(--line);
+}
+.recent-list li > div:first-child { min-width: 0; flex: 1 1 16rem; overflow-wrap: anywhere; }
+.recent-list .meta { display: block; color: var(--muted); font-size: 0.9rem; }
+.recent-actions { display: flex; gap: 0.5rem; }
+.recent-actions button { padding: 0.4rem 0.8rem; }

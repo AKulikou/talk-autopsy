@@ -80,6 +80,11 @@
         <button type="submit" id="estimate" class="primary" data-i18n="estimate_button"></button>
       </div>
     </form>
+    <section id="recent" class="recent" aria-labelledby="recent-heading" hidden>
+      <h2 id="recent-heading" data-i18n="recent_heading"></h2>
+      <ul id="recent-list" class="recent-list"></ul>
+      <p id="recent-error" class="error" role="alert" hidden></p>
+    </section>
   </section>
 
   <!-- 2. Estimate -->
@@ -136,7 +141,14 @@
   <!-- 4. Done / failed -->
   <section id="view-done" class="view" hidden aria-labelledby="done-heading">
     <h2 id="done-heading" data-i18n="done_heading"></h2>
-    <p><span data-i18n="done_cost"></span>: <span id="done-cost"></span></p>
+    <p id="done-title" class="run-title"></p>
+    <div id="player-box" class="player" hidden>
+      <div id="player-media" class="player-media"></div>
+      <ol id="player-text" class="cues" aria-label="" hidden></ol>
+    </div>
+    <p id="player-note" class="muted" hidden></p>
+    <p id="player-none" class="muted" data-i18n="player_none" hidden></p>
+    <p id="done-cost-row"><span data-i18n="done_cost"></span>: <span id="done-cost"></span></p>
     <h3 data-i18n="done_files"></h3>
     <ul id="done-files" class="files"></ul>
     <p class="muted"><code id="done-folder"></code></p>

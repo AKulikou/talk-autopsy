@@ -136,5 +136,12 @@
   "live_jump": "Į naujausią tekstą ↓",
   "unit_byte": "MB",
   "unit_second": "s",
-  "tokens": "žetonai: {input} įvesties / {output} išvesties"
+  "tokens": "žetonai: {input} įvesties / {output} išvesties",
+  "recent_heading": "Naujausi rezultatai",
+  "recent_watch": "Žiūrėti",
+  "recent_lang": "subtitrai: {lang}",
+  "player_none": "Rezultatų aplanke nėra vaizdo ar garso įrašo, kurį būtų galima paleisti čia; subtitrų failai yra aplanke.",
+  "player_burned": "Aplanke yra tik vaizdo įrašas su įrašytais subtitrais, todėl subtitrų takeliai iš pradžių išjungti.",
+  "err_no_result": "Šio rezultato rezultatų aplanke nebėra.",
+  "purpose_audio": "garso įrašo kopija grotuvui šiame puslapyje"
 }

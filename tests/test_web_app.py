@@ -312,3 +312,10 @@ def test_unknown_routes_are_short_404(setup):
 def test_outside_connections_stay_blocked(loopback_only):
     with pytest.raises(pytest_socket.SocketConnectBlockedError):
         socket.create_connection(("192.0.2.1", 80), timeout=1)
+
+
+def test_page_assets_are_revalidated(setup):
+    client = setup[0]
+    response = client.get("/static/app.js")
+    assert response.status_code == 200 and response.headers["cache-control"] == "no-cache"
+    assert response.headers.get("etag")

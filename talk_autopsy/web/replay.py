@@ -165,7 +165,8 @@ class ReplayRunner(JobRunner):
                     self.sleep(wait)
             payload = {k: v for k, v in final.items() if k not in ("id", "type", "t")}
             if final["type"] == "finished":
-                payload["folder"] = str(self._demo_folder(job, payload))
+                folder = self._demo_folder(job, payload)
+                payload["folder"], payload["result"] = str(folder), folder.name
             state = final["type"]
         except Exception:
             logger.exception("replay %s failed", job.id)

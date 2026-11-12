@@ -36,6 +36,7 @@ import logging
 import math
 import os
 import re
+import shutil
 import threading
 import time
 import uuid
@@ -78,7 +79,7 @@ PIPELINE_STEPS = list(pipeline.STEPS)  # stt, glossary, stt2, align, fix, transl
 HIDDEN = "[hidden]"
 
 FILE_PURPOSE = {"mp4-burned": "tv", "srt": "subtitles", "ass": "subtitles_styled",
-                "bilingual": "bilingual", "mp4-soft": "video_tracks"}
+                "bilingual": "bilingual", "mp4-soft": "video_tracks", "audio": "audio"}
 
 
 # --- request ----------------------------------------------------------------------------
@@ -621,6 +622,30 @@ def _edit_rows(edits: list[dict]) -> list[dict]:
              "after": short(e.get("after", ""), 200)} for e in edits]
 
 
+def result_id(output_root: Path, folder: Path) -> str | None:
+    """The folder's name when it sits directly inside the output root (the player's result id)."""
+    try:
+        return folder.name if folder.resolve().parent == Path(output_root).resolve() else None
+    except OSError:
+        return None
+
+
+def copy_audio(source: Path, dest: Path, stem: str) -> Path | None:
+    """An audio-only input linked (or copied) into its result folder, so the player can serve it."""
+    target = dest / f"{stem}{source.suffix.lower()}"
+    try:
+        if target.is_file() or source.resolve() == target.resolve():
+            return target
+        try:
+            os.link(source, target)
+        except OSError:
+            shutil.copyfile(source, target)
+        return target
+    except OSError:
+        logger.exception("audio not copied into %s; the player will have nothing to play", dest)
+        return None
+
+
 def write_result_marker(folder: Path, data: dict) -> None:
     """The marker the start page's recent results read; a failure to write it is logged only."""
     try:
@@ -874,6 +899,10 @@ class JobRunner:
             job.add("step_finished", step="outputs", skipped=False, seconds=round(job.clock() - t0, 1),
                     cost_usd=0.0, stt_cost_usd=0.0, tokens=None, detail="",
                     total_cost_usd=round(job.cost_usd, 4), total_stt_cost_usd=round(job.stt_cost_usd, 4))
+            if request.mode == "file" and is_audio_only(settings.source):
+                copied = copy_audio(settings.source, dest, stem)  # the player serves only the output folder
+                if copied is not None:
+                    written.append(outputs.Written("audio", copied))
             # the report's totals are the pipeline's own numbers; they win over the parsed ones
             job.cost_usd, job.stt_cost_usd = report.cost_usd, report.stt_cost_usd
             files = [w.path.name for w in written]
@@ -886,7 +915,7 @@ class JobRunner:
             if not report.fallbacks:  # a fallback engine's times would mislead this machine's history
                 estimator.record()
             final = ("finished", {
-                "folder": str(dest),
+                "folder": str(dest), "result": result_id(output_root, dest),
                 "files": [{"name": w.path.name, "format": w.format, "purpose": FILE_PURPOSE.get(w.format, "")}
                           for w in written],
                 "cost_usd": round(report.cost_usd, 4), "stt_cost_usd": round(report.stt_cost_usd, 4),

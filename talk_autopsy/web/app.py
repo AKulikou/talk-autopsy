@@ -3,6 +3,7 @@ The local web application: one page and a small JSON API (docs/web.md).
 
     GET  /                          the page, with this launch's token
     GET  /static/...                its assets
+    GET  /api/hello                 {"app": "talk-autopsy"}: a second start finds this one and reuses it
     GET  /api/config?ui=<lang>      languages, domains, profiles, cost limit, strings
     POST /api/settings              remember the default target / interface language
     POST /api/estimate              metadata, cost and time of a link or a file
@@ -10,14 +11,20 @@ The local web application: one page and a small JSON API (docs/web.md).
     GET  /api/jobs/current          the running or last job, for a page reload
     GET  /api/jobs/{id}/events      Server-Sent Events, replay after ?after=<id> or Last-Event-ID
     GET  /api/jobs/{id}/transcript  a window of the waiting screen's rows (web/transcript.py)
+    GET  /api/results               recent finished results in the output root (web/results.py)
+    GET  /api/results/{id}          one result: files, the media to play, subtitle tracks
+    GET  /api/results/{id}/media/{name}  the video or audio, with HTTP Range (seeking)
+    GET  /api/results/{id}/vtt/{name}    an .srt as WebVTT for the player
     POST /api/pick-file             the native file dialog on this machine
     POST /api/open-folder           a folder inside the output root, in the file manager
     GET  /api/doctor                the doctor checks (key names, set / not set)
 
 The server can spend money and open folders, so the browser is treated as
 hostile (`LocalGuard`): the Host header must name this server (DNS
-rebinding), a cross-origin request is refused, every POST carries the
-per-launch token that only the page has, and no CORS header is ever sent.
+rebinding), a cross-origin request is refused (`Origin`, and `Sec-Fetch-Site`
+for everything but the page itself, so another site cannot even embed the
+media), every POST carries the per-launch token that only the page has, and no
+CORS header is ever sent.
 Errors are one short line with a code; no stack trace, no environment value.
 """
 
@@ -31,13 +38,13 @@ from pathlib import Path
 
 from fastapi import Body, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from talk_autopsy import youtube
-from talk_autopsy.web import dialogs, jobs
+from talk_autopsy.web import dialogs, jobs, results
 from talk_autopsy.web import settings as web_settings
 from talk_autopsy.web.jobs import BusyError, GateError, JobRequest, JobRunner
 from talk_autopsy.web.sources import InputError
@@ -49,6 +56,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 TOKEN_HEADER = "x-talk-autopsy-token"
 TOKEN_PLACEHOLDER = "__TALK_AUTOPSY_TOKEN__"
 HEARTBEAT_S = 15.0
+APP_ID = "talk-autopsy"
 POLL_S = 0.25
 SAFE_METHODS = {"GET", "HEAD"}
 SECURITY_HEADERS = {
@@ -60,6 +68,15 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",
 }
+
+
+class RevalidatedStatic(StaticFiles):
+    """Page assets the browser must revalidate (ETag) before reuse, so an update is never half-loaded."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 def error(status: int, code: str, message: str, **extra) -> JSONResponse:
@@ -82,18 +99,21 @@ class LocalGuard:
         if scope["type"] != "http":
             return  # no websockets
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
-        problem = self._problem(scope.get("method", "GET"), headers)
+        problem = self._problem(scope.get("method", "GET"), headers, scope.get("path", ""))
         if problem is not None:
             status, code, message = problem
             logger.warning("refused %s %s: %s", scope.get("method"), scope.get("path"), code)
             return await error(status, code, message)(scope, receive, send)
         return await self.app(scope, receive, send)
 
-    def _problem(self, method: str, headers: dict[str, str]) -> tuple[int, str, str] | None:
+    def _problem(self, method: str, headers: dict[str, str], path: str = "") -> tuple[int, str, str] | None:
         if headers.get("host", "").lower() not in self.hosts:
             return 400, "bad_host", "This server answers only on this computer's own address."
         origin = headers.get("origin")
         if origin is not None and origin.lower() not in self.origins:
+            return 403, "cross_origin", "Requests from other sites are not accepted."
+        site = headers.get("sec-fetch-site")
+        if path != "/" and site is not None and site not in ("same-origin", "none"):
             return 403, "cross_origin", "Requests from other sites are not accepted."
         if method not in SAFE_METHODS:
             sent = headers.get(TOKEN_HEADER, "")
@@ -158,6 +178,10 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
     def page():
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8").replace(TOKEN_PLACEHOLDER, token)
         return HTMLResponse(html, headers=SECURITY_HEADERS)
+
+    @app.get("/api/hello")
+    def hello():
+        return {"app": APP_ID}
 
     @app.get("/api/config")
     def config_(ui: str | None = None):
@@ -261,6 +285,41 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
             return error(404, "no_job", "This job is not known (the server was restarted).")
         return job.view.window(start, count, follow=follow or start is None)
 
+    media_headers = {"Cross-Origin-Resource-Policy": "same-origin", "X-Content-Type-Options": "nosniff",
+                     "Cache-Control": "no-store"}
+
+    def result_folder(result_id: str) -> Path | None:
+        return results.folder_of(Path(runner.core.output_root()), result_id)
+
+    def no_result() -> JSONResponse:
+        return error(404, "no_result", "This result is not in the output folder.")
+
+    @app.get("/api/results")
+    def recent_results():
+        return {"results": results.recent(Path(runner.core.output_root()))}
+
+    @app.get("/api/results/{result_id}")
+    def result(result_id: str):
+        folder = result_folder(result_id)
+        return no_result() if folder is None else results.describe(folder)
+
+    @app.get("/api/results/{result_id}/media/{name}")
+    def media(result_id: str, name: str):
+        folder = result_folder(result_id)
+        path = results.file_in(folder, name) if folder is not None else None
+        if path is None or path.suffix.lower() not in results.MEDIA_TYPES:
+            return no_result()
+        return FileResponse(path, media_type=results.MEDIA_TYPES[path.suffix.lower()], headers=media_headers)
+
+    @app.get("/api/results/{result_id}/vtt/{name}")
+    def vtt(result_id: str, name: str):
+        folder = result_folder(result_id)
+        path = results.file_in(folder, name) if folder is not None else None
+        if path is None or path.suffix.lower() != ".srt" or path.stat().st_size > 20_000_000:
+            return no_result()
+        text = path.read_text(encoding="utf-8", errors="replace")
+        return Response(results.srt_to_vtt(text), media_type="text/vtt; charset=utf-8", headers=media_headers)
+
     @app.post("/api/pick-file")
     def pick_file(payload=Body(default=None)):  # noqa: B008
         strings = web_settings.ui_strings((payload or {}).get("ui_lang", "") if isinstance(payload, dict)
@@ -296,5 +355,5 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
                             "fix": c.fix} for c in checks],
                 "ok": all(c.ok or not c.required for c in checks)}
 
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount("/static", RevalidatedStatic(directory=STATIC_DIR), name="static")
     return LocalGuard(app, port, token)  # type: ignore[return-value]
