@@ -118,5 +118,6 @@
   "pick_all": "Visi failai",
   "unit_h": "val.",
   "unit_min": "min.",
-  "unit_s": "s"
+  "unit_s": "s",
+  "unit_mb": "MB"
 }

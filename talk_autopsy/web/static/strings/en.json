@@ -118,5 +118,6 @@
   "pick_all": "All files",
   "unit_h": "h",
   "unit_min": "min",
-  "unit_s": "s"
+  "unit_s": "s",
+  "unit_mb": "MB"
 }

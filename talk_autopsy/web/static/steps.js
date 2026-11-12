@@ -1,6 +1,7 @@
 // The list of pipeline steps with their state. A progress bar and percentage appear only for a
-// step that reports a real position (correction and translation blocks, Gemini chunks); any
-// other running step shows a spinner and its elapsed time. Nothing is estimated here.
+// step that reports a real position (download bytes, correction and translation blocks, Gemini
+// chunks, burn-in seconds); any other running step shows a spinner and its elapsed time.
+// Nothing is estimated here.
 import { t, clock } from "./i18n.js";
 
 const ICONS = { waiting: "○", done: "✓", skipped: "✓", failed: "✕" };
@@ -29,6 +30,21 @@ export function build(element, steps) {
   }
 }
 
+const megabytes = (bytes) => (bytes / 1e6).toFixed(1);
+
+// "block 2/5", "12.3 / 40.0 MB", "1:05 / 6:34" (encoded / video length)
+function amount(event) {
+  if (event.unit === "byte") {
+    return event.total > 0
+      ? `${megabytes(event.position)} / ${megabytes(event.total)} ${t("unit_mb")}`
+      : `${megabytes(event.position)} ${t("unit_mb")}`;
+  }
+  if (event.unit === "second") {
+    return event.total > 0 ? `${clock(event.position)} / ${clock(event.total)}` : clock(event.position);
+  }
+  return `${t(`unit_${event.unit}`)} ${event.position}/${event.total}`;
+}
+
 function setState(r, state) {
   r.li.dataset.state = state;
   r.icon.replaceChildren();
@@ -50,13 +66,19 @@ export function apply(event) {
   } else if (event.type === "step_progress") {
     r.position = event.position;
     if (r.li.dataset.state !== "running") setState(r, "running");
-    const percent = Math.round((100 * event.position) / Math.max(event.total, 1));
-    const bar = document.createElement("progress");
-    bar.max = event.total;
-    bar.value = event.position;
-    bar.setAttribute("aria-label", `${t(`step_${event.step}`)} ${percent}%`);
-    r.detail.replaceChildren(bar);
-    r.state.textContent = `${percent}% (${t(`unit_${event.unit}`)} ${event.position}/${event.total})`;
+    const known = event.total > 0;
+    if (known) {
+      const percent = Math.round((100 * Math.min(event.position, event.total)) / event.total);
+      const bar = document.createElement("progress");
+      bar.max = event.total;
+      bar.value = Math.min(event.position, event.total);
+      bar.setAttribute("aria-label", `${t(`step_${event.step}`)} ${percent}%`);
+      r.detail.replaceChildren(bar);
+      r.state.textContent = `${percent}% (${amount(event)})`;
+    } else {
+      r.detail.replaceChildren();
+      r.state.textContent = amount(event); // a download of unknown size: bytes so far, no bar
+    }
   } else if (event.type === "step_finished") {
     setState(r, event.skipped ? "skipped" : "done");
     r.state.textContent = event.skipped ? t("state_skipped") : `${t("state_done")} · ${clock(event.seconds)}`;

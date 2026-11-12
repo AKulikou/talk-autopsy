@@ -27,6 +27,7 @@ import datetime as dt
 import importlib
 import importlib.util
 import json
+import logging
 import re
 import shutil
 from collections.abc import Callable, Iterable
@@ -49,6 +50,8 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
 _FORBIDDEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 YdlFactory = Callable[[dict], object]  # params -> a YoutubeDL-like context manager
+ByteProgress = Callable[[int, int | None], None]  # (bytes done, bytes expected or None)
+logger = logging.getLogger(__name__)
 
 
 class YouTubeError(RuntimeError):
@@ -356,12 +359,49 @@ class Download:
     meta: Path
 
 
+class DownloadProgress:
+    """
+    A yt-dlp progress hook -> `progress(bytes done, bytes expected)` over every
+    part of the download (video and audio streams are separate files before the
+    merge). The expected size is the sum of the requested formats' sizes when
+    yt-dlp knows them all, else the sum of the parts seen so far (then the bar
+    can step back when the next part starts), else None. A display error is
+    logged, never raised into yt-dlp.
+    """
+
+    def __init__(self, progress: ByteProgress):
+        self.progress = progress
+        self.done: dict[str, int] = {}
+        self.totals: dict[str, int] = {}
+
+    def __call__(self, status: dict) -> None:
+        try:
+            name = str(status.get("filename") or status.get("tmpfilename") or "")
+            if status.get("status") not in ("downloading", "finished") or not name:
+                return
+            total = status.get("total_bytes") or status.get("total_bytes_estimate")
+            done = status.get("downloaded_bytes") or 0
+            if status.get("status") == "finished":
+                done = total = int(total or done or self.done.get(name, 0))
+            self.done[name] = int(done)
+            if total:
+                self.totals[name] = int(total)
+            formats = (status.get("info_dict") or {}).get("requested_formats") or []
+            sizes = [f.get("filesize") or f.get("filesize_approx") for f in formats]
+            expected = (sum(sizes) if sizes and all(sizes) else sum(self.totals.values())) or None
+            done_all = sum(self.done.values())
+            self.progress(min(done_all, expected) if expected else done_all, expected)
+        except Exception:
+            logger.exception("download progress not shown")
+
+
 def download(video: VideoInfo, folder: Path, runtimes: Iterable[str],
-             ydl_factory: YdlFactory | None = None) -> Download:
+             ydl_factory: YdlFactory | None = None, progress: ByteProgress | None = None) -> Download:
     """
     The video (up to 1080p, MP4 with audio, H.264 preferred) and the author's
     English captions, if any, into `folder`; meta.json written first. An MP4
-    already there is reused.
+    already there is reused. `progress(bytes done, bytes expected)` is called as
+    yt-dlp reports (DownloadProgress).
     """
     factory = ydl_factory or _default_factory
     folder.mkdir(parents=True, exist_ok=True)
@@ -375,6 +415,8 @@ def download(video: VideoInfo, folder: Path, runtimes: Iterable[str],
                           "subtitle": str(folder / f"{stem}.youtube.%(ext)s")},
               "writesubtitles": bool(wanted), "writeautomaticsub": False, "subtitleslangs": wanted,
               "subtitlesformat": "srt/vtt/best", "overwrites": False}
+    if progress is not None:
+        params["progress_hooks"] = [DownloadProgress(progress)]
     if not target.is_file():
         try:
             with factory(params) as ydl:

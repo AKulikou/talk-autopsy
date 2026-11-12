@@ -15,9 +15,12 @@ turning the core's progress callbacks into an append-only list of events.
 - **Events** have increasing integer ids; readers ask for the events after an
   id (replay on reconnect). Text payloads are capped and the list is bounded.
   Every string is cleaned of secret values before it is stored.
-- **Progress** comes only from what the core reports: positions for correction
-  and translation blocks (and Gemini chunks), nothing invented for the rest.
-  Text events are read from each step's output file once the step finished.
+- **Progress** comes only from what the core reports: bytes of the download
+  (yt-dlp), correction and translation blocks (pipeline-v3.1 block events, with
+  their text), Gemini chunks, seconds of the burn-in (ffmpeg); nothing invented
+  for the rest. Byte and second positions are sent at most every
+  PROGRESS_EVERY_S. Costs, tokens and estimates come as numbers from the
+  pipeline's events (the text of older events is parsed as a fallback).
 - **No cancel:** the core has no cooperative cancellation (work/STATUS.md).
 
 The core is reached through `Core`; tests pass a fake with the same methods.
@@ -61,6 +64,7 @@ MAX_REASON_CHARS = 300
 KEEP_JOBS = 5  # finished jobs kept in memory for a page reload
 PREVIEW_TTL_S = 3600.0
 TICK_S = 30.0  # the remaining time is recalculated at least this often while a job runs
+PROGRESS_EVERY_S = 0.5  # byte (download) and second (burn-in) positions: at most this often
 PIPELINE_STEPS = list(pipeline.STEPS)  # stt, glossary, stt2, align, fix, translate, srt
 HIDDEN = "[hidden]"
 
@@ -136,8 +140,8 @@ class Core:
     def fetch(self, url: str, runtimes: list[str]) -> youtube.VideoInfo | youtube.PlaylistInfo:
         return youtube.fetch(url, runtimes)
 
-    def download(self, video: youtube.VideoInfo, folder: Path, runtimes: list[str]) -> Path:
-        return youtube.download(video, folder, runtimes).video
+    def download(self, video: youtube.VideoInfo, folder: Path, runtimes: list[str], progress=None) -> Path:
+        return youtube.download(video, folder, runtimes, progress=progress).video
 
     def probe(self, path: Path) -> float:
         return ingest.probe(path)
@@ -159,7 +163,8 @@ class Core:
         return load_transcript(path) if path.is_file() else None
 
     def write_outputs(self, settings: pipeline.RunSettings, formats: list[str], dest: Path, stem: str,
-                      video: Path, progress) -> list[outputs.Written]:
+                      video: Path, progress, position=None, duration: float | None = None
+                      ) -> list[outputs.Written]:
         from talk_autopsy.glossary import load_glossary
         lang = settings.target_lang
         translated_path = settings.work_dir / f"{lang}.json"
@@ -168,7 +173,8 @@ class Core:
         glossary_file = settings.work_dir / "glossary.md"
         glossary = load_glossary(glossary_file) if glossary_file.is_file() else None
         return outputs.write_outputs(settings.work_dir, settings.video_id, lang, dest, stem, formats,
-                                     video=video, glossary=glossary, translated=translated, progress=progress)
+                                     video=video, glossary=glossary, translated=translated, progress=progress,
+                                     position=position, duration=duration)
 
     def mark_done(self, folder: Path, files: list[str], cost: dict) -> None:
         youtube.mark_done(folder, files, cost)
@@ -356,6 +362,34 @@ class Job:
 
 # --- the progress adapter ------------------------------------------------------------------
 
+
+class Positions:
+    """
+    Byte or second positions of one step -> step_progress events, at most every
+    PROGRESS_EVERY_S (the last one always), and the time estimator told. A
+    display error never reaches the download or the encoder.
+    """
+
+    def __init__(self, job: Job, estimator: TimeEstimator, step: str, unit: str, estimator_step: str = ""):
+        self.job, self.estimator, self.step, self.unit = job, estimator, step, unit
+        self.estimator_step = estimator_step or step
+        self.last = -math.inf
+
+    def __call__(self, position: float, total: float | None) -> None:
+        try:
+            now = self.job.clock()
+            final = bool(total) and position >= total
+            if now - self.last < PROGRESS_EVERY_S and not final:
+                return
+            self.last = now
+            self.job.add("step_progress", step=self.step, position=int(position),
+                         total=int(total) if total else None, unit=self.unit)
+            if total:
+                self.estimator.step_progress(self.estimator_step, position, total)
+        except Exception:
+            logger.exception("job %s: %s position not shown", self.job.id, self.step)
+
+
 _BLOCK = re.compile(r"block (\d+)/(\d+)")
 _CLAUDE_USD = re.compile(r", (\d+\.\d+) USD")
 _STT_USD = re.compile(r"speech recognition (\d+\.\d+) USD")
@@ -410,10 +444,11 @@ class _Progress:
                 job.add("notice", code="fallback", text=short(ev.detail, 300))
             return
         step = "stt" if ev.stage == "audio" else ev.stage
+        data = getattr(ev, "data", None) or {}
         if ev.event == "step-start":
             self._start(step, ("audio: " if ev.stage == "audio" else "") + ev.detail)
         elif ev.event in ("step-done", "step-skipped"):
-            self._finished(step, ev.event == "step-skipped", ev.detail)
+            self._finished(step, ev.event == "step-skipped", ev.detail, data)
         elif ev.event == "block-done":
             match = _BLOCK.search(ev.detail)
             if match:
@@ -422,21 +457,26 @@ class _Progress:
                 self.estimator.step_progress(step, position, total)
         elif ev.event == "estimate":
             match = _ESTIMATE_USD.search(ev.detail)
-            if match:
-                self.claude_estimate[step] = self.claude_estimate.get(step, 0.0) + float(match.group(1))
+            usd = data.get("usd") if "usd" in data else (float(match.group(1)) if match else None)
+            if usd is not None:
+                self.claude_estimate[step] = self.claude_estimate.get(step, 0.0) + float(usd)
                 job.add("estimate_updated", claude_usd=round(sum(self.claude_estimate.values()), 4),
                         claude_parts={k: round(v, 4) for k, v in self.claude_estimate.items()})
         elif ev.event in ("fallback", "srt"):
             job.add("notice", code=ev.event, text=short(ev.detail, 300))
 
-    def _finished(self, step: str, skipped: bool, detail: str) -> None:
+    def _finished(self, step: str, skipped: bool, detail: str, data: dict | None = None) -> None:
         job, now = self.job, self.job.clock()
         seconds = now - self.started_at.get(step, self.last_mark)
         self.last_mark = now
-        claude, stt = (0.0, 0.0) if skipped else step_costs(detail)
+        data = data or {}
+        if "cost_usd" in data:  # pipeline-v3.1: numbers, not text
+            claude, stt = float(data["cost_usd"] or 0.0), float(data.get("stt_cost_usd") or 0.0)
+        else:
+            claude, stt = (0.0, 0.0) if skipped else step_costs(detail)
         job.cost_usd += claude
         job.stt_cost_usd += stt
-        tokens = None if skipped else self._tokens(step)
+        tokens = None if skipped else (data.get("tokens") if "tokens" in data else self._tokens(step))
         if step in self.started_at:
             self.estimator.step_finished(step, None if not skipped else seconds, skipped)
         elif skipped or "passed through" in detail:  # cached, or nothing to do this time: not a measurement
@@ -710,7 +750,8 @@ class JobRunner:
                 job.add("step_started", step="download", detail="")
                 estimator.step_started("download")
                 reused = (dest / f"{stem}.mp4").is_file()  # youtube.download keeps an MP4 already there
-                settings.source = core.download(preview.video, dest, core.youtube_runtimes())
+                settings.source = core.download(preview.video, dest, core.youtube_runtimes(),
+                                                progress=Positions(job, estimator, "download", "byte"))
                 estimator.step_finished("download", skipped=reused)
                 job.add("step_finished", step="download", skipped=reused, seconds=round(job.clock() - t0, 1),
                         cost_usd=0.0, stt_cost_usd=0.0, tokens=None, detail=settings.source.name,
@@ -726,7 +767,9 @@ class JobRunner:
             estimator.step_started(out_step)
             written = core.write_outputs(settings, preview.formats, dest, stem, settings.source,
                                          lambda message: job.add("notice", code="outputs",
-                                                                 text=short(message, 300)))
+                                                                 text=short(message, 300)),
+                                         position=Positions(job, estimator, "outputs", "second", out_step),
+                                         duration=preview.duration_s)
             estimator.step_finished(out_step)
             job.add("step_finished", step="outputs", skipped=False, seconds=round(job.clock() - t0, 1),
                     cost_usd=0.0, stt_cost_usd=0.0, tokens=None, detail="",

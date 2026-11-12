@@ -118,5 +118,6 @@
   "pick_all": "Все файлы",
   "unit_h": "ч",
   "unit_min": "мин",
-  "unit_s": "с"
+  "unit_s": "с",
+  "unit_mb": "МБ"
 }

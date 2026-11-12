@@ -175,7 +175,9 @@ def test_file_job_events_in_order(tmp_path, media):
     assert finished["fix"]["tokens"] == {"input": 9000, "output": 4000, "cache_write": 0, "cache_read": 0}
     assert finished["glossary"]["tokens"] is None  # the core does not report them for this step
     progress = [(e["step"], e["position"], e["total"]) for e in events if e["type"] == "step_progress"]
-    assert progress == [("fix", 1, 2), ("fix", 2, 2), ("translate", 1, 1)]
+    # burn-in positions are throttled: the first and the last of three reported within 0.5 s
+    assert progress == [("fix", 1, 2), ("fix", 2, 2), ("translate", 1, 1), ("outputs", 100, 600),
+                        ("outputs", 600, 600)]
     texts = [(e["kind"], e["text"]) for e in events if e["type"] == "text"]
     assert texts == [("recognized", "Hello agents."), ("recognized", "We use cloud code."),
                      ("edit", "Claude Code"), ("translated", "Sveiki.")]
@@ -204,6 +206,26 @@ def test_url_job_downloads_first_and_marks_done(tmp_path):
     folder, files, cost = core.done_marked[0]
     assert folder.name == "2026-11-01 A talk" and "A talk.bilingual.ass" in files
     assert events[-1]["type"] == "finished"
+    download = [(e["position"], e["total"], e["unit"]) for e in events
+                if e["type"] == "step_progress" and e["step"] == "download"]
+    assert download[0] == (250_000, 1_000_000, "byte") and download[-1] == (1_000_000, 1_000_000, "byte")
+    # no burn-in in the laptop profile: no positions for the outputs step
+    assert not [e for e in events if e["type"] == "step_progress" and e["step"] == "outputs"]
+
+
+def test_positions_are_throttled_and_never_raise(tmp_path):
+    from talk_autopsy.time_estimate import TimeEstimator
+    now = [0.0]
+    job = jobs.Job(id="j", request=request(), preview=None, steps=[], started_wall="", clock=lambda: now[0])
+    positions = jobs.Positions(job, TimeEstimator(None, 600.0, ["download"]), "download", "byte")
+    for done, at in ((10, 0.1), (20, 0.2), (30, 0.3), (40, 0.9)):
+        now[0] = at
+        positions(done, 100)
+    positions(100, 100)  # the last one always goes out
+    now[0] = 2.0
+    positions(5, None)  # an unknown total: no bar, no estimate, no error
+    sent = [(e["position"], e["total"]) for e in job.events_after(0)[0]]
+    assert sent == [(10, 100), (40, 100), (100, 100), (5, None)]
 
 
 def test_replay_from_an_id(tmp_path, media):
@@ -403,3 +425,21 @@ def test_steps_without_a_start_event_are_timed_unless_passed_through(tmp_path, m
     rates = next(iter(machines.values()))["rates"]
     assert "srt" in rates and rates["srt"][0] > 0  # timed from the end of the previous step
     assert "stt2" not in rates  # a pass-through says nothing about a real second pass
+
+
+def test_numbers_of_pipeline_events_win_over_their_text(tmp_path, media):
+    data = {"skipped": False, "seconds": 3.0, "cost_usd": 0.5, "stt_cost_usd": 0.0,
+            "tokens": {"input": 7, "output": 8, "cache_write": 0, "cache_read": 0}}
+    script = [pipeline.PipelineEvent("fix", "estimate", 0, 7, 0, 0, 0, "pipeline", "garbled",
+                                     data={"usd": 0.25, "blocks": 1, "input_tokens": 1, "output_tokens": 1,
+                                           "part": "fix"}),
+              pipeline.PipelineEvent("fix", "step-start", 0, 7, 0, 0, 0, "pipeline", "correction-v2"),
+              pipeline.PipelineEvent("fix", "step-done", 0, 7, 0, 0, 0, "pipeline", "fixed.json, 0.0400 USD",
+                                     data=data)]
+    r, core = runner(tmp_path)
+    core.script = script
+    job = r.start(request(mode="file", url=None, path=str(media)))
+    events = wait(job)
+    fix = next(e for e in events if e["type"] == "step_finished" and e["step"] == "fix")
+    assert fix["cost_usd"] == 0.5 and fix["tokens"]["input"] == 7
+    assert [e["claude_usd"] for e in events if "claude_usd" in e] == [0.25]

@@ -95,8 +95,11 @@ class FakeCore:
             return youtube.PlaylistInfo(id="PL1", title="list", entries=[video])
         return video
 
-    def download(self, video, folder: Path, runtimes) -> Path:
+    def download(self, video, folder: Path, runtimes, progress=None) -> Path:
         self.calls.append("download")
+        if progress is not None:
+            for done in (250_000, 500_000, 1_000_000):
+                progress(done, 1_000_000)
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{youtube.video_file_stem(video)}.mp4"
         path.write_bytes(b"video")
@@ -137,8 +140,12 @@ class FakeCore:
     def read_transcript(self, path: Path):
         return transcripts(self.settings.target_lang if self.settings else "lt").get(path.name)
 
-    def write_outputs(self, settings, formats, dest: Path, stem: str, video: Path, progress):
+    def write_outputs(self, settings, formats, dest: Path, stem: str, video: Path, progress, position=None,
+                      duration=None):
         self.calls.append("outputs")
+        if position is not None and "mp4-burned" in formats:
+            for seconds in (100.0, 300.0, 600.0):
+                position(seconds, duration)
         dest.mkdir(parents=True, exist_ok=True)
         names = {"srt": f"{stem}.srt", "ass": f"{stem}.ass", "bilingual": f"{stem}.bilingual.ass",
                  "mp4-soft": f"{stem}.subs.mp4", "mp4-burned": f"{stem}.{settings.target_lang}.mp4"}

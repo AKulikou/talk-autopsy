@@ -22,16 +22,22 @@ so that no Windows path needs filter escaping. Measured on the owner's laptop
 (2026-11-10, 1080p H.264): 10.7 s for a 60 s clip (0.18x real time), 457 s for a
 27:52 talk together with the subtitle-track MP4 (0.27x; the estimate uses 0.27).
 
-No CLI I/O here; `run_ffmpeg` is injectable for tests.
+Burn-in progress: with `position`, ffmpeg runs with `-progress pipe:1` and
+every `out_time_us` it reports is passed on as (seconds encoded, seconds of
+video), so a display can show the real position. Without it nothing changes.
+
+No CLI I/O here; `run_ffmpeg` and `popen` are injectable for tests.
 """
 
+import logging
 import shutil
 import subprocess
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from talk_autopsy import subtitles
+from talk_autopsy import ingest, subtitles
 from talk_autopsy.glossary import Glossary
 from talk_autopsy.segments import Transcript
 
@@ -41,6 +47,9 @@ BURN_SPEED = 0.27  # encoding seconds per second of 1080p video, measured 2026-1
 BURN_FILTER_NAME = "burn-subtitles.ass"  # plain name: the subtitles filter needs no path escaping
 LANG3 = {"ru": "rus", "en": "eng", "de": "deu", "fr": "fra", "es": "spa", "uk": "ukr", "it": "ita",
          "pt": "por", "pl": "pol", "zh": "zho", "ja": "jpn"}  # ISO 639-2 tags for the MP4 tracks
+
+logger = logging.getLogger(__name__)
+Position = Callable[[float, float | None], None]  # (seconds encoded, seconds of video or None)
 
 # Bilingual .ass: the English line smaller and dimmer on top, the target language below at the usual size.
 ENGLISH_FONT_SIZE = 30
@@ -168,14 +177,54 @@ def _run(command: list[str], run_ffmpeg: Callable, cwd: Path | None = None) -> N
         raise OutputError(f"ffmpeg failed: {(result.stderr or '').strip()[-500:]}")
 
 
+def with_progress(command: list[str]) -> list[str]:
+    """An ffmpeg command that also writes machine-readable progress to stdout (before the output file)."""
+    return [*command[:-1], "-progress", "pipe:1", "-nostats", command[-1]]
+
+
+def _run_with_position(command: list[str], duration: float | None, position: Position, popen: Callable,
+                       cwd: Path | None = None) -> None:
+    """Run ffmpeg, passing each reported `out_time_us` on as seconds; OutputError on failure."""
+    process = popen(with_progress(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                    cwd=cwd, encoding="utf-8", errors="replace")
+    errors: list[str] = []
+    reader = threading.Thread(target=lambda: errors.append(process.stderr.read()), daemon=True)
+    reader.start()
+    for line in process.stdout:
+        key, _, value = line.strip().partition("=")
+        if key != "out_time_us" or not value.strip().isdigit():
+            continue
+        try:
+            seconds = int(value) / 1_000_000
+            position(min(seconds, duration) if duration else seconds, duration)
+        except Exception:
+            logger.exception("burn-in progress not shown")
+    returncode = process.wait()
+    reader.join(timeout=5)
+    if returncode != 0:
+        raise OutputError(f"ffmpeg failed: {''.join(errors).strip()[-500:]}")
+
+
+def _duration(video: Path) -> float | None:
+    try:
+        seconds = ingest.probe(video)
+        return seconds if seconds and seconds > 0 else None
+    except Exception:
+        logger.exception("duration of %s not read; burn-in progress without a total", video.name)
+        return None
+
+
 def write_outputs(work_dir: Path, video_id: str, lang: str, dest: Path, stem: str, formats: list[str],
                   video: Path | None = None, glossary: Glossary | None = None,
                   translated: Transcript | None = None, run_ffmpeg: Callable = subprocess.run,
-                  progress: Callable[[str], None] | None = None) -> list[Written]:
+                  progress: Callable[[str], None] | None = None, position: Position | None = None,
+                  popen: Callable = subprocess.Popen, duration: float | None = None) -> list[Written]:
     """
     Write the requested `formats` for a finished run into `dest`, named after
     `stem`. MP4 formats need `video`; `bilingual` needs `translated` (the
     <lang>.json transcript). Partial MP4s are written to a temporary name first.
+    `position(seconds encoded, seconds of video)` follows the burn-in when given
+    (`duration`, or ffprobe's, is the total).
     """
     progress = progress or (lambda message: None)
     dest.mkdir(parents=True, exist_ok=True)
@@ -231,9 +280,12 @@ def write_outputs(work_dir: Path, video_id: str, lang: str, dest: Path, stem: st
         ass_copy = dest / BURN_FILTER_NAME
         shutil.copyfile(need(target_ass), ass_copy)
         progress(f"mp4-burned: drawing the {lang} subtitles into the picture (H.264 re-encode)")
+        command = burn_command(ffmpeg, Path(video).resolve(), BURN_FILTER_NAME, partial.resolve())
         try:
-            _run(burn_command(ffmpeg, Path(video).resolve(), BURN_FILTER_NAME, partial.resolve()), run_ffmpeg,
-                 cwd=dest)
+            if position is None:
+                _run(command, run_ffmpeg, cwd=dest)
+            else:
+                _run_with_position(command, duration or _duration(Path(video)), position, popen, cwd=dest)
         except OutputError:
             partial.unlink(missing_ok=True)
             raise

@@ -18,6 +18,16 @@
 - Not yet: the side-by-side live view, an in-browser player, a desktop shortcut
   for the page, playlists in the page, cancelling a run.
 
+**Progress events (`pipeline-v3.1`, session 2)**
+
+- The pipeline's events carry numbers (estimates, cost, seconds and tokens of
+  each step) and, for every finished correction or translation block, its
+  text. Observability only: golden tests show the model requests and outputs
+  are byte-identical to `pipeline-v3`; a failing progress display never stops
+  a run.
+- Real positions for the YouTube download (bytes) and the burn-in (seconds of
+  video encoded).
+
 ## 1.0.0 — 2026-11-12
 
 First release: the CLI tool of stage 3, on the frozen pipeline `pipeline-v3`.
