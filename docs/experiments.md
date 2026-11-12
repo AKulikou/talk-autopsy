@@ -48,7 +48,7 @@ punctuation stripped, nothing expanded).
 - **Term accuracy v1 (superseded, column `term_accuracy_v1`):** position-free:
   per term min(occurrences in the reference, occurrences in the hypothesis), no
   possessives. A term missed where it was said but written elsewhere counted
-  as a hit (external audit #1, finding 3). Kept for the record.
+  as a hit (independent LLM review #1, finding 3). Kept for the record.
 - **False-edit rate (column `false_edit_rate_v2`):** the share of the
   correction's word edits that move the text further from the reference. The
   edits are the word substitutions, deletions and **insertions** of the
@@ -93,10 +93,11 @@ is 2.75%, not 0: the old definition did not see inserted words.
 ## Spec criteria
 
 Every acceptance criterion of the project specification (hypotheses A1–A5,
-B1–B5, C1–C5, D1, the metric targets, the judge calibration rule), as the
-specification words it, next to the result. Status is `met`, `not met` or
+B1–B5, C1–C5, D1, the metric targets, the judge calibration rule), next to the
+result. Criteria are quoted from the project plan (in Russian, not published),
+translated without rewording. Status is `met`, `not met` or
 `not run`, nothing in between; where a decision went ahead despite `not met`,
-the last column says so and why. Written 2026-11-11 after external audit #1
+the last column says so and why. Written 2026-11-11 after independent LLM review #1
 (finding 7: criteria had been reworded after results); C1, term accuracy,
 translation quality and the gate rows updated after the T6 translation check
 (2026-11-11); C1 updated after the Google Translate rating (2026-11-12). Numbers: term accuracy
@@ -110,27 +111,27 @@ carries the weight (T1's reference was decided by a Claude model).
 | A3 | cloud STT: WER gain over 5 points at up to $1 per hour | T2: AssemblyAI 6.97%, Gemini 2.34% against Whisper 6.19% (best gain 3.85 points); T1: gain 9.79 points both; references built with these engines (biased in their favour) | not met (on T2; met on T1) | AssemblyAI with key terms chosen as the main engine (owner): key terms gave T2 99.1% term accuracy with a reference glossary, 96.3% with the auto-glossary |
 | A4 | Gemini with audio: equal or better term accuracy than the best block B result at comparable price, with the same glossary | Gemini ran without a glossary, to build the references (T2 93.5% against 96.3% for the B path) | not run (as specified) | |
 | A5 | mean onset shift under 0.3 s against hand labels on 10 minutes | no hand labels exist | not run | |
-| B1 | term accuracy after correction above 90%, WER not worse | T2 AssemblyAI + auto terms + correction-v2: 96.26% (v2), WER 4.73% -> 4.73% | met | |
+| B1 | term accuracy after correction above 90%, WER not worse | T2 AssemblyAI + auto terms + correction-v2: 96.26% (v2), WER 4.73% -> 4.73% | met (the number is the recogniser's; correction made 0 edits) | |
 | B2 | fewer than 5% of edits distort meaning (all edits on 10 minutes checked by hand) | correction-v1: 0 of 3 on T2; correction-v2: 0 edits on T2, 0 of 2 on T1 | met (on 3 and 2 edits: too few to say much) | |
 | B3 | recognition alternatives or word confidence: at least +3 points term accuracy | | not run | |
 | B4 | Sonnet enough: term-accuracy difference to Opus under 2 points | T2 Gemini+align input: Opus 100% vs Sonnet 96.3% (gap 3.7 points, v1) | not met (gap 3.7 > 2) | Sonnet kept for cost (0.060 vs 0.129 USD per fragment) |
 | B5 | auto-glossary covers at least 70% of the hand glossary | T2 74.4% / 79.5%; T1 56.8% / 62.2% (two runs each) | met on T2, not met on T1 | auto-glossary adopted as the pipeline's glossary step (an unseen video has no hand glossary) |
-| C1 | Claude's blind mean at least 1 point above Google Translate and not below VideoLingo; 20 random fragments, three systems mixed | **Against Google Translate** (2026-11-12, pre-registered, 12 T6 units instead of 20 fragments, blind, single-rated; Google Translate items rated on another day, anchor drift 0.00): pipeline 4.42, Whisper + Google Translate 4.42, difference 0.00 [−0.42, +0.42] ([result](#translation-rating-pre-registered-2026-11-11-before-any-google-translate-or-rater-call)). VideoLingo: not run, out of v1.0 scope (owner, 2026-11-11; [why](#baselines-on-one-set-t2-and-t6)). Earlier: translation-v1 rated 3.85 alone (not blind); v1 against v2 blind-pairwise (not fully blind), v1 4.40, v2 4.67; **C1 on T6** against a plain Gemini translation: pipeline 4.42, Gemini 4.33, difference +0.08 [−0.33, +0.50] | **not met** against Google Translate (difference 0.00 < 1.0); VideoLingo part not run (out of v1.0 scope); the pre-registered C1 on T6 (pipeline mean >= 4.0) met | Accepted as a finding (2026-11-12): not confirmed; no translation changes before v1.0; translation-v4 idea stays in Backlog (decisions). Gate 2 -> 3 had passed on C1 on T6 (2026-11-11, before this rating) |
+| C1 | Claude's blind mean at least 1 point above Google Translate and not below VideoLingo; 20 random fragments, three systems mixed | **Against Google Translate** (2026-11-12, pre-registered, 12 T6 units instead of 20 fragments, blind, single-rated; Google Translate items rated on another day, anchor drift 0.00): pipeline 4.42, Whisper + Google Translate 4.42, difference 0.00 [−0.42, +0.42] ([result](#translation-rating-pre-registered-2026-11-11-before-any-google-translate-or-rater-call)). VideoLingo: not run, out of v1.0 scope (owner, 2026-11-11; [why](#baselines-on-one-set-t2-and-t6)). Earlier: translation-v1 rated 3.85 alone (not blind); v1 against v2 blind-pairwise (not fully blind), v1 4.40, v2 4.67; **absolute translation quality on T6** (a criterion added on 2026-11-11, not this one; first called "C1 on T6") against a plain Gemini translation: pipeline 4.42, Gemini 4.33, difference +0.08 [−0.33, +0.50] | **not met** against Google Translate (difference 0.00 < 1.0); VideoLingo part not run (out of v1.0 scope) | Accepted as a finding (2026-11-12): not confirmed; no translation changes before v1.0; translation-v4 idea stays in Backlog (decisions). Gate 2 -> 3 (2026-11-11, before this rating) was decided on term accuracy, the stage's criterion; the absolute translation quality on T6 (mean >= 4.0) was met there |
 | C2 | one translation per glossary term across the video (20 key terms) | | not run | |
 | C3 | no lost or repeated phrases at 10 block boundaries, with and without overlap | | not run | |
 | C4 | the style instruction preferred in 2 of 3 cases, blind | | not run | |
 | C5 | Batch API: identical quality, 40–50% cheaper | | not run | |
 | D1 | (reworded 2026-11-09, after C1) no more than 10% of cues faster than 20 cps with three lines | T2 fragment: 15.8% of Russian cues above 25 cps (so more than 10% above 20); real-01 14.8% above 25 | not met | nothing is cut for reading speed (owner's decision: meaning first; `.ass` with a smaller font) |
 | WER | ≤ 10% clean speech, ≤ 15% accent | AssemblyAI + auto terms: T1 0.58%, T2 4.73% | met | |
-| Term accuracy | ≥ 85% after correction | T2 96.26% (v2; macro 89.74%, without the top term 94.94%); `pipeline-v3` T2 repeats 94.39–96.26%; T6 100% against J and M, lower bound 91.67% (Wilson 83.0%) | met (on T6 "pass (not demonstrated)") | |
+| Term accuracy | ≥ 85% after correction | T2 (development fragment) 96.26% (v2; macro 89.74%, without the top term 94.94%); `pipeline-v3` T2 repeats 94.39–96.26% micro (macro 84.62–89.74%: one repeat below 85% on macro; the target is defined on micro); T6 72/72 against J and 71/71 against M, lower bound 66/72 = 91.67% (Wilson 83.0–96.1%) | met (on T6 "pass (not demonstrated)") | |
 | False edits | ≤ 3% | false-edit rate (one definition, Metrics): 0 or no edits on every current row except T1 faster-whisper + correction-v1, 2.75% | met | |
-| Translation quality | blind owner rating of 20 random lines, mean ≥ 4.0 | translation-v1 3.85 (not blind); v2 4.67 only in a pairwise comparison against v1; `pipeline-v3` on T6: **4.42** (12 random units of at least 6 words, blind, single-rated, mixed with a Gemini baseline) | met (on T6, 12 units instead of 20: owner's amendment before the run) | |
+| Translation quality | blind owner rating of 20 random lines, mean ≥ 4.0 | translation-v1 3.85 (not blind); v2 4.67 only in a pairwise comparison against v1; `pipeline-v3` on T6: **4.42** (12 random units of at least 6 words, blind, single-rated, mixed with a Gemini baseline) | met (on T6, 12 units instead of 20: owner's amendment before the run). This is the absolute translation quality criterion, not C1: C1 (against Google Translate) is not met (row C1) | |
 | Reading speed | ≤ 17 cps, at most 5% of cues above | T2 fragment 58.8% of Russian cues above 17 cps; real-01 49.2% | not met | as D1 |
 | Timing shift | median ≤ 300 ms against hand labels | no hand labels; timing drift not implemented | not run | |
 | Cost | ≤ $3 per hour of video | 0.47 USD AssemblyAI + 0.67–0.82 USD Claude per hour (three whole videos) | met | |
 | Time | ≤ 30 min per hour of video | 9.1–9.9 min per hour (three whole videos) | met | |
 | Judge calibration | (added 2026-11-10) the audio judge is accepted for T6 if agreement on T2 ≥ 90% and WER between the T2 references ≤ 2% | 79.0% (WER 1.90%); 82.5% after a labelled post-hoc rescoring (WER 1.17%) | not met (failed twice) | deviation: the rule said T6 is not judged; T6 was judged anyway, with two references (judge / engine majority) and bounds (owner's decision 2026-11-10) |
-| Gate 2 -> 3 | term accuracy ≥ 85% on the hold-out T6, run once | T6 run once 2026-11-11: 100% (J, M), lower bound 91.67%, "pass (not demonstrated)"; translation 4.42; audit #1 done ([Gate 2 -> 3](#gate-2---3-2026-11-11)) | met | passed by the owner's decision 2026-11-11 |
+| Gate 2 -> 3 | term accuracy ≥ 85% on the hold-out T6, run once | T6 run once 2026-11-11: 72/72 (J), 71/71 (M), lower bound 91.67%, "pass (not demonstrated)"; absolute translation quality 4.42; review #1 done ([Gate 2 -> 3](#gate-2---3-2026-11-11)) | met | passed by the owner's decision 2026-11-11, on term accuracy (the stage's criterion), not on translation against a baseline |
 
 ## v1.0 checklist
 
@@ -142,7 +143,7 @@ The specification's list for v1.0 (stage 3), with the state of each item.
 | `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and a plain Gemini translation on one set (amended 2026-11-11, owner: VideoLingo out of v1.0 scope) | [Baselines on one set](#baselines-on-one-set-t2-and-t6): all four measured on T2 and T6; Google Translate run 2026-11-11 and rated by the owner 2026-11-12 (4.42, equal to the pipeline). VideoLingo: not run, out of v1.0 scope (its installer was blocked by the permission filter and not bypassed; its default recogniser is now Qwen3-ASR) |
 | CI green; README in the series structure; honest Known limitations | in progress |
 | re-run from cache within a minute | **met**: 6.7–8.9 s wall time on T2 (three re-runs, below) |
-| external audit #2 | not done |
+| independent LLM review #2 | not done |
 | tag `v1.0` | not done |
 
 **Re-run from cache (2026-11-11).** The work folder of the `pipeline-v3` T2 repeat 2 (a fresh run
@@ -277,7 +278,7 @@ committed before any call to Cloud Translation or to the Gemini rater.
   the numbers. The anchors' new scores do not replace the old ones.
 - **Specification C1, Google Translate part** ("Claude's blind mean at least 1 point above Google
   Translate"): read off the means, met if pipeline mean − Google Translate mean ≥ 1.0 (point estimate,
-  as the specification words it; the interval is reported next to it). Caveats stated with it: 12 units on
+  as in the criteria table, Spec criteria; the interval is reported next to it). Caveats stated with it: 12 units on
   T6 instead of 20 random fragments, the Google Translate items rated on another day. The VideoLingo part
   stays not run.
 - **Gemini as a second rater** (`gemini-rater-v1`, informational only; **no rule uses it**): model
@@ -346,7 +347,9 @@ the same 38 items as the owner. Measured, not assumed:
   within ±1 point on 74%.
 - **Self-preference:** the rater's mean on Gemini's own translations **4.93** (14 items) against **3.93**
   for the pipeline (14) and **3.83** for Google Translate (12); the owner's means on the same item
-  groups are 4.36, 4.50 and 4.42. Rater − owner: +0.57 on Gemini items, −0.57 / −0.58 on the others. Raw means from
+  groups are 4.36, 4.50 and 4.42. These owner means differ from the headline 4.33 / 4.42 / 4.42 because
+  the item groups include the 4 anchors (items rated on both days, counted twice) and count each item
+  shared by the pipeline and Gemini for both systems (14 = 10 own + 2 shared + 2 anchors). Rater − owner: +0.57 on Gemini items, −0.57 / −0.58 on the others. Raw means from
   `work/T6/gemini-rater.json` with the keys' system per item (a shared item counts for pipeline and Gemini).
 - **Consequence:** the Gemini rater is **not usable** as a second rater of translations, least of all for
   comparing against a Gemini translation. Translation quality stays on the owner's single rating. The same
@@ -412,7 +415,7 @@ clip carries 5 s of padding; neighbouring clips overlap.
 
 ### Who decided each reference
 
-Decided by, per fragment (added 2026-11-11 after external audit #1, findings
+Decided by, per fragment (added 2026-11-11 after independent LLM review #1, findings
 2 and 11: no human listener decided T1, and a Claude model must not be read
 as an independent check of the Claude stages):
 
@@ -677,7 +680,7 @@ not known without a listener.
 
 ## T6 protocol
 
-Written 2026-11-11, before the T6 run, after external audit #1. It replaces the
+Written 2026-11-11, before the T6 run, after independent LLM review #1. It replaces the
 earlier versions of the protocol, kept below as history. No T6 content is
 recorded here: counts, durations and costs only.
 
@@ -689,7 +692,8 @@ T2 and is known. The owner has not watched it. Three engines transcribed it
 to build the reference; the blind Gemini audio judge decided the disputed
 spans (it failed its T2 calibration, hence two references and bounds); Gemini
 extracted the glossary (51 terms). The pipeline was never run on it and no
-prompt or setting was tuned on it. **No human has checked the reference**: no
+prompt or setting was tuned on it; the prompts' examples were only checked by
+code not to occur in any test-set glossary or reference, T6's included. **No human has checked the reference**: no
 fluent listener is available (owner's decision); this is a limitation, not
 fixed.
 
@@ -745,8 +749,10 @@ this English sentence from a technical talk into natural Russian for
 subtitles. Answer with the translation only."). The owner rates **at most 24
 items shuffled together** (seed 20261112), one at a time, single-rated 1–5,
 without knowing which system wrote which; the English is shown above each item
-(as in C1; caveat: the rater reads the source first). **Rule: C1 on T6 is met
-if the pipeline's mean >= 4.0.** The difference to the baseline is reported
+(as in C1; caveat: the rater reads the source first). **Rule: absolute
+translation quality on T6 is met if the pipeline's mean >= 4.0** (called "C1
+on T6" when written; it is not the specification's C1, which compares against
+Google Translate). The difference to the baseline is reported
 with a paired bootstrap 95% interval (10,000 resamples of the 12 units); no
 other conclusion is drawn. Implemented and tested with a fake client on
 2026-11-11; prepared after the run, not rated yet (below). (As first written:
@@ -895,7 +901,7 @@ accuracy ≥ 85%, fail if the upper bound < 85%, otherwise inconclusive.
 - **Known limit.** A term the engines' majority has inside a span where J
   has other words is not counted by the bounds (the glossary and the
   occurrences come from J); the accuracy against M shows that case.
-- **Next:** the frozen `pipeline-v2` on T6 once (after the external audit
+- **Next:** the frozen `pipeline-v2` on T6 once (after the independent LLM review
   tonight), then `eval T6 --record`.
 
 ## T6 result (2026-11-11)
@@ -981,8 +987,10 @@ independent check.
 | Gemini `gemini-4-carbon`, plain prompt, one unit per request | 4.33 | 7 / 2 / 3 / 0 / 0 |
 | difference, pipeline − Gemini | **+0.08** | paired bootstrap 95% interval **−0.33 … +0.50** (10,000 resamples of the units) |
 
-- **Rule** (written before the run): C1 on T6 is met if the pipeline's mean
-  >= 4.0. **Met** (4.42).
+- **Rule** (written before the run): absolute translation quality on T6 (first
+  called "C1 on T6"; not the specification's C1) is met if the pipeline's mean
+  >= 4.0. **Met** (4.42). The specification's C1 (at least 1 point above Google
+  Translate) was rated on 2026-11-12 and is **not met** (Translation rating).
 - **Against the baseline:** per unit, the pipeline scored higher on 2, Gemini
   on 2, 8 tied (2 of the ties are the shared items with identical text). The
   interval contains 0: the pipeline's translation is **not shown to be better
@@ -1002,14 +1010,18 @@ The stage 2 gate, criterion by criterion (CLAUDE.md, Stage gates):
 | Gate criterion | Result | |
 |---|---|---|
 | term accuracy >= 85% | T6 (hold-out, run once): 100% against J and M, lower bound 91.67% (Wilson 83.0%), verdict **pass (not demonstrated)**, no overfitting signal; T2 repeats 94.39–96.26% | met (not demonstrated at 85% with 72 occurrences) |
-| blind translation score >= 4/5 | T6 check: pipeline mean 4.42 (12 units, single-rated, blind), Gemini 4.33, difference +0.08 [−0.33, +0.50] | met |
+| blind translation score >= 4/5 (absolute translation quality on T6) | T6 check: pipeline mean 4.42 (12 units, single-rated, blind), Gemini 4.33, difference +0.08 [−0.33, +0.50] | met |
 | hold-out T6 run once | 2026-11-11, `pipeline-v3` (d180a73), one run | met |
-| external audit | audit #1, 2026-11-11 ([findings and responses](audit-2026-11-11.md)) | met |
+| independent LLM review | review #1, 2026-11-11 ([findings and responses](review-2026-11-11.md)) | met |
 
 **Owner's decision (2026-11-11): gate 2 -> 3 passed.** Stage 3 finishes v1.0
 as the specification lists it (benchmark with the baselines on one set, the
 README in the series structure, re-run from cache within a minute, external
-audit #2, tag `v1.0`); the web UI stays v1.1. `pipeline-v3` stays frozen.
+review #2, tag `v1.0`); the web UI stays v1.1. `pipeline-v3` stays frozen.
+
+The gate was decided on term accuracy, the criterion the stage was about.
+The specification's C1 (translation at least 1 point above Google Translate)
+was rated only afterwards, on 2026-11-12, and is not met (Spec criteria).
 
 What the gate does and does not show: the pipeline's strength is **term
 recognition** (key terms from an automatic glossary) and the end-to-end tool;
@@ -1020,15 +1032,16 @@ so transfer to another domain is not shown (T3).
 ## Freeze pipeline-v3
 
 Frozen on 2026-11-11 with the annotated git tag `pipeline-v3` on commit
-**`d180a73ddc3c95f2b7cb79e8621e541aa36f99b5`**, after external audit #1. It
+**`d180a73ddc3c95f2b7cb79e8621e541aa36f99b5`**, after independent LLM review #1. It
 supersedes `pipeline-v2` for the T6 run; T6 has never been run on either.
 What changed against `pipeline-v2`:
 
 - `glossary-auto-v2` and `translation-v2.1`: the same rules as
   `glossary-auto-v1` and `translation-v2`, with every example that came from
   the test set replaced by an example of the same kind from outside it
-  (checked by code against the T1, T2 and T6 glossaries and references;
-  `tests/test_prompt_examples.py`). `correction-v2` is unchanged (its examples
+  (checked by code not to occur in the T1, T2 and T6 glossaries and
+  references, `tests/test_prompt_examples.py`; no prompt or setting was tuned
+  on T6). `correction-v2` is unchanged (its examples
   are discourse markers and an invented accent pair).
 - The cache key of every step includes the prompt file and a hash of the
   validator and post-processing code (`pipeline.code_hash`), so a fix
@@ -1059,7 +1072,7 @@ the evaluation tooling (`judge.py`, `translation_check.py`).
 
 ### Repeats on T2 and T1 (2026-11-11)
 
-- **Why:** external audit #1, finding 12: no number had a repeat. These three
+- **Why:** independent LLM review #1, finding 12: no number had a repeat. These three
   T2 runs are also the comparison point of the T6 overfitting signal.
 - **Run:** `talk-autopsy run <fragment>.wav --lang ru --name <run>` from a clean
   `git worktree` of `pipeline-v3` (d180a73), a fresh work folder per run (no
@@ -1084,8 +1097,15 @@ the evaluation tooling (`judge.py`, `translation_check.py`).
 
 - **Correction:** 0 segments changed in all four runs (0 edits listed by the
   model, 0 word edits by the metric), at 0.064–0.065 USD per T2 run. On this
-  path the key terms do the work; correction is insurance for the fallback
-  engines (B1: faster-whisper T2 input 61.7% -> 93.5%, v2).
+  path the key terms do the work; correction is kept as insurance for the
+  fallback engines, but that is not shown for the shipped version: the
+  evidence (B1: faster-whisper T2 input 61.7% -> 93.5%, scored with v2) is
+  correction-v1 with a reference-reviewed glossary; correction-v2 with an
+  automatic glossary was never run on fallback input, and no fallback path of
+  `pipeline-v3` was run end to end and scored.
+- **Macro below the target in one repeat:** repeat 2 has macro 84.62%, below
+  85%. The 85% target is defined on the micro-average (Spec criteria, Term
+  accuracy); the macro-average is reported, not gated.
 - **Spread:** three runs differ by 1.9 points micro and 5.1 points macro on
   T2, from the auto-glossary (26–29 terms per run) and AssemblyAI's second
   pass; the earlier single-run number (B1 v2, 96.26%) is the top of the range.
@@ -1307,7 +1327,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 | pipeline-v3 repeats | 2026-11-11 | none: variance of the frozen path, and the T2 point of the T6 overfitting rule | `run` from a clean worktree of tag `pipeline-v3`, auto-glossary only, no cache; T2 three times, T1 once | term accuracy v2 T2 94.39–96.26% (mean 95.33%), macro 84.62–89.74%, without `Claude Code` 92.41–94.94%; WER 4.24–4.48%; T1 99.20%; correction 0 edits in all four; 0.511 USD Claude, 0.309 USD AssemblyAI | the earlier single-run 96.26% is the top of the range; correction does nothing on this path | T2 mean 95.33% is the overfitting comparison point (Freeze pipeline-v3) |
 | C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | **not adopted** (owner's blind rating 2026-11-11: v3 won 5 pairs, v2 6, ties 5; means v2 4.44, v3 4.25): v2 stays the default, v3 an option |
 | D1 (setup) | 2026-11-10 | none: sentence units before translation and display extended into pauses (subtitle-v2) | translation-v2 on units; T2 fragment, C1 input, T2.source, real-01 | T2 fragment Russian above 17 / 25 cps 74.7% / 25.3% -> 58.8% / 15.8%; on AssemblyAI input units = segments (149/149, 373/373, 428/426); Gemini input 109 -> 85 units; 0.547 USD | the C1 fragments become whole sentences; the extension does most of the reading-speed work; word timing raises speed variance in multi-cue segments | units frozen with the pipeline; display rule stays open |
-| C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | v2 preferred; not fully blind | translation-v2 adopted. *Relabelled 2026-11-11 (audit #1, finding 6): v2 preferred to v1; absolute target not demonstrated (3.85 < 4.0); this was recorded as "C1 met" through the wrong instrument (pairwise scores, not the specified single rating against baselines)* |
+| C1 (blind) | 2026-11-10 | translation-v2 scores higher than v1 and >= 4.0 in a blind pairwise comparison | owner rated items 1–15 of `C1-blind.md` (T2, Gemini+align input, correction-v1 English) | v1 4.40, v2 4.67 over 15 pairs; v2 better 8, v1 better 3, ties 4 | v2 preferred; not fully blind | translation-v2 adopted. *Relabelled 2026-11-11 (review #1, finding 6): v2 preferred to v1; absolute target not demonstrated (3.85 < 4.0); this was recorded as "C1 met" through the wrong instrument (pairwise scores, not the specified single rating against baselines)* |
 | B2 (v2) | 2026-11-10 | correction-v2 edits distort meaning in < 5% of cases | owner checked `B2-review-v2.md` | T2 0 edits; T1 2 edits, 0 distort meaning | met on a tiny sample | correction-v2 frozen unchanged |
 | B1 (v2) | 2026-11-09 | correction-v2 with the auto-glossary keeps the realistic pipeline at >= 85% term accuracy without false edits or words moved between segments | `correction-v2`, Sonnet, on AssemblyAI + auto key terms, auto-glossary; T2, T1 | term accuracy T2 96.26% -> 96.26%, T1 98.33% -> 98.33%; WER T2 4.73% -> 4.73%, T1 0.58% -> 0.50%; false edits 0; edits 0 / 2; 0.108 USD | the realistic pipeline is at 96.3% / 98.3%; correction adds nothing measurable on this input | correction-v2 is the default; owner checks `B2-review-v2.md` |
 | B5 | 2026-11-09 | a glossary drafted by Haiku from the first transcript covers >= 70% of the reference glossary | `glossary-auto-v1`, `claude-haiku-5-5`, raw AssemblyAI T2/T1, no context; two runs; then AssemblyAI with the auto terms | coverage T2 74.4% / 79.5%, T1 56.8% / 62.2%; STT terms with auto terms T2 96.3%, T1 98.3% (reference glossary: 99.1% / 100%); 0.0096 USD Claude, 0.084 USD AssemblyAI | met on T2, not on T1; the second pass keeps most of the keyterm gain | auto-glossary is the pipeline's glossary step |
@@ -1675,7 +1695,7 @@ linger; cues never cross a segment boundary. Writing both files takes about
   versions, single rating for "is it good enough". 15 items, one fragment,
   one rater.
 - **Conclusion:** v2 wins more pairs than it loses (8 to 3): **v2 is
-  preferred to v1**. *Relabelled 2026-11-11 (external audit #1, finding 6):
+  preferred to v1**. *Relabelled 2026-11-11 (independent LLM review #1, finding 6):
   this entry first said "both versions are above the 4.0 target; C1 is met".
   Pairwise scores drift about one point above single ratings (see above), and
   the specification's C1 compares against Google Translate and VideoLingo,
@@ -2298,7 +2318,8 @@ Ideas that come up during a stage and wait for a later one.
   `pipeline-v3` at about 0.39 USD per hour of video (0.0645 USD per 10
   minutes on T6), for one correct edit on T6 (`genetic` -> `agentic`) and 0
   edits in the four T1/T2 repeats; its measured value is on fallback-engine
-  input (B1). Revisit after T3: drop it from the AssemblyAI path, or run it
+  input with correction-v1 and a reference-reviewed glossary (B1); the
+  shipped correction-v2 was never run on fallback input. Revisit after T3: drop it from the AssemblyAI path, or run it
   only when a fallback engine produced the transcript.
 
 - ~~Speed of faster-whisper on this laptop (A1)~~ Closed 2026-11-09 by A2:
@@ -2386,17 +2407,17 @@ Ideas that come up during a stage and wait for a later one.
 
 - ~~Server-side refusal fallback on the Claude calls~~ Decided 2026-11-09:
   on in `run`, off in experiments (decisions).
-- Next-video failure modes (external audit #1, finding 14; after the T6 run):
+- Next-video failure modes (independent LLM review #1, finding 14; after the T6 run):
   diarization (speaker labels are off, so an interview's turns are not
   attributed), music and long non-speech stretches (no detection; AssemblyAI
   and the auto-glossary see whatever is there), long videos (one glossary call
   over the whole first pass; untested above about 40 minutes).
-- Hygiene (external audit #1, finding 15): split `cli.py` (about 1,300 lines)
+- Hygiene (independent LLM review #1, finding 15): split `cli.py` (about 1,300 lines)
   by command group; the adjudication and judge tooling (`adjudicate.py`,
   `judge.py`, `ref_bounds.py`) is large for evaluation code and could share
   one span model. Not before the T6 run (frozen paths are not touched, and
   these are not frozen but the run uses them).
-- One topic (external audit #1, finding 5): T1, T2 and T6 are all about
+- One topic (independent LLM review #1, finding 5): T1, T2 and T6 are all about
   AI-assisted software development. T3 is chosen from a new domain after the
   T6 run, to measure transfer the T6 result cannot show.
 - ~~AssemblyAI key-term limit~~ Fixed 2026-11-11 in `pipeline-v3`

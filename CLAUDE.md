@@ -166,8 +166,8 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 |---|---|---|
 | 0 | Foundation: repository, data format, audio cut, test set | — |
 | 1 | STT selection | WER ≤ 15% on the accented fragment (T2) |
-| 2 | Claude correction + translation | term accuracy ≥ 85%; blind translation score ≥ 4/5; hold-out T6 run once; external audit |
-| 3 | CLI tool with subtitles | external audit before v1.0 |
+| 2 | Claude correction + translation | term accuracy ≥ 85%; blind translation score ≥ 4/5; hold-out T6 run once; independent LLM review |
+| 3 | CLI tool with subtitles | independent LLM review before v1.0 |
 | 4 | Dubbing | — |
 
 Prompts and the engine freeze after a gate. New ideas go to the Backlog in
@@ -193,9 +193,9 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   decisions), Gemini + forced alignment and faster-whisper as fallbacks;
   baselines measured. Still open from the plan: prior-art survey, T3–T5.
 - **Stage 2 (gate passed 2026-11-11):** correction and translation prompts, measured and frozen; hold-out
-  and external audit at the gate. C1: v2 preferred to v1 (blind pairwise 4.40 / 4.67); absolute target
-  not demonstrated (3.85 < 4.0); re-tested on T6. B2 v2 checked. External audit #1 done 2026-11-11
-  (`docs/audit-2026-11-11.md`); its fixes refroze the pipeline as git tag **`pipeline-v3`** (d180a73;
+  and independent LLM review at the gate. C1: v2 preferred to v1 (blind pairwise 4.40 / 4.67); absolute target
+  not demonstrated (3.85 < 4.0); re-tested on T6. B2 v2 checked. Independent LLM review #1 done 2026-11-11
+  (`docs/review-2026-11-11.md`); its fixes refroze the pipeline as git tag **`pipeline-v3`** (d180a73;
   `docs/experiments.md`, Freeze pipeline-v3): AssemblyAI two passes, glossary-auto-v2, correction-v2, sentence
   units, translation-v2.1, cache key with a code hash, key-term truncation, term accuracy v2 (in place,
   possessives, macro, without the top term, precision); a change to a frozen path needs a new tag and a new
@@ -210,7 +210,7 @@ for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
   translation-v3 stays an option.
 - **Stage 3 (current):** v1.0 per the specification's checklist (`docs/experiments.md`, v1.0 checklist):
   baselines on one set (T2, T6: raw Whisper, Whisper + Google Translate, VideoLingo) and the owner's
-  three-system rating, Windows launcher for the owner, re-run from cache within a minute, external audit #2,
+  three-system rating, Windows launcher for the owner, re-run from cache within a minute, independent LLM review #2,
   tag `v1.0`. The web UI stays v1.1.
 - **Stage 4:** dubbed audio track.
 - **v1.1:** local web UI over the same core.

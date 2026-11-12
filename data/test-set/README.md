@@ -14,6 +14,15 @@ fragments, so results stay comparable from one experiment to the next.
 | T5 | university lecture | slow pace, long sentences | TBD | TBD | TBD |
 | T6 | workshop with live demo (hold-out, run once) | non-native speaker | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | AI-assisted software development | 51 (drafted by Gemini from the reference; tracked since the run) |
 
+## Sources
+
+The fragments are cut from public talks, lectures and interviews. By the
+owner's decision of 2026-11-12 the sources are named openly, with links and
+the cut points, so that the benchmark can be rebuilt from the same audio; the
+list is added in a separate commit once the owner has checked it. Speakers
+are described only as native or non-native speakers. The media and the
+reference transcripts are not published.
+
 ## What each fragment tests
 
 - **T1:** the baseline case: clear speech, technical vocabulary and a live demo
@@ -35,7 +44,9 @@ fragments, so results stay comparable from one experiment to the next.
   it. After the `pipeline-v2` freeze three engines transcribed it to build the
   reference, a blind Gemini audio judge decided the disputed spans, and Gemini
   extracted the glossary; **no human has checked the reference** (no fluent
-  listener available). No prompt or setting was tuned on it. It ran once, with `pipeline-v3`,
+  listener available). No prompt or setting was tuned on it; the prompts'
+  examples were only checked by code not to occur in any test-set glossary or
+  reference, T6's included. It ran once, with `pipeline-v3`,
   on 2026-11-11 (`docs/experiments.md`, T6 protocol and T6 result).
 
 T3–T5 are not chosen yet; they will be selected deliberately to cover the cases

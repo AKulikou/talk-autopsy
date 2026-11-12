@@ -182,7 +182,7 @@ def test_a_fix_that_only_corrects_has_no_false_edits():
 
 
 def test_invented_insertions_are_false_edits():
-    # The auditor's probe: v1 scored a correction that only inserts invented words as 0.
+    # The reviewer's probe: v1 scored a correction that only inserts invented words as 0.
     ref = tokenize("we run the agent")
     raw = list(ref)
     fixed = tokenize("we run the shiny new agent")

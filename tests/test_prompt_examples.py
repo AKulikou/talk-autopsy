@@ -1,5 +1,5 @@
 """
-The frozen prompts carry no example taken from the test set (external audit #1,
+The frozen prompts carry no example taken from the test set (independent LLM review #1,
 finding 5; 2026-11-11). Every backticked or double-quoted item of a frozen prompt
 is an example unless it is a field name or a generic discourse marker listed
 below; no example may occur in a test-set glossary, and, where the references are
@@ -87,7 +87,7 @@ def test_no_prompt_example_occurs_in_a_local_reference(version):
 
 
 def test_the_old_prompts_fail_the_check():
-    # The check would have caught the prompts the audit found.
+    # The check would have caught the prompts the review found.
     terms = [t for terms in _glossary_terms().values() for t in terms]
     old = [e for e in prompt_examples("glossary-auto-v1") if any(_occurs(e, t) for t in terms)]
     assert {"Shift+Enter", "GitHub", "tmux"} <= set(old)

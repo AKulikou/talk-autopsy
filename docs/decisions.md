@@ -6,6 +6,27 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-12 — Test-set sources named; speakers described only as native or non-native
+
+Context: independent LLM review #2 (2026-11-12) found an accent label still in
+a tracked file and asked how a reader could reproduce the benchmark without
+knowing what was measured.
+
+Decision (owner): the test-set sources are **named openly**: title, speaker,
+event or channel, link and the cut used, in `data/test-set/README.md`, after
+the owner has checked the proposed list. **No accent or nationality labels**
+for any speaker, anywhere: only "native" or "non-native speaker". Transcripts
+stay unpublished.
+
+Why: the talks are public, and a benchmark that names its audio can be
+rebuilt; an accent label adds nothing the measurement needs and singles a
+person out.
+
+What it rules out: publishing the reference transcripts or the media;
+describing a speaker by accent or nationality. Supersedes the 2026-11-08
+entry "what from the test set is published" (no titles, speakers, channels or
+links) and the generic description "strong non-native accent" of 2026-11-11.
+
 ## 2026-11-12 — C1 against Google Translate: accepted as a finding
 
 Context: the owner's blind rating on 12 T6 units gave the pipeline 4.42 and
@@ -43,14 +64,14 @@ Context: the hold-out T6 ran once on `pipeline-v3` (term accuracy v2 100%
 against both references, lower bound 91.67%, "pass (not demonstrated)", no
 overfitting signal), and the owner rated the pre-registered translation check
 blind (pipeline 4.42, plain Gemini 4.33, difference +0.08 with a bootstrap
-interval of −0.33 … +0.50; rule pipeline mean >= 4.0 met). External audit #1
+interval of −0.33 … +0.50; rule pipeline mean >= 4.0 met). Independent LLM review #1
 was done the same day (experiments, Gate 2 -> 3).
 
 Decision (owner): **gate 2 -> 3 is passed.** Stage 3 finishes v1.0 as the
 specification lists it: the baselines (raw Whisper, Whisper + Google
 Translate, VideoLingo) on one set, T2 and T6; re-run from cache within a
 minute; README in the series structure with honest limitations; external
-audit #2; tag `v1.0`. Until a web UI exists the owner starts the tool with a
+review #2; tag `v1.0`. Until a web UI exists the owner starts the tool with a
 Windows launcher. The web UI stays v1.1. `pipeline-v3` stays frozen;
 correction stays on the main path until T3 (Backlog).
 
@@ -63,7 +84,7 @@ claiming better translation than a plain LLM translation.
 
 ## 2026-11-11 — Speaker details out of tracked files; history rewritten before going public
 
-Context: external audit #1 (finding 13) found the speakers of the test-set and
+Context: independent LLM review #1 (finding 13) found the speakers of the test-set and
 operational videos identifiable from tracked files: names, a job title,
 accent labels next to product names, a course code.
 
@@ -79,9 +100,9 @@ depends on.
 
 What it rules out: making the repository public with its current history.
 
-## 2026-11-11 — pipeline-v3 refrozen after external audit #1; T6 runs on it
+## 2026-11-11 — pipeline-v3 refrozen after independent LLM review #1; T6 runs on it
 
-Context: the audit found prompt examples taken from the test set, a lenient
+Context: the review found prompt examples taken from the test set, a lenient
 term-accuracy metric, no interpretation rule for T6, a cache that a
 validator fix did not invalidate, and a key-term limit that raised an error.
 
@@ -91,7 +112,7 @@ pipeline refrozen as tag `pipeline-v3` (d180a73): `glossary-auto-v2` and
 key-term truncation, term accuracy v2. The T6 protocol (rule, intervals,
 overfitting signal, scope, translation check) was written before the run
 (experiments, T6 protocol). The human check of the T6 reference that the
-audit asked for is not possible (no fluent listener; owner's decision); it is
+review asked for is not possible (no fluent listener; owner's decision); it is
 recorded as a limitation.
 
 What it rules out: running T6 on `pipeline-v2`; any change to a frozen path of
@@ -186,7 +207,7 @@ calibration) and applied in code by one deterministic function,
 comparison and to the judged spans when a reference is built from a judged
 file. The existing T2 judge output was rescored with no new requests and the
 threshold unchanged. **This is a post-hoc methodology change, made after
-seeing the result; the external audit will see it.** Both results are
+seeing the result; the independent LLM review will see it.** Both results are
 published side by side (experiments, Post-hoc rescoring): 79.0% before,
 82.5% after (owner's 19 by ear: 14), WER 1.17%. The rule still fails, so the
 judge is not accepted for T6 and T6 is not judged.
@@ -391,11 +412,11 @@ the naive chain would prove little; the comparison that matters is against what
 a viewer could already use. *(Out of v1.0 scope since 2026-11-11: see that
 entry above.)*
 
-## 2026-11-08 — sealed hold-out, external audit, prior-art survey first
+## 2026-11-08 — sealed hold-out, independent LLM review, prior-art survey first
 
 T6 is sealed: not listened to, not transcribed for prompt work, run once at the
 stage 2 gate with frozen prompts, so the gate numbers are not tuned to the test
-set. An external audit reviews the method and results at the gate from stage 2 to
+set. An independent LLM review reviews the method and results at the gate from stage 2 to
 3 and again before v1.0. Before any stage is built, a survey of prior art
 (VideoLingo, pyvideotrans and others) settles what already exists, so the project
 does not rebuild a solved part and claims only what it adds.
@@ -404,7 +425,7 @@ does not rebuild a solved part and claims only what it adds.
 
 A stage is done when its gate passes: WER ≤ 15% on the accented fragment for
 speech recognition; term accuracy ≥ 85%, a blind translation score ≥ 4/5, the
-hold-out run and an external audit for correction and translation. Limits are set
+hold-out run and an independent LLM review for correction and translation. Limits are set
 in advance: at most 3 runs per hypothesis; stage 1 at most 10 test-set runs and
 $5; stage 2 at most 10 correction-prompt versions, 5 translation-prompt versions
 and $20; a cost estimate before every full-video run and the owner's confirmation

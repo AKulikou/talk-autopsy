@@ -1,4 +1,4 @@
-"""AssemblyAI key terms within the service limit: 1,000 words, user terms first (audit #1, finding 14)."""
+"""AssemblyAI key terms within the service limit: 1,000 words, user terms first (review #1, finding 14)."""
 
 import logging
 

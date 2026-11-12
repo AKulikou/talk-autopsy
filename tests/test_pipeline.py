@@ -311,7 +311,7 @@ def test_translate_command_stops_above_the_cost_limit(tmp_path, fake_claude):
     assert fake.requests == []
 
 
-# --- cache key: prompt and validator code (audit #1, finding 14) ----------------------
+# --- cache key: prompt and validator code (review #1, finding 14) ----------------------
 
 
 def test_a_changed_validator_or_prompt_reruns_the_claude_steps(setup, fake_claude, monkeypatch):

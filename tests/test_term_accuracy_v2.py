@@ -1,7 +1,7 @@
 """
 Term accuracy v2 (position-aware, possessives, precision, macro, without the top
-term), the Wilson interval and the T6 verdict. The first tests are the external
-audit's probes (2026-11-11), kept as regression tests.
+term), the Wilson interval and the T6 verdict. The first tests are the independent
+review's probes (2026-11-11), kept as regression tests.
 """
 
 import pytest
@@ -9,7 +9,7 @@ import pytest
 from talk_autopsy import metrics
 from talk_autopsy.metrics import term_accuracy_v1, term_accuracy_v2
 
-# --- the audit's probes ----------------------------------------------------------------
+# --- the review's probes ----------------------------------------------------------------
 
 
 def test_a_term_missed_in_place_but_written_elsewhere_is_not_a_hit():
