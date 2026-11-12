@@ -15,6 +15,9 @@ The field is crowded: VideoLingo, pyvideotrans and other tools already chain
 speech recognition, an LLM and subtitles. This project's contribution is meant
 to be measurement: each stage scored on fixed fragments, with a sealed hold-out
 and an external audit. What is measured so far, and what is not, is listed below.
+VideoLingo, the closest of these tools, is not compared here: it is out of v1.0
+scope (its installer was blocked by the permission filter and not bypassed; its
+default recogniser is now Qwen3-ASR).
 
 ## How it is tested
 
@@ -35,7 +38,8 @@ and an external audit. What is measured so far, and what is not, is listed below
 - **Baselines:** raw speech recognition (faster-whisper large-v3, AssemblyAI,
   Gemini) on the same fragments; a plain Gemini translation in the T6
   translation check; Whisper + Google Translate on T2 and T6, its translation
-  rated on T6; VideoLingo: attempted, not run (see the comparison table below).
+  rated on T6. VideoLingo: not run, out of v1.0 scope (see below the comparison
+  table).
 - **Metrics** (definitions in one place: [Metrics](docs/experiments.md#metrics)):
 
   | Metric | What it measures |
@@ -313,14 +317,18 @@ with a paired bootstrap 95% interval).
 | raw Whisper (faster-whisper large-v3) | 61.7% | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | — (no translation) |
 | Whisper + Google Translate | 61.7% (raw Whisper's transcript) | 6.19% | 87.5% / 88.7% | 8.01% / 5.97% | 4.42 (pipeline +0.00, −0.42 … +0.42) |
 | Gemini translation (plain prompt, of Talk Autopsy's corrected English) | as Talk Autopsy | | as Talk Autopsy | | 4.33 (pipeline +0.08, −0.33 … +0.50) |
-| VideoLingo | attempted, not run | | attempted, not run | | *pending* |
+| VideoLingo | not run, out of v1.0 scope | | not run, out of v1.0 scope | | not run, out of v1.0 scope |
 <!-- baselines-table:end -->
 
 Raw Whisper's numbers are biased in its favour: it was one of the three engines
 that built both references. Whisper + Google Translate uses the same raw Whisper
 transcript, so its English side is the same; only its translation differs.
-VideoLingo (now Qwen3-ASR by default) could not be installed in this session:
-the session's permission policy refused running its downloaded installer.
+VideoLingo is **out of v1.0 scope** (owner's decision 2026-11-11; the
+specification's Definition of Done amended): running its downloaded installer
+was blocked by the session's permission filter and the project chose not to
+bypass it; it has also switched its default recogniser to Qwen3-ASR. The v1.0
+comparison is the pipeline against raw Whisper, Whisper + Google Translate and
+a plain Gemini translation.
 
 **Translation.** On T6, 12 random sentence units (at least 6 words each) were
 translated by the pipeline and, as a baseline, by Gemini (`gemini-4-carbon`,
@@ -378,8 +386,8 @@ external audit #1 is done ([findings and responses](docs/audit-2026-11-11.md)).
 `pipeline-v3` stays frozen.
 
 **Next** (the specification's [v1.0 checklist](docs/experiments.md#v10-checklist)):
-VideoLingo on the baseline set (T2 and T6; Google Translate is done),
-external audit #2, tag `v1.0`. Then T3 on a new domain.
+external audit #2, tag `v1.0` (the baselines on T2 and T6 are done;
+VideoLingo is out of v1.0 scope). Then T3 on a new domain.
 
 | Stage | Content | Gate |
 |---|---|---|
@@ -417,7 +425,9 @@ language measured; the code takes any language as a parameter.
 - **Correction adds little** on the main path (0 edits in four T1/T2 runs, 1
   on T6) at about 0.39 USD per hour; its value is shown on fallback-engine
   input.
-- **Baselines incomplete:** VideoLingo was not run.
+- **No comparison with VideoLingo**, the closest open-source tool: not run,
+  out of v1.0 scope (installer blocked by the permission filter, not bypassed;
+  its default recogniser is now Qwen3-ASR).
 - **Reading speed** is above the usual guideline on fast speakers; nothing is cut.
 - **Timing** of subtitles is not validated against hand-labelled onsets.
 - **Next-video failure modes** not handled: several speakers (no
@@ -426,10 +436,11 @@ language measured; the code takes any language as a parameter.
 
 ## Not done
 
-- VideoLingo run and the owner's rating of its translations.
+- VideoLingo: not run, out of v1.0 scope (its installer was blocked by the
+  permission filter and not bypassed; its default recogniser is now Qwen3-ASR).
 - Fragments T3–T5 (no fragment from another domain); hypotheses A5, B3,
-  C2–C5; the specification's C1 against VideoLingo (against Google Translate:
-  rated, not met).
+  C2–C5. The specification's C1 against Google Translate was rated and not met;
+  its VideoLingo part is out of v1.0 scope.
 - Timing drift and term accuracy of the translation (metrics not implemented).
 - A human check of the T6 reference (no fluent listener available).
 - Dubbing (stage 4; a stub) and the web UI (v1.1).

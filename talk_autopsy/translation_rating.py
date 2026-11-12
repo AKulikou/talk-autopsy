@@ -363,7 +363,8 @@ def result_markdown(result: BaselineResult, date: str) -> str:
                  f"{C1_GT_MARGIN:.0f} point above Google Translate): difference {_f(gt_diff)} "
                  f"({_interval(gt_interval)}): "
                  f"**{'met' if result.c1_google_met else 'not met'}** (12 units on T6, not 20 fragments; "
-                 "Google Translate rated on another day). The VideoLingo part stays not run.")
+                 "Google Translate rated on another day). The VideoLingo part: not run, out of "
+                 "v1.0 scope.")
     lines.append("- Google Translate translates raw Whisper; the owner saw the corrected English above "
                  "it, so recognition errors count against it. Pipeline and Gemini scores are the "
                  "first rating's.")

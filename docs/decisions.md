@@ -6,6 +6,37 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-12 — C1 against Google Translate: accepted as a finding
+
+Context: the owner's blind rating on 12 T6 units gave the pipeline 4.42 and
+Whisper + Google Translate 4.42 (difference 0.00, bootstrap interval −0.42 …
++0.42; anchor drift 0); the specification's C1 asks for at least 1 point
+(experiments, Translation rating).
+
+Decision (owner): **accepted as a finding: not confirmed.** No translation
+changes before v1.0; the translation-v4 idea stays in the Backlog.
+
+Why: on random sentences the systems rate equal; the measured difference is
+term recognition on accented speech, which v1.0 claims.
+
+What it rules out: a new translation prompt version, or claiming better
+translation than Google Translate, before v1.0.
+
+## 2026-11-11 — VideoLingo out of v1.0 scope
+
+Decision (owner): VideoLingo is removed from the v1.0 comparison and the
+specification's Definition of Done is amended. The v1.0 comparison is the
+pipeline against raw Whisper, Whisper + Google Translate and a plain Gemini
+translation, on T2 and T6.
+
+Why: running VideoLingo's downloaded installer was blocked by the session's
+permission filter, and the project chose not to bypass it; VideoLingo has also
+switched its default recogniser to Qwen3-ASR.
+
+What it rules out: a VideoLingo row with numbers in v1.0; it is reported as
+"not run, out of v1.0 scope". Supersedes the VideoLingo part of the
+2026-11-08 baseline entry and of the gate 2 -> 3 entry below.
+
 ## 2026-11-11 — Gate 2 -> 3 passed; v1.0 per the specification first, web UI stays v1.1
 
 Context: the hold-out T6 ran once on `pipeline-v3` (term accuracy v2 100%
@@ -356,7 +387,8 @@ VideoLingo is the closest open-source tool to this pipeline (speech recognition,
 LLM correction and translation, subtitles, dubbing), so it is a baseline on the
 same fragments, next to raw Whisper and Whisper + Google Translate. Beating only
 the naive chain would prove little; the comparison that matters is against what
-a viewer could already use.
+a viewer could already use. *(Out of v1.0 scope since 2026-11-11: see that
+entry above.)*
 
 ## 2026-11-08 — sealed hold-out, external audit, prior-art survey first
 

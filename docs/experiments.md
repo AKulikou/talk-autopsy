@@ -115,7 +115,7 @@ carries the weight (T1's reference was decided by a Claude model).
 | B3 | recognition alternatives or word confidence: at least +3 points term accuracy | | not run | |
 | B4 | Sonnet enough: term-accuracy difference to Opus under 2 points | T2 Gemini+align input: Opus 100% vs Sonnet 96.3% (gap 3.7 points, v1) | not met (gap 3.7 > 2) | Sonnet kept for cost (0.060 vs 0.129 USD per fragment) |
 | B5 | auto-glossary covers at least 70% of the hand glossary | T2 74.4% / 79.5%; T1 56.8% / 62.2% (two runs each) | met on T2, not met on T1 | auto-glossary adopted as the pipeline's glossary step (an unseen video has no hand glossary) |
-| C1 | Claude's blind mean at least 1 point above Google Translate and not below VideoLingo; 20 random fragments, three systems mixed | **Against Google Translate** (2026-11-12, pre-registered, 12 T6 units instead of 20 fragments, blind, single-rated; Google Translate items rated on another day, anchor drift 0.00): pipeline 4.42, Whisper + Google Translate 4.42, difference 0.00 [−0.42, +0.42] ([result](#translation-rating-pre-registered-2026-11-11-before-any-google-translate-or-rater-call)). VideoLingo not run. Earlier: translation-v1 rated 3.85 alone (not blind); v1 against v2 blind-pairwise (not fully blind), v1 4.40, v2 4.67; **C1 on T6** against a plain Gemini translation: pipeline 4.42, Gemini 4.33, difference +0.08 [−0.33, +0.50] | **not met** against Google Translate (difference 0.00 < 1.0); VideoLingo part not run; the pre-registered C1 on T6 (pipeline mean >= 4.0) met | gate 2 -> 3 had passed on C1 on T6 (2026-11-11, before this rating); no decision on this result yet (owner) |
+| C1 | Claude's blind mean at least 1 point above Google Translate and not below VideoLingo; 20 random fragments, three systems mixed | **Against Google Translate** (2026-11-12, pre-registered, 12 T6 units instead of 20 fragments, blind, single-rated; Google Translate items rated on another day, anchor drift 0.00): pipeline 4.42, Whisper + Google Translate 4.42, difference 0.00 [−0.42, +0.42] ([result](#translation-rating-pre-registered-2026-11-11-before-any-google-translate-or-rater-call)). VideoLingo: not run, out of v1.0 scope (owner, 2026-11-11; [why](#baselines-on-one-set-t2-and-t6)). Earlier: translation-v1 rated 3.85 alone (not blind); v1 against v2 blind-pairwise (not fully blind), v1 4.40, v2 4.67; **C1 on T6** against a plain Gemini translation: pipeline 4.42, Gemini 4.33, difference +0.08 [−0.33, +0.50] | **not met** against Google Translate (difference 0.00 < 1.0); VideoLingo part not run (out of v1.0 scope); the pre-registered C1 on T6 (pipeline mean >= 4.0) met | Accepted as a finding (2026-11-12): not confirmed; no translation changes before v1.0; translation-v4 idea stays in Backlog (decisions). Gate 2 -> 3 had passed on C1 on T6 (2026-11-11, before this rating) |
 | C2 | one translation per glossary term across the video (20 key terms) | | not run | |
 | C3 | no lost or repeated phrases at 10 block boundaries, with and without overlap | | not run | |
 | C4 | the style instruction preferred in 2 of 3 cases, blind | | not run | |
@@ -139,7 +139,7 @@ The specification's list for v1.0 (stage 3), with the state of each item.
 | Item | State |
 |---|---|
 | the owner watched two full videos and uses the tool | done (owner) |
-| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and VideoLingo on one set | in progress ([Baselines on one set](#baselines-on-one-set-t2-and-t6)): Google Translate run 2026-11-11 and rated by the owner 2026-11-12 (4.42, equal to the pipeline); VideoLingo not run |
+| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and a plain Gemini translation on one set (amended 2026-11-11, owner: VideoLingo out of v1.0 scope) | [Baselines on one set](#baselines-on-one-set-t2-and-t6): all four measured on T2 and T6; Google Translate run 2026-11-11 and rated by the owner 2026-11-12 (4.42, equal to the pipeline). VideoLingo: not run, out of v1.0 scope (its installer was blocked by the permission filter and not bypassed; its default recogniser is now Qwen3-ASR) |
 | CI green; README in the series structure; honest Known limitations | in progress |
 | re-run from cache within a minute | **met**: 6.7–8.9 s wall time on T2 (three re-runs, below) |
 | external audit #2 | not done |
@@ -160,19 +160,23 @@ launcher re-run with the TV file takes minutes, not seconds (Backlog).
 ## Baselines on one set (T2 and T6)
 
 The specification's comparison for v1.0: Talk Autopsy (`pipeline-v3`) against raw Whisper,
-Whisper + Google Translate and VideoLingo on one set. The set is **T2 and T6**: both have
+Whisper + Google Translate and a plain Gemini translation on one set. **VideoLingo is out of v1.0
+scope** (owner's decision 2026-11-11; the specification's Definition of Done amended): running its
+downloaded installer was blocked by the session's permission filter and the project chose not to
+bypass it; it had also switched its default recogniser from WhisperX to Qwen3-ASR since the
+specification was written. The attempt is recorded below. The set is **T2 and T6**: both have
 references, and T6 is no longer sealed after its single run. The same metrics everywhere (Metrics
 above): term accuracy v2 (micro, macro, without the top term, precision) and WER of the English;
 on T6 against reference J, with reference M as the range. The translations are compared by the
 owner's blind rating on 12 T6 units ([Translation rating](#translation-rating-pre-registered-2026-11-11-before-any-google-translate-or-rater-call),
-rated 2026-11-12): pipeline 4.42, Whisper + Google Translate 4.42, plain Gemini 4.33. VideoLingo not run.
+rated 2026-11-12): pipeline 4.42, Whisper + Google Translate 4.42, plain Gemini 4.33.
 
 | English side | T2 term accuracy v2 | T2 WER | T6 term accuracy v2, J / M | T6 WER, J / M |
 |---|---|---|---|---|
 | Talk Autopsy `pipeline-v3` | 94.39–96.26% (3 repeats, mean 95.33%) | 4.24–4.48% | 100.00% / 100.00% (one run) | 4.70% / 2.89% |
 | raw Whisper (faster-whisper large-v3, no glossary) | 61.68% | 6.19% | 87.50% / 88.73% | 8.01% / 5.97% |
 | Whisper + Google Translate (run 2026-11-11) | 61.68% (raw Whisper's transcript) | 6.19% | 87.50% / 88.73% | 8.01% / 5.97% |
-| VideoLingo (commit 61d944a, defaults, Claude Sonnet 5.5) | attempted, not run | | attempted, not run | |
+| VideoLingo (commit 61d944a, defaults, Claude Sonnet 5.5) | not run, out of v1.0 scope | | not run, out of v1.0 scope | |
 
 **Raw Whisper (2026-11-11, no new run).** T2: the existing row (A1 (setup), re-scored with v2).
 T6: the faster-whisper transcript made for the reference consensus
@@ -223,7 +227,9 @@ outside the project, "Code from External"), before any package was installed. Th
 decision for the owner, not a technical failure, so it was not retried or worked around; the second
 attempt is left to the owner (below). No API key was written to any file; LLM cost 0 USD.
 
-To run it: either the owner allows this session type to run the VideoLingo installer, or runs it
+**Out of v1.0 scope (owner's decision 2026-11-11).** The installer was not retried and the
+permission filter was not bypassed; its default recogniser is now Qwen3-ASR. The notes below are
+kept for a later version. To run it: either the owner allows this session type to run the VideoLingo installer, or runs it
 once by hand (`cd C:\Projects\videolingo-baseline\VideoLingo; uv run start.py --api`) and a later
 session drives the API on `data/test-set/T2.wav` and `T6.wav`; estimate for two 10-minute fragments
 with Sonnet 5.5: under 1 USD (its summary, term extraction, meaning split, two-step translation and
@@ -310,7 +316,7 @@ rater); `judge.GeminiCaller` got an optional `temperature` (default unchanged).
 | Whisper + Google Translate | **4.42** | 6 / 5 / 1 / 0 / 0 | +0.00 (−0.42 … +0.42) |
 
 - **Drift** on the 4 anchors (first-file item: old -> new score; item 1: 5 -> 5; item 5: 5 -> 5; item 9: 5 -> 5; item 22: 4 -> 4): mean absolute difference **0.00**, signed +0.00; below 1.0, so the two days are comparable by the rule.
-- **Specification C1, Google Translate part** (pipeline mean at least 1 point above Google Translate): difference +0.00 (−0.42 … +0.42): **not met** (12 units on T6, not 20 fragments; Google Translate rated on another day). The VideoLingo part stays not run.
+- **Specification C1, Google Translate part** (pipeline mean at least 1 point above Google Translate): difference +0.00 (−0.42 … +0.42): **not met** (12 units on T6, not 20 fragments; Google Translate rated on another day). The VideoLingo part: not run, out of v1.0 scope.
 - Google Translate translates raw Whisper; the owner saw the corrected English above it, so recognition errors count against it. Pipeline and Gemini scores are the first rating's.
 
 **Gemini as a second rater** (`gemini-rater-v1`, informational; no rule uses it):
