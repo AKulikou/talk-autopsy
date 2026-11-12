@@ -121,6 +121,7 @@ class ReplayRunner(JobRunner):
 
     def __init__(self, recording: Recording, speed: float = 1.0, root: Path | None = None,
                  make_video: bool = True, sleep=time.sleep, **kwargs):
+        self.owns_root = root is None  # a temporary folder of its own is removed by close()
         self.root = Path(root or tempfile.mkdtemp(prefix="talk-autopsy-replay-"))
         super().__init__(core=ReplayCore(recording, self.root), history_file=self.root / "time-history.json",
                          **kwargs)
@@ -128,6 +129,11 @@ class ReplayRunner(JobRunner):
         self.speed = max(0.0, float(speed))
         self.make_video = make_video
         self.sleep = sleep
+
+    def close(self) -> None:
+        """Remove the temporary demo folder (when the server stops)."""
+        if self.owns_root:
+            shutil.rmtree(self.root, ignore_errors=True)
 
     def start(self, request: JobRequest) -> Job:
         if not self._busy.acquire(blocking=False):

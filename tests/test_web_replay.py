@@ -157,3 +157,13 @@ def test_old_recordings_are_pruned(tmp_path, monkeypatch):
     job.start_recording(folder, {"summary": {}})
     job.add("notice", code="x", text="y")
     assert len(list(folder.glob("*.jsonl"))) == 3
+
+
+def test_a_replay_removes_only_its_own_temporary_folder(tmp_path):
+    own = replay.ReplayRunner(replay.load(FINISHED), speed=0, make_video=False)
+    assert own.root.is_dir()
+    own.close()
+    assert not own.root.exists()
+    given = replay.ReplayRunner(replay.load(FINISHED), speed=0, root=tmp_path, make_video=False)
+    given.close()
+    assert tmp_path.is_dir()

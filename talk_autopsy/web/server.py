@@ -145,6 +145,9 @@ def serve(port: int | None = None, open_browser: bool = True, echo: Callable[[st
         server.run(sockets=[sock])
     finally:
         sock.close()
+        close = getattr(runner, "close", None)
+        if close is not None:  # a replay removes its temporary demo folder
+            close()
         if runner.active_id is not None:
             echo("A video was still being processed and has stopped. Finished steps are kept: "
                  "start it again and it continues from them.")
