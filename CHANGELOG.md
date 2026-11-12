@@ -1,71 +1,78 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — DATE-TBD (set when the `v1.1` tag is created)
 
-**Web UI preview (v1.1, session 1 of 3)**
+A local web page over the same core, on the frozen pipeline (`pipeline-v3.2`:
+model requests and outputs identical to `pipeline-v3`, so 1.0's measured
+numbers carry over without re-runs).
 
-- `talk-autopsy web`: a local page (127.0.0.1 only) that runs one video end to
-  end: a YouTube link or a file on this computer (native file dialog), output
-  profile (TV, laptop, everything), Web3 glossary, target language; cost and
-  time estimate first, an explicit confirmation above 3 USD per video; steps,
-  running cost and the text of each finished step as Server-Sent Events; the
-  produced files and "Open folder" at the end. Interface in Lithuanian, Russian
-  and English. Design and security model: `docs/web.md`.
-- Time estimate from this machine's own history (user cache directory), with
-  measured built-in values on a first run; it never blocks a run.
-- `doctor` reports whether the web UI can start; `fastapi` and `uvicorn` are
-  regular dependencies.
-- Not yet: the side-by-side live view, an in-browser player, a desktop shortcut
-  for the page, playlists in the page, cancelling a run.
+**Web UI**
 
-**Progress events (`pipeline-v3.1`, session 2)**
-
-- The pipeline's events carry numbers (estimates, cost, seconds and tokens of
-  each step) and, for every finished correction or translation block, its
-  text. Observability only: golden tests show the model requests and outputs
-  are byte-identical to `pipeline-v3`; a failing progress display never stops
-  a run.
-- Real positions for the YouTube download (bytes) and the burn-in (seconds of
-  video encoded).
-
-**Web UI (v1.1, session 2 of 3)**
-
-- The waiting screen shows the text as it becomes ready, in two aligned
-  columns: English (the recognised text, then each correction block's changes
-  in place: removed words struck through, added words underlined) and the
-  translation, filled block by block. It follows the newest text until you
-  scroll up ("jump to the latest text" brings it back), keeps at most one
-  window of rows in the page (an hour-long talk stays smooth), and a reload
-  rebuilds it. Tokens per step are shown.
+- `talk-autopsy web` (desktop shortcut "Talk Autopsy" on Windows): a page on
+  this computer only (127.0.0.1) that runs one video end to end: a YouTube
+  link or a file on this computer (native file dialog), output profile (TV,
+  laptop, everything), Web3 glossary, target language. Interface in English,
+  Russian and Lithuanian. Design and security model: `docs/web.md`.
+- Cost and time estimate before anything is spent, and an explicit
+  confirmation above 3 USD per video. The time estimate comes from this
+  machine's own history, with measured built-in values on a first run; it
+  never blocks a run.
+- The waiting screen shows the steps (with a real position where the core
+  reports one: download bytes, correction and translation blocks, burn-in
+  seconds; elsewhere a spinner and the elapsed time), the running cost and
+  tokens, and the text as it becomes ready, in two aligned columns: English
+  (the recognised text, then each correction block's changes in place:
+  removed words struck through, added words underlined) and the translation,
+  filled block by block. It follows the newest text until you scroll up
+  ("jump to the latest text" brings it back), keeps at most one window of rows
+  in the page, and a reload rebuilds it.
 - In-browser player on the Done screen: the video without burned-in
   subtitles when there is one, with the target-language and English subtitles
   as switchable tracks; audio-only inputs get an audio player with the text
-  beside it.
-- The start page lists recent results with "Watch" and "Open folder".
+  beside it. The start page lists recent results with "Watch" and "Open
+  folder".
 - Desktop shortcuts: "Talk Autopsy" starts the page (closing its window stops
   it; a second start opens the running page), "Talk Autopsy (console)" keeps
   the console launcher for playlists.
 - Every job's events are recorded locally; `talk-autopsy web --replay <file>`
   plays a recording back with no pipeline, network or cost (synthetic
   recordings in `tests/fixtures/replay/`).
-- An unexpected error is named in the interface language; harmless "connection
-  reset" tracebacks no longer appear in the console; page assets are
-  revalidated after an update.
+- `doctor` reports whether the web UI can start; `fastapi` and `uvicorn` are
+  regular dependencies.
 
-**Cleanup and one cost limit (v1.1, session 3 of 4)**
+**Changed**
 
-- **Changed: one per-video cost limit.** `run --max-cost` (default 3 USD) is
-  now compared with the whole estimate, Claude plus speech recognition, as the
-  web page already did; before, the CLI compared the Claude part only. A video
-  of about 2.3 to 3.7 hours, which passed before, now stops before any work
-  (and before the download) unless `--max-cost` is raised. Playlists apply the
-  same per-video limit. One function (`youtube.over_video_limit`) serves the
-  CLI and the page.
+- **One per-video cost limit.** `run --max-cost` (default 3 USD) is now
+  compared with the whole estimate, Claude plus speech recognition, as the web
+  page does; before, the CLI compared the Claude part only. A video of about
+  2.3 to 3.7 hours, which passed before, now stops before any work (and before
+  the download) unless `--max-cost` is raised. Playlists apply the same
+  per-video limit. One function (`youtube.over_video_limit`) serves the CLI
+  and the page.
+
+**Pipeline (observability and cleanup only)**
+
+- `pipeline-v3.1`: the pipeline's events carry numbers (estimates, cost,
+  seconds and tokens of each step) and, for every finished correction or
+  translation block, its text. Golden tests show the model requests and
+  outputs are byte-identical to `pipeline-v3`; a failing progress display
+  never stops a run. Real positions for the YouTube download (bytes) and the
+  burn-in (seconds of video encoded).
+- `pipeline-v3.2`: the unused `edge-tts` dependency and the `ingest.download`
+  stub removed; cache keys, model requests and outputs unchanged.
+  `metrics.timing_drift` stays: removing it would invalidate cached runs.
+
+**Code**
+
 - `cli.py` split into the package `talk_autopsy/cli/` (one module per command
   group); help, dry-run and doctor output unchanged, checked by snapshot tests.
-- The unused `edge-tts` dependency and the `ingest.download` stub removed (tag
-  `pipeline-v3.2`: cache keys, model requests and outputs unchanged).
-  `metrics.timing_drift` stays: removing it would invalidate cached runs.
+
+**Not in 1.1**
+
+- A stop button (the core has no cooperative cancellation); playlists in the
+  page (they stay with the CLI and the console launcher).
+- Measured quality for target languages other than Russian.
+- Voice-over / dubbed audio (stage 4).
 
 ## 1.0.0 — 2026-11-12
 

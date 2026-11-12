@@ -6,6 +6,20 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-12 — Version 1.1.0 under the cache-key rule
+
+Decision: the package version moves 1.0.0 → 1.1.0 in `pyproject.toml` and
+`uv.lock`, treated like the 1.0.0 bump (a frozen path touched by package
+metadata only) and checked with the cache-key rule below: the `uv.lock` diff is
+the project's own `version` line (`uv lock`: "Updated talk-autopsy v1.0.0 ->
+v1.1.0"); nothing in the package reads its own version; golden request tests
+pass unchanged; T2 from cache skips every model step at 0 USD and all 22 files
+are byte-identical. No new pipeline tag: `pipeline-v3.2` still describes the
+pipeline.
+
+Why: the release number should say what changed for the user (a web
+interface), without reopening the measured pipeline.
+
 ## 2026-11-12 — Cache-key rule for frozen modules; `pipeline-v3.2` removes dead code
 
 Decision (owner, v1.1 session 3): a change to a frozen path is allowed without
