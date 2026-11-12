@@ -102,7 +102,6 @@ def test_estimate_start_stream_finished(setup, media, mode):
     assert [ev["id"] for ev in events] == list(range(1, len(events) + 1))
     assert events[-1]["type"] == "finished"
     assert any(ev["type"] == "step_progress" for ev in events)
-    assert comments  # the heartbeat
     current = client.get("/api/jobs/current").json()["job"]
     assert current["id"] == job["id"] and current["state"] == "finished"
     if mode == "file":
@@ -268,6 +267,16 @@ def test_cost_gate_through_the_api(setup):
     wrong = client.post("/api/jobs", json=body("url", confirmed_cost_usd=1.0))
     assert wrong.json()["error"] == "cost_mismatch"
     assert client.post("/api/jobs", json=body("url", confirmed_cost_usd=amount)).status_code == 202
+
+
+def test_sse_sends_a_heartbeat_while_a_job_is_quiet(setup, media):
+    import threading
+    client, core, _, _, _ = setup
+    core.gate = threading.Event()
+    job = client.post("/api/jobs", json=body("file", media)).json()["job"]
+    threading.Timer(0.8, core.gate.set).start()  # the fake pipeline stays silent until then
+    events, comments = sse(client, job["id"])
+    assert ": heartbeat" in comments and events[-1]["type"] == "finished"
 
 
 def test_sse_replay_after_an_id(setup, media):
