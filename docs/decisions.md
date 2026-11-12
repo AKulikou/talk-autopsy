@@ -27,6 +27,13 @@ describing a speaker by accent or nationality. Supersedes the 2026-11-08
 entry "what from the test set is published" (no titles, speakers, channels or
 links) and the generic description "strong non-native accent" of 2026-11-11.
 
+Confirmed by the owner later the same day: cite the **original public
+recordings** where they were identified (T2, real-01, stress-01); our local
+copies are reposts from a social network, trimmed differently, and the
+reposts are not cited. Where the original was not identified (T1, T6), the
+event or topic is named without a link. The names appear only in that Sources
+section, the one section `scripts/check_names.py` allows them in.
+
 ## 2026-11-12 — C1 against Google Translate: accepted as a finding
 
 Context: the owner's blind rating on 12 T6 units gave the pipeline 4.42 and

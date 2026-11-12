@@ -17,11 +17,27 @@ fragments, so results stay comparable from one experiment to the next.
 ## Sources
 
 The fragments are cut from public talks, lectures and interviews. By the
-owner's decision of 2026-11-12 the sources are named openly, with links and
-the cut points, so that the benchmark can be rebuilt from the same audio; the
-list is added in a separate commit once the owner has checked it. Speakers
-are described only as native or non-native speakers. The media and the
-reference transcripts are not published.
+owner's decision of 2026-11-12 the sources are named openly, so that the
+benchmark can be rebuilt from the same recordings. Our local copies are
+reposts from a social network, trimmed differently from the originals; the
+reposts are not cited. Where the original public recording was identified, it
+is linked below; where it was not, the event or topic is named without a link.
+Cut points are given on **our copy's** timeline, which can be offset from the
+original's. Speakers are described only as native or non-native speakers. The
+media and the reference transcripts are not published. Links checked on
+2026-11-12 (YouTube metadata via yt-dlp, no download).
+
+| ID | Source | Speaker(s) | Original recording | Our copy and the cut |
+|---|---|---|---|---|
+| T1 | Code with Claude 2025 keynote (Anthropic, San Francisco, 2025-05-22), segment on Claude Code | Cat Wu; native speaker (to be confirmed) | official recording not identified | a ~9.5-minute repost clip (9:27) from a social network; the whole clip is the fragment; its position in the keynote is not known |
+| T2 | "Mastering Claude Code in 30 minutes", Code with Claude 2025 (channel Anthropic, 2025-05-22) | Boris Cherny; non-native speaker | <https://www.youtube.com/watch?v=6eBSHbLKuN0> (28:07) | a repost, 15 s shorter (27:52 vs 28:07); fragment 0:00–10:00 of our copy |
+| T6 | a workshop on AI-assisted software development: an "agent skills" package, with a live demo in a code editor | two presenters, not identified; non-native speaker plus a second presenter | official recording not identified | a 41-minute repost (41:24); fragment cut blind at 25:46–35:46 of our copy (below) |
+| real-01 | "Stanford CS153 Frontier Systems \| Scale, AGI, and the Future of Everything" (channel Stanford Online, 2026-06-15) | Sam Altman (guest) and the course host | <https://www.youtube.com/watch?v=F_7M4Hc-usM> (41:10) | a shortened repost (38:30 vs 41:10); the whole copy; operational run, not scored |
+| stress-01 | "Andrej Karpathy: From Vibe Coding to Agentic Engineering w/ Stephanie Zhan" (channel Sequoia Capital, AI Ascent 2026, 2026-04-29) | Andrej Karpathy, Stephanie Zhan; two speakers, fast conversational speech | <https://www.youtube.com/watch?v=96jN2OCOfLs> (29:49) | the same length (29:50); the whole copy; operational run, not scored |
+
+The names above are the only speaker names in the repository: this section is
+the one place the de-identification check (`scripts/check_names.py`) allows
+them.
 
 ## What each fragment tests
 

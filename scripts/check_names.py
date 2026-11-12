@@ -22,6 +22,10 @@ De-identification check over every tracked file (`git ls-files`). Two parts:
 Exit code 1 on any hit, 2 if the local list is missing in a run that needs it.
 This file, the pattern file and its test are not scanned: they hold the patterns
 (whose word lists overlap with the local list) and their test examples.
+
+Allow-list: the "## Sources" section of `data/test-set/README.md` names the
+speakers of the published recordings (owner's decision 2026-11-12), so part (a)
+skips that one section; part (b) still scans it. Nothing else is allowed.
 """
 
 import argparse
@@ -37,6 +41,8 @@ DEFAULT_NAMES = Path("work/names.local.txt")
 PATTERNS_FILE = Path("scripts/identifying_patterns.txt")
 # Files that hold the patterns or their test examples; neither part scans them.
 EXEMPT = {"scripts/check_names.py", PATTERNS_FILE.as_posix(), "tests/test_check_names.py"}
+# The one place where speaker names are allowed (part (a) only): file -> section heading.
+NAMES_ALLOWED_SECTIONS = {"data/test-set/README.md": "## Sources"}
 
 
 @dataclass(frozen=True)
@@ -68,6 +74,23 @@ def read_patterns(path: Path) -> list[re.Pattern]:
     return patterns
 
 
+def blank_section(text: str, heading: str) -> str:
+    """`text` with the section under `heading` (up to the next heading of the same or a higher
+    level) replaced by spaces, line breaks kept, so that line numbers of later hits stay right."""
+    level = len(heading) - len(heading.lstrip("#"))
+    lines = text.split("\n")
+    out, inside = [], False
+    for line in lines:
+        if line.strip() == heading:
+            inside = True
+        elif inside and line.startswith("#"):
+            hashes = len(line) - len(line.lstrip("#"))
+            if hashes <= level and line[hashes:hashes + 1] == " ":
+                inside = False
+        out.append(" " * len(line) if inside else line)
+    return "\n".join(out)
+
+
 def find_hits(name: str, text: str, regexes: Iterable[tuple[str, re.Pattern]]) -> list[Hit]:
     hits = []
     for source, regex in regexes:
@@ -92,7 +115,10 @@ def scan(files: Iterable[str], names: list[str] | None, patterns: list[re.Patter
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        hits += find_hits(name, text, name_regexes + pattern_regexes)
+        names_text = text
+        if name in NAMES_ALLOWED_SECTIONS:
+            names_text = blank_section(text, NAMES_ALLOWED_SECTIONS[name])
+        hits += find_hits(name, names_text, name_regexes) + find_hits(name, text, pattern_regexes)
     return hits
 
 

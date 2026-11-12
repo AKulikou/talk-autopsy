@@ -79,3 +79,26 @@ def test_every_tracked_file_passes_the_committed_patterns():
 def test_a_missing_local_list_is_an_error_unless_patterns_only(tmp_path, capsys):
     assert check_names.main(["--names", str(tmp_path / "absent.txt")]) == 2
     assert "--patterns-only" in capsys.readouterr().out
+
+
+def test_names_are_allowed_only_in_the_sources_section_of_the_test_set_readme(tmp_path):
+    readme = (
+        "# Test set\n\nJane Example in the intro.\n\n## Sources\n\n| T9 | Jane Example |\n\n"
+        "### Notes\n\nJane Example again.\n\n## What each fragment tests\n\nJane Example here too.\n"
+    )
+    (tmp_path / "data" / "test-set").mkdir(parents=True)
+    (tmp_path / "data" / "test-set" / "README.md").write_text(readme, encoding="utf-8")
+    (tmp_path / "other.md").write_text("## Sources\n\nJane Example\n", encoding="utf-8")
+    hits = check_names.scan(["data/test-set/README.md", "other.md"], ["Jane Example"], None, root=tmp_path)
+    # Line 3 (before the section) and line 15 (after it) are hits; the section with its subsection is not;
+    # the same heading in another file allows nothing.
+    readme = "data/test-set/README.md"
+    assert [(h.file, h.line) for h in hits] == [(readme, 3), (readme, 15), ("other.md", 3)]
+
+
+def test_the_sources_section_is_still_scanned_by_the_committed_patterns(tmp_path):
+    (tmp_path / "data" / "test-set").mkdir(parents=True)
+    (tmp_path / "data" / "test-set" / "README.md").write_text(
+        "# Test set\n\n## Sources\n\nan OpenAI researcher\n", encoding="utf-8")
+    hits = check_names.scan(["data/test-set/README.md"], None, PATTERNS, root=tmp_path)
+    assert [(h.line, h.source) for h in hits] == [(5, "pattern 5")]

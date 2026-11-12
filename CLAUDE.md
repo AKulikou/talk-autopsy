@@ -78,8 +78,8 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
 - **No names:** no speaker or interviewee names, no accent or nationality
   labels (only "native / non-native speaker"), no transcripts or long quotes
   in tracked files; `scripts/check_names.py` must report 0 hits. Test-set
-  sources are named in `data/test-set/README.md` once the owner has checked
-  them (decision 2026-11-12). No personal email, no employer names.
+  sources (with speaker names) are named only in the Sources section of
+  `data/test-set/README.md`, the name check's one allow-listed section. No personal email, no employer names.
 - **Data:** media, references and run outputs are never committed; check
   `git status` before a commit. Only text goes to the Claude API.
 - **Measurement:** every run gets a row in `results/benchmark.csv` and an
