@@ -111,7 +111,7 @@ def baseline_translations(items: list[Item], caller,
 
 MAX_SHUFFLES = 1000
 
-RATING_INSTRUCTIONS = [  # for the owner, who rates in Russian (prompt 15)
+RATING_INSTRUCTIONS = [  # for the owner, who rates in Russian
     "# Оценка перевода",
     "",
     "Оцените каждый пункт отдельно, от 1 до 5: 5 — субтитр, который вы приняли бы как есть;",

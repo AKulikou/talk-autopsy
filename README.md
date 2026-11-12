@@ -12,7 +12,8 @@ and broke down on non-native speakers: the words a viewer of a technical
 talk most needs are the ones it got wrong.
 
 The field is crowded: VideoLingo, pyvideotrans and other tools already chain
-speech recognition, an LLM and subtitles. This project's contribution is meant
+speech recognition, an LLM and subtitles ([prior-art survey](docs/prior-art.md)),
+and almost none publishes quality measurements. This project's contribution is meant
 to be measurement: each stage scored on fixed fragments, with a sealed hold-out
 and an independent LLM review. What is measured so far, and what is not, is listed below.
 VideoLingo, the closest of these tools, is not compared here: it is out of v1.0
@@ -371,7 +372,7 @@ engine). Whisper + Google Translate uses the same raw Whisper transcript, so
 its English side is the same; only its translation differs. VideoLingo is
 **out of v1.0 scope** (owner's decision 2026-11-11; the specification's
 Definition of Done amended): running its downloaded installer was blocked by
-the session's permission filter and the project chose not to bypass it; it
+the coding agent's permission filter and the project chose not to bypass it; it
 has also switched its default recogniser to Qwen3-ASR. The v1.0 comparison is
 the pipeline against raw Whisper, Whisper + Google Translate and a plain
 Gemini translation, plus the single Gemini call on the English side.

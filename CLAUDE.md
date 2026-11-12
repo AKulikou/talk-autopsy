@@ -1,237 +1,110 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working in this repository.
+Guidance for Claude Code when working in this repository. What the project
+measured and why is in `README.md`, `docs/experiments.md` and `docs/decisions.md`.
 
 ## Project
 
-**Talk Autopsy** turns an English technical talk, lecture or interview (a video
-URL or a local file) into subtitles in a target language, later also a dubbed
-audio track. It runs locally; only text goes to the Claude API.
+Talk Autopsy turns an English technical talk (a YouTube link or a local file)
+into subtitles in a target language, with every stage measured on a fixed test
+set. Pipeline (`talk_autopsy/pipeline.py`, `run`):
 
 ```
-input (URL/file) -> ffmpeg audio.wav (+ audio.flac for upload) + meta.json
-  -> AssemblyAI, first pass -> raw.json          (fallbacks: chunked Gemini + forced alignment, then faster-whisper)
-  -> auto-glossary (Haiku, from raw.json + context), merged with the user's glossary -> glossary.md
-  -> AssemblyAI with the glossary as key terms -> raw2.json
-  -> Claude correction (correction-v2; terms, names, accent-distorted words) -> fixed.json
-  -> sentence units (segments merged to sentence ends, split above 25 s; units.py)
-  -> Claude translation (translation-v2.1 on units; blocks of 5 min with context, no meaning compression) -> <lang>.json
-  -> subtitles .srt + .ass (target language timed by the English words + corrected English) | later: TTS dub
+ffmpeg audio.wav + audio.flac -> AssemblyAI first pass (raw.json)
+  -> auto-glossary (Haiku) -> AssemblyAI with key terms (raw2.json)
+  -> Claude correction (correction-v2, fixed.json) -> sentence units (units.py)
+  -> Claude translation (translation-v2.1, <lang>.json) -> .srt + .ass, optional MP4
+fallbacks: chunked Gemini + forced alignment, then faster-whisper
 ```
-
-The research question is measurement, not features: every stage is benchmarked on
-a fixed test set (six planned 5-10 minute fragments; T1 and T2 scored, T6 the hold-out, T3–T5 not
-selected) against baselines (raw speech recognition measured; Whisper + Google Translate run on T2 and T6,
-its translation rated by the owner; VideoLingo attempted, not run). The target
-language is a parameter (`target_lang`); only Russian is measured and accepted.
-
-Part of the Autopsy series; repository conventions follow Startup Autopsy.
 
 ## Commands
 
 ```bash
-uv sync                                    # Python 3.13 venv in .venv + dependencies from uv.lock
-uv sync --extra align                      # + CPU torch/torchaudio for forced alignment (about 0.9 GB with the model)
-uv run pytest                              # unit tests: fake Claude client, generated audio, no network
-uv run ruff check .                        # lint (config in pyproject.toml, target Python 3.13)
-pwsh scripts/check.ps1                     # before every push: what CI runs (keeps installed extras), secrets cleared (scripts/check.sh elsewhere)
-uv run talk-autopsy cut <source> --start 00:00 --end 10:00 --out <file>.wav   # 16 kHz mono WAV
-uv run talk-autopsy transcribe <file>.wav --out work/T2/raw.whisper-large-v3.json   # faster-whisper, CPU
-uv run talk-autopsy transcribe <file>.wav --engine assemblyai --out work/T2/raw.assemblyai.json  # cloud, uploads audio
-uv run talk-autopsy transcribe <file>.wav --engine gemini --out work/T2/raw.gemini.json          # cloud, uploads audio
-uv run talk-autopsy transcribe <file>.wav --engine gemini+align --out work/<run>/raw.gemini+align.json  # chunked Gemini + forced alignment
-uv run talk-autopsy transcribe <file>.wav --threads 8 ...                                       # faster-whisper CPU threads
-uv run talk-autopsy align <transcript>.json <file>.wav --out <aligned>.json                     # measured word times
-uv run talk-autopsy srt <transcript>.json --out <file>.srt [--glossary <md>]                    # subtitles: .srt + sibling .ass
-uv run talk-autopsy glossary-auto <raw>.json --out <glossary>.md [--context <text-or-file>] [--compare <ref>.md]  # Haiku auto-glossary (B5)
-uv run talk-autopsy fix <transcript>.json --glossary <md> --out <fixed>.json [--model <id>] [--prompt correction-v1]  # Claude correction (default v2), prints the estimate
-uv run talk-autopsy translate <fixed>.json --lang ru --glossary <md> --out <ru>.json [--prompt translation-v1]       # Claude translation (default v2)
-uv run talk-autopsy translate <fixed>.json ... --prompt translation-v3   # term classes first (Haiku) -> <out>.glossary-v3.md, then v3
-uv run talk-autopsy adjudicate T2 --backbone work/T2/raw.whisper-large-v3.json --hyp work/T2/raw.assemblyai.json --hyp work/T2/raw.gemini.json
-uv run talk-autopsy resolve T2                    # after ticking data/test-set/T2.adjudication.md -> T2.ref.txt + protocol
-uv run talk-autopsy judge T6 --resume [--spent-before <usd>] [--plan-after <n>]  # blind audio judge (JUDGE_MODEL gemini-4-carbon, paid, $3 session budget): work/T6/judge.jsonl + T6.adjudication.judged.md; counts and cost only
-uv run talk-autopsy resolve T6 --adjudication data/test-set/T6.adjudication.judged.md   # reference from the judge's decisions
-uv run talk-autopsy judge-refs T6 [--force]           # T6: references J (judge) + M (majority) and work/T6/uncertain_spans.json; counts only
-uv run talk-autopsy eval T6 --hyp <t>.json           # sealed: WER and term accuracy against J and M, bounds, gate verdict; counts only
-uv run talk-autopsy judge-compare T2 [--normalize-adjudication]  # judge vs the decided T2 spans + WER between references (prints span texts; refuses T6)
+uv sync                          # Python 3.13 venv from uv.lock (uv sync --extra align: torch for forced alignment)
+uv run pytest                    # offline unit tests (fake Claude client, generated audio)
+uv run ruff check .              # lint
+pwsh scripts/check.ps1           # before every push: what CI runs, secrets cleared, plus the name check
+uv run python scripts/check_names.py   # de-identification check (local list + committed patterns)
+uv run talk-autopsy doctor       # ffmpeg, JavaScript runtime for YouTube, keys (names only)
+uv run talk-autopsy run <url-or-file> --lang ru [--dry-run] [--output srt,ass|mp4-burned|all]
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
-uv run talk-autopsy doctor                         # ffmpeg, JavaScript runtime for YouTube, yt-dlp age, align extra (Gemini fallback), key names
-uv run talk-autopsy run <youtube-url> --domain web3 --output mp4-burned   # download (<=1080p) + pipeline + outputs
-uv run talk-autopsy run <playlist-url> --max-videos N [--max-total-cost 10]  # one by one, finished ones skipped
-uv run talk-autopsy run <source> --lang ru [--context <text-or-file>] [--glossary <md>]
-                                           # the pipeline (default steps stt,glossary,stt2,align,fix,translate,srt; engine assemblyai);
-                                           # work/<video-id>/, skips steps that are up to date; --dry-run prints the plan;
-                                           # --engine gemini+align|faster-whisper|gemini; --gemini-cache-only: no Gemini call
-                                           # --output srt,ass(default)|bilingual|mp4-soft|mp4-burned|all -> OUTPUT_DIR/<name>/
-                                           # --translation v2(default)|v3 (TRANSLATION_VERSION): v3 = term classes, glossary.v3.md
+uv run talk-autopsy eval T6 --hyp <transcript>.json   # counts only: J/M references, bounds, verdict
+uv run talk-autopsy --help       # all commands: cut, transcribe, align, glossary-auto, fix, translate, srt,
+                                 # adjudicate, resolve, judge, judge-refs, judge-compare, glossary-ref, ...
 ```
 
-`fix`, `translate` and `eval` are the experiment commands: no refusal fallback, one
-named model per benchmark row. `run` is the tool: refusal fallback on.
-
-Requires ffmpeg (with ffprobe) on PATH. `ANTHROPIC_API_KEY` in `.env` (never commit
-it) is needed only by the Claude stages; the CLI checks it before any work on a run
-that includes `glossary`, `fix` or `translate`. `ASSEMBLYAI_API_KEY` is needed by the
-default `run`; `GEMINI_API_KEY` only for the Gemini engine or fallback. Run `uv run pytest` and `uv run ruff check .`
-after any change, and `scripts/check.ps1` before every push (CI also scans the full git history
-for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `python`.
+`fix`, `translate` and `eval` are experiment commands (one named model per
+benchmark row, no refusal fallback); `run` is the tool (refusal fallback on).
+Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
+`ASSEMBLYAI_API_KEY`, `GEMINI_API_KEY` (fallback, judge),
+`GOOGLE_TRANSLATE_API_KEY` (baseline only).
 
 ## Layout
 
-- `talk_autopsy/config.py` — `load_environment` (reads `.env`; called only by entry points: the CLI's `main`, later the web UI), API key check (`require_api_key`), optional cloud STT keys (`require_key`), settings as functions read on call (`target_lang()`, `correction_model()`, ...), `check_lang`, model IDs, prices for the cost estimate, paths. Importing any module reads neither `.env` nor a secret
-- `talk_autopsy/segments.py` — `Transcript` / `Segment` / `Word`: the one JSON format every stage reads and writes; `assert_same_ids`; `Segment.source_ids` only in sentence units
-- `talk_autopsy/units.py` — sentence units (`sentence-units-v1`): segments merged until terminal punctuation or a pause over 1.5 s, split above 25 s at the best boundary near the even split; each unit keeps its English words and the covered segment ids
-- `talk_autopsy/ingest.py` — `extract_audio` (ffmpeg, optional cut), `probe` (duration), `parse_timecode`; its `download` stub is superseded by `youtube.py` (ingest.py is left unchanged: its audio functions are frozen)
-- `talk_autopsy/youtube.py` — YouTube links and playlists through yt-dlp as a library (`yt-dlp[default]`, incl. the `yt-dlp-ejs` challenge solver; a JavaScript runtime must be installed, never installed automatically): metadata without download, estimate, MP4 up to 1080p (H.264 preferred) + the author's English captions (saved, not used), `meta.json`, Windows-safe `<upload-date> <title>` folders, playlist plan (order, done markers, caps), `doctor` checks
-- `talk_autopsy/outputs.py` — output formats after the srt step: `<stem>.srt` (named like the video, for players that auto-load), `.en.srt`, `.ass`, `bilingual.ass` (English small on top), `.subs.mp4` (mov_text tracks, no re-encode), `.<lang>.mp4` (burned in with libx264, for TVs; 0.27x real time measured on a 28-min talk)
-- `glossaries/` — reusable domain glossaries (`web3.md`; `--domain web3`); `glossaries/local/` git-ignored personal additions (names)
-- `talk_autopsy/glossary.py` — `Glossary`: a Markdown table per video (`T<n>.glossary.md`), format in the module docstring; optional `policy` column (keep / both / translate / ui, `effective_policy` maps old files); `combine`, `domain_paths` for `--glossary` + `--domain`
-- `talk_autopsy/term_policy.py` — `term-policy-v1`: one Haiku call classifies the glossary terms without a policy, for translation-v3 only (user entries win; `glossary.md` and the STT key terms are never rewritten)
-- `talk_autopsy/stt/` — `base.py` `Transcriber` protocol and `drop_wordless`; `faster_whisper.py` first engine (large-v3, int8, CPU, `cpu_threads`; reads the WAV itself, see its docstring); `assemblyai.py` cloud engine (Universal-3.5 Pro, keyterms with `--glossary-prompt`); `gemini.py` cloud engine (Files API upload, verbatim JSON transcript; timestamps are model estimates, never for subtitles; typed errors `GeminiUnavailable` / `GeminiQuotaExhausted`); `chunked.py` long audio through Gemini (chunks cut at silences, per-chunk cache, model fallback list, faster-whisper for a failed chunk, quota error stops, `ProgressEvent`s)
-- `talk_autopsy/align.py` — forced alignment (wav2vec2 base 960h from torchaudio, Viterbi in numpy, block by block with garbage states); `AlignedTranscriber` = the `gemini+align` engine; `start_differences` for timing comparisons. torch is the optional `align` extra; tests use a stub emitter
-- `talk_autopsy/metrics.py` — pure metric functions (definitions summarised in `docs/experiments.md`, Metrics): `tokenize` (the one normalization; drops fillers uh/um/er/ah/hmm), WER, `term_accuracy_v2` (the benchmark's: in place via the WER alignment, plural or possessive of the last word, macro, without the top term, precision; `term_accuracy` = v1, position-free, kept for the stages' occurrence checks), `false_edit_rate` (share of the correction's word edits that move away from the reference; v1 kept), Wilson interval, the T6 verdict and overfitting signal, reading speed; timing drift not implemented
-- `talk_autopsy/evaluation.py` — reads hypothesis/reference/glossary files, `evaluate`, the benchmark row (`BENCHMARK_COLUMNS`, with `status` current/superseded) and its append
-- `talk_autopsy/baselines/google_translate.py` — Whisper + Google Translate baseline (evaluation tooling): raw Whisper -> `units.make_units` -> Cloud Translation API Basic v2 (stdlib HTTP, key in the `X-goog-api-key` header) -> `ru.json` + `.srt/.ass`; `words_by_span` (raw Whisper words inside a unit's span, the rating rule); `scripts/google_translate_baseline.py` counts every character first, then runs T2 and T6 into `work/baselines/google-translate/` + the 12 T6 rating items (`T6-units.json`), or prints the setup steps without a key
-- `talk_autopsy/secret_registry.py` — `ALL` = `config.SECRET_ENV_VARS` (frozen with `pipeline-v3`) + `EVALUATION_SECRET_ENV_VARS` (`GOOGLE_TRANSLATE_API_KEY`); the tests, `.env.example` check and check scripts use `ALL`. A new evaluation key goes here, a new pipeline key into config (needs a new freeze tag)
-- `talk_autopsy/translation_check.py` — the pre-registered T6 translation check (evaluation tooling): seeded sample of 20 units, plain Gemini baseline, 40 shuffled items for the owner, scorer with a bootstrap interval; `scripts/translation_check.py` runs it
-- `talk_autopsy/translation_rating.py` — the baselines' translation rating (evaluation tooling, pre-registered in `docs/experiments.md`, Translation rating): second rating file (12 Google Translate items + 4 anchors, `C1-T6-rating-2.md` + key), Gemini second rater (`gemini-rater-v1`, informational), `score_baselines` (means, paired bootstrap, drift, spec C1 Google Translate part, rater agreement), writes the result between markers in `docs/experiments.md` and the README baselines table; `scripts/translation_check.py rating-2 | rater | score-baselines`
-- `talk_autopsy/adjudicate.py` — reference by consensus: aligns two cloud transcripts to the faster-whisper backbone, spans of disagreement, the adjudication file, clips, `resolve` to the reference and its protocol (`other: (no words)` types an empty variant)
-- `talk_autopsy/judge.py` — blind audio judge (`audio-judge-v1`, evaluation tooling, not frozen): one Gemini request per majority/split span with the clip inline; `heard` (verbatim, written first) then `choice` among deduplicated, shuffled, unlabeled options or `none` + `final_text`; resumable `judge.jsonl` (keyed by span and model; other models' records moved to `judge.free-pilot.jsonl`); cost per span from usage metadata and `config.GEMINI_PRICING_PER_MTOK`, budget stop, spend-cap stop; filled copy `T<n>.adjudication.judged.md`; self-preference / none / consistency shares; `compare` and `classify_decision` for calibration on decided spans
-- `talk_autopsy/ref_glossary.py` — reference glossary drafted by Gemini (`ref-glossary-v1`, not Claude, so the scored corrector does not write its own glossary): terms from `T<n>.ref.txt`, kept only if `eval` finds them in the reference, at most 60 (`talk-autopsy glossary-ref T<n>`)
-- `talk_autopsy/ref_bounds.py` — two references of a judged fragment (`two-references-v1`): J = the judge's `final_text` everywhere, M = the engines' majority where one exists; uncertain spans (splits + majority spans where J and M differ) with character/word ranges and the references' SHA-256 in `work/<ID>/uncertain_spans.json`; `metrics.bounded_term_accuracy` scores the T6 gate with a lower and an upper bound
-- `talk_autopsy/proofread.py` — draft export (`[mm:ss] text`) and reference import; superseded by `adjudicate.py` for the test set (`draft`, `ref-from-draft` still work)
-- `talk_autopsy/blocks.py` — what correction and translation share: 5-minute blocks with 3 read-only context segments, video context from `meta.json`, token and cost estimates, stage meta
-- `talk_autopsy/glossary_auto.py` — auto-glossary (`glossary-auto-v2` default: v1's rules with examples from outside the test set; v1 kept; helper model): terms, `keep`, suggested translation, `heard_as` mis-recognitions, evidence rule; `coverage` against a reference glossary; `merge` with a user glossary (user wins, drafted translations become "suggested" notes)
-- `talk_autopsy/correct.py` — Claude correction (`correction-v2` default, `correction-v1`), validator (incl. 70% words kept in order, no runs of words from a neighbouring segment), failed blocks keep their text and are listed; `translate.py` — Claude translation (`translation-v2.1` default: v2's rules, no meaning compression, examples from outside the test set; `translation-v2`, `translation-v1` kept) of sentence units by default (`units=False` / `--per-segment`: each segment alone), `target_lang` a parameter; prompts in `talk_autopsy/prompts/<version>.md`; `translation-v3` (option, C1b): term policies, `⟦both:…|…⟧` / `⟦ui:…|…⟧` markers rendered by `render_markers` (first occurrence over the whole video, malformed markers stripped and counted), `validate_block_v3` rejects a missing name-or-code keep term
-- `talk_autopsy/subtitles.py` — SRT and `.ass` writer: up to 3 x 48 characters, at most 7 s, breaks at sentence/clause ends, never inside a glossary term; a translated unit's cues timed by the English words they cover; every cue extended into the following pause (up to +1.5 s, 0.1 s before the next cue, at most 7 s); `.ass` 1920x1080, Arial 42, outline, bottom centre; reading speed reported (shares above 17 and 25 cps), never enforced
-- `talk_autopsy/pipeline.py` — `run` (stamps include `code_hash`: prompt file + validator modules; key terms truncated to AssemblyAI's 1,000 words, user terms first): stt (AssemblyAI on `audio.flac`; fallback chunked Gemini, then faster-whisper), glossary, stt2 (key terms), align (model-estimated times only), fix, translate, srt in `work/<video-id>/`; stamp files to skip unchanged steps, key checks first, cost estimate and limit, Claude and speech recognition cost report, fallbacks listed, progress events
-- `talk_autopsy/core/structured_call.py` also has `refusal_fallback` (`fallbacks: "default"` through the beta endpoint); `run` turns it on for Sonnet calls
-- `talk_autopsy/tts/edge.py` (stage 4) — stub with input -> output in the docstring
-- `talk_autopsy/cli.py` — typer CLI (`cut`, `transcribe`, `align`, `glossary-auto`, `fix`, `translate`, `srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`, `eval`, `run`); argument parsing and printing only
-- `talk_autopsy/core/` — shared with autopsy-template: `structured_call.py` (structured request, stop-reason checks, validation, one retry), `claude_client.py`, `batch_client.py` (Message Batches at half price), `token_summary.py` (cost)
-- `tests/` — `conftest.py` has the fake Claude client (`fake_claude`), the generated sine WAV (`sine`) and a placeholder for every secret in `secret_registry.ALL` (autouse); `test_secrets.py` fails on an environment read of a `*_KEY`/`*_TOKEN`/`*_SECRET` name missing from the registry, and on a `.env.example` out of sync with it. A new provider key: add it to `SECRET_ENV_VARS` and `.env.example`, nothing else
-- `data/test-set/` — media and reference transcripts are local only; `README.md` and `*.glossary.md` are tracked
-- `docs/decisions.md` — decision log; `docs/experiments.md` — experiment log and Backlog
-- `results/benchmark.csv` — one row per measured run (tracked); everything else in `results/`, `logs/`, `work/` is git-ignored
-- `scripts/check.ps1`, `scripts/check.sh` — the CI test job, run locally with the secrets cleared
-- `scripts/windows/` — the owner's launcher: `Talk Autopsy.bat` (double-click or drop a file; ASCII, CRLF) runs `talk-autopsy.ps1` (UTF-8 with BOM for Windows PowerShell 5.1; Russian prompts; doctor, `run --dry-run` estimate, `run --output mp4-burned,srt,ass`, log in `logs/launcher/`, opens the output folder; `-Source -Web3 -Yes -DryRun -NoPause` for tests); `create-shortcut.ps1` makes the desktop shortcut
-- `scripts/check_names.py` — de-identification check of every tracked file, case-insensitive and across line breaks: (a) the local, git-ignored `work/names.local.txt` (check.ps1), (b) the committed `scripts/identifying_patterns.txt` (accent/nationality labels, job titles, video-ID file names; also CI); `scripts/rescore_benchmark_v2.py` — the 2026-11-11 re-scoring
+- `talk_autopsy/` — `cli.py` (typer; parsing and printing only), `pipeline.py`,
+  `config.py` (settings as functions, model IDs, prices; `load_environment` is
+  called only by entry points), `segments.py` (the one JSON format), `stt/`
+  (assemblyai, gemini, chunked, faster_whisper), `align.py`, `glossary.py`,
+  `glossary_auto.py`, `correct.py`, `units.py`, `translate.py`, `subtitles.py`,
+  `outputs.py`, `youtube.py`, `blocks.py`, `core/` (shared Claude request code),
+  `prompts/<version>.md`.
+- Evaluation: `metrics.py`, `evaluation.py` (both frozen), `adjudicate.py`,
+  `judge.py`, `ref_bounds.py`, `ref_glossary.py`, `translation_check.py`,
+  `translation_rating.py`, `baselines/google_translate.py`, `secret_registry.py`
+  (every secret name; the tests use it).
+- `tests/` — offline; `conftest.py` has the fake Claude client and a placeholder
+  for every secret.
+- `data/test-set/` — only `README.md` and `*.glossary.md` are tracked; media and
+  reference transcripts stay local.
+- `docs/experiments.md` (experiment log, metrics, criteria, Backlog),
+  `docs/decisions.md`, `docs/review-*.md`, `docs/prior-art.md`;
+  `results/benchmark.csv` (one row per measured run).
+- `scripts/` — `check.ps1` / `check.sh`, `check_names.py` +
+  `identifying_patterns.txt`, evaluation scripts, `windows/` (the owner's launcher).
 
-## Data rules
+## Rules
 
-- Media (video, audio), reference transcripts (`T<n>.ref.txt`) and run outputs are
-  never committed. Check `git status` before every commit.
-- Only text goes to the Claude API: transcript segments, the glossary and a short
-  video context. Audio leaves the machine only through a cloud STT engine
-  (`--engine assemblyai` or `gemini`), which the owner approved for the test-set
-  fragments; video never does. Engine keys (`ASSEMBLYAI_API_KEY`,
-  `GEMINI_API_KEY`) are never printed or logged.
-- `target_lang` is a parameter. No language is hard-coded in the core: stage
-  functions take it as an argument; the default lives only in `config.py`.
-- The test-set README names no video titles, speakers, channels or links.
+- **Frozen paths** (git tag `pipeline-v3`): `ingest.py`, `stt/`, `align.py`,
+  `glossary.py`, `glossary_auto.py`, `correct.py`, `blocks.py`, `units.py`,
+  `translate.py`, `segments.py`, `pipeline.py`, `config.py`, `core/`,
+  `metrics.py`, `evaluation.py`, `ref_bounds.py`, the three prompts in use,
+  `uv.lock`. A change needs a new tag and a new hold-out; check with
+  `git diff --stat pipeline-v3 -- <paths>`. New ideas go to the Backlog.
+- **Keys:** never printed, logged or committed; importing a module reads
+  neither `.env` nor a secret. A new pipeline key goes into
+  `config.SECRET_ENV_VARS`, an evaluation key into `secret_registry`, both
+  into `.env.example`.
+- **Tests offline:** pytest-socket blocks the network; use the fakes.
+- **No names:** no speaker or interviewee names, no accent or nationality
+  labels (only "native / non-native speaker"), no transcripts or long quotes
+  in tracked files; `scripts/check_names.py` must report 0 hits. Test-set
+  sources are named in `data/test-set/README.md` once the owner has checked
+  them (decision 2026-11-12). No personal email, no employer names.
+- **Data:** media, references and run outputs are never committed; check
+  `git status` before a commit. Only text goes to the Claude API.
+- **Measurement:** every run gets a row in `results/benchmark.csv` and an
+  entry in `docs/experiments.md`; no number in the docs that was not
+  measured; estimate the cost before a full-video run (above $3 needs the owner).
+- **Code:** English everywhere; structured outputs; stages keep segment ids
+  (translation works on sentence units with `source_ids`); core logic free of
+  CLI I/O; `target_lang` is a parameter.
+- **Commits:** `Area: what changed` (at most 72 characters; Docs, CI, STT,
+  Correction, Translation, Subtitles, Metrics, Eval, CLI, Tests, Config,
+  Tooling), the body says why. A `Co-Authored-By: Claude <model>` trailer is
+  allowed; never a `Claude-Session:` trailer or a claude.ai link. Run
+  `scripts/check.ps1` before every push.
 
-## Engineering standards
+## State
 
-- Production quality: explicit error handling, no silent fallbacks that fabricate
-  data (a cut past the end of a file is an error, not a shorter file).
-- Prefer structured outputs (`core/structured_call.py`) over parsing free text.
-- Stages never renumber, merge or split segments; correction returns the same
-  ids (`segments.assert_same_ids`). The one exception is translation, which
-  works on sentence units (`units.py`): new ids, each unit listing the segment
-  ids it covers (`source_ids`) and keeping the English word timings.
-- Keep core logic free of CLI I/O so a web UI can wrap it later.
-- Stage modules get the client as `claude_client.get_client()` (through the
-  module), so the test fixture can replace it.
-- Code, comments, docstrings, docs and commit messages in English.
-- Realistic estimates for time and cost; no number in the docs that was not measured.
-- Tests never touch the network or a real secret: pytest-socket (`--disable-socket`, in
-  `pyproject.toml`) makes opening an internet socket or a DNS lookup raise, so a test
-  that would reach a service fails instead; use the fakes in `tests/conftest.py`. Every
-  secret in `config.SECRET_ENV_VARS` is a placeholder inside a test, and importing a module
-  reads neither `.env` nor a secret (only entry points call `config.load_environment()`).
+Stage 3 (v1.0). Gate 2 -> 3 passed on 2026-11-11 (T6 run once: pass, not
+demonstrated). Independent LLM reviews #1 and #2 done and answered
+(`docs/review-*.md`). Remaining for v1.0: git history rewritten without
+identifying details, test-set sources published, tag `v1.0`, repository made
+public. VideoLingo is out of v1.0 scope; the web UI is v1.1; dubbing is stage 4.
 
-## Commits
+## Pitfalls
 
-- Subject `Area: what changed`, at most 72 characters. Areas: Docs, CI, STT,
-  Correction, Translation, Subtitles, TTS, Metrics, Eval, CLI, Tests, Config.
-- The body says why.
-- A `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer is allowed.
-  **Never add a `Claude-Session:` trailer or any claude.ai link.**
-- No personal email anywhere (the repository identity is the GitHub noreply
-  address); no employer names.
-
-## Stage gates
-
-| Stage | Content | Gate to the next stage |
-|---|---|---|
-| 0 | Foundation: repository, data format, audio cut, test set | — |
-| 1 | STT selection | WER ≤ 15% on the accented fragment (T2) |
-| 2 | Claude correction + translation | term accuracy ≥ 85%; blind translation score ≥ 4/5; hold-out T6 run once; independent LLM review |
-| 3 | CLI tool with subtitles | independent LLM review before v1.0 |
-| 4 | Dubbing | — |
-
-Prompts and the engine freeze after a gate. New ideas go to the Backlog in
-`docs/experiments.md`, not into the current stage. T6 is never listened to or used
-for prompt work; it runs once, at the stage 2 gate, with frozen prompts.
-
-## Limits
-
-- At most 3 runs per hypothesis.
-- Stage 1: at most 10 test-set runs and $5.
-- Stage 2: at most 10 correction-prompt versions, 5 translation-prompt versions, $20.
-- Estimate the cost before any full-video run; anything above $3
-  (`COST_CONFIRMATION_USD`) needs the owner's explicit confirmation.
-- Every run is recorded: a row in `results/benchmark.csv` and an entry in
-  `docs/experiments.md` (hypothesis, what was run, numbers, conclusion, decision).
-
-## Roadmap
-
-- **Stage 0 (done):** foundation. Repository, CI, shared core, data format,
-  `cut` command, test set T1–T2.
-- **Stage 1 (gate passed 2026-11-09):** reference transcripts for T1–T2; STT
-  engine chosen against the WER gate: AssemblyAI with key terms (owner's choice,
-  decisions), Gemini + forced alignment and faster-whisper as fallbacks;
-  baselines measured. Still open from the plan: prior-art survey, T3–T5.
-- **Stage 2 (gate passed 2026-11-11):** correction and translation prompts, measured and frozen; hold-out
-  and independent LLM review at the gate. C1: v2 preferred to v1 (blind pairwise 4.40 / 4.67); absolute target
-  not demonstrated (3.85 < 4.0); re-tested on T6. B2 v2 checked. Independent LLM review #1 done 2026-11-11
-  (`docs/review-2026-11-11.md`); its fixes refroze the pipeline as git tag **`pipeline-v3`** (d180a73;
-  `docs/experiments.md`, Freeze pipeline-v3): AssemblyAI two passes, glossary-auto-v2, correction-v2, sentence
-  units, translation-v2.1, cache key with a code hash, key-term truncation, term accuracy v2 (in place,
-  possessives, macro, without the top term, precision); a change to a frozen path needs a new tag and a new
-  hold-out. Three repeats on T2: term accuracy v2 94.39–96.26% (mean 95.33%), correction 0 edits.
-  T6: reference in two variants (J judge, M majority; 50 uncertain spans; 72 term occurrences, 6 uncertain),
-  no human check; the rule is written (`docs/experiments.md`, T6 protocol: Wilson intervals, pass demonstrated
-  / not demonstrated / fail / inconclusive, overfitting signal below 85.33%; "pass (demonstrated)" is out of
-  reach on T6). **T6 run once on 2026-11-11** (d180a73, `docs/experiments.md`, T6 result): term accuracy v2
-  100% against J and M, lower bound 91.67% (Wilson 83.0%), verdict "pass (not demonstrated)", overfitting
-  signal no. Translation check (blind, 12 units): pipeline 4.42, plain Gemini 4.33, +0.08 [−0.33, +0.50];
-  rule (>= 4.0) met; not shown better than Gemini. Owner passed gate 2 -> 3 (`docs/experiments.md`, Gate 2 -> 3).
-  translation-v3 stays an option.
-- **Stage 3 (current):** v1.0 per the specification's checklist (`docs/experiments.md`, v1.0 checklist):
-  baselines on one set (T2, T6: raw Whisper, Whisper + Google Translate, VideoLingo) and the owner's
-  three-system rating, Windows launcher for the owner, re-run from cache within a minute, independent LLM review #2,
-  tag `v1.0`. The web UI stays v1.1.
-- **Stage 4:** dubbed audio track.
-- **v1.1:** local web UI over the same core.
-
-## Known issues
-
-- Gemini's free tier allows 20 requests per day per project for `gemini-3.8-flash` (429 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, measured 2026-11-10; not in the docs). The project is on the paid tier since 2026-11-10 (EUR 5 monthly cap); the audio judge costs about $0.0026 per span with `gemini-4-carbon`.
-- The blind audio judge (`audio-judge-v1`) failed its T2 calibration on 2026-11-10 (agreement 79.0% against the 90% rule; it keeps repetitions the reference drops); a post-hoc rescoring with the repetition convention made explicit (`judge.normalize_for_adjudication`, both sides) gave 82.5%, still a fail, so T6's reference is built in two variants with uncertain spans and the gate uses bounds (docs/experiments.md, T6 protocol; built 2026-11-11).
-- T1's reference was decided by a Claude model without listening; it is secondary evidence for the Claude stages.
-- Gemini's free tier: 503 "high demand" is frequent and the daily quota can run out within one long talk (2026-11-09: on the third chunk). The chunked engine falls back per chunk on 503 and stops on quota; `run --gemini-cache-only` finishes a video with faster-whisper for the missing chunks.
-- Forced alignment places word starts 130–230 ms later than faster-whisper does; which is closer to the truth is not measured (no hand-labelled onsets yet).
-- Glossaries are reviewed against the references, so term accuracy with a glossary in the prompt is optimistic for unseen videos. Dubbing is a stub.
-- Gemini `gemini-3.8-flash` often answers 503 UNAVAILABLE ("high demand"; 8 of 10 calls on 2026-11-09). The engine retries after 20, 60 and 120 s and then fails; rerun later. Its timestamps are model estimates and may run past the end of the audio.
-- AssemblyAI and Gemini helped build the T1/T2 references, so their WER against them is biased in their favour; compare them through the resolve protocol (docs/experiments.md, methodology).
-- faster-whisper 1.2.1 cannot decode files with PyAV 19 (`metadata_errors`); the engine reads the WAV itself and passes samples.
-- faster-whisper's segment `avg_logprob` is per 30-second decoding window, so segment `confidence` is too; word probabilities are per word.
-- T3–T5 are not selected; T6 is cut blind (25:46–35:46 of `T6.source.mp4`). T6 was run once on 2026-11-11 and is no longer sealed, but the repository rules still apply: no speaker names, no transcripts or long quotes in tracked files (short term examples are fine); its glossary is tracked since the run. The owner rated the T6 translation check before watching T6 (done 2026-11-11). The assistant decided none of its spans. T1's speaker is assumed native (to be confirmed).
-- AssemblyAI costs about $0.47 per hour of video in `run` (two passes, list price: $0.21 + $0.26 with key terms), drawn from the account's free credit for now.
-- Claude Haiku 5.5 costs more for prompts over 100,000 tokens; the cost estimate
-  uses the lower tier.
-- The shared core was written against `anthropic` 1.x; the lock has 2.x (2.6.0).
-  Real calls work since 2026-11-09 (B1, B4): `messages.parse` with
-  `output_format`, prompt caching (the second run within five minutes reads the
-  prefix). Server-side refusal fallback is deliberately off (decisions).
+- faster-whisper 1.2.1 cannot decode files with PyAV 19; the engine reads the WAV itself.
+- Gemini `gemini-3.8-flash` often answers 503; the free tier allows 20 requests a day per
+  model. Gemini timestamps are model estimates: never time subtitles with them unaligned.
+- Use the uv-managed Python 3.13 (`uv run`), not the system `python`.

@@ -38,7 +38,7 @@ the chosen text (consistency between steps 1 and 3).
 The run is resumable span by span: every judged span is appended to
 judge.jsonl at once, and a rerun with `resume` skips the spans already there.
 Resume is keyed by span and model: records of another model (the free-tier
-pilot of 09a) are moved to `judge.free-pilot.jsonl` and never reused. A daily
+pilot) are moved to `judge.free-pilot.jsonl` and never reused. A daily
 quota, billing or spend-cap error stops the run (`JudgeQuotaStop`); a server
 error or a per-minute rate limit is retried after 20, 60 and 120 s, then the
 span is left for the next run.
@@ -163,7 +163,7 @@ def shown_options(span: Span, seed: int) -> list[ShownOption]:
     return options
 
 
-CALIBRATION_ADDENDUM = "after the judge calibration"  # marks README rows added after 09b
+CALIBRATION_ADDENDUM = "after the judge calibration"  # marks README rows added after the T2 calibration
 
 
 def read_conventions(readme_text: str) -> list[str]:
@@ -282,7 +282,7 @@ def clean_text(text: str) -> str:
 
 # --- adjudication normaliser (post-hoc, 2026-11-10) ------------------------------
 #
-# The reference convention on repetitions was never written down before the 09b
+# The reference convention on repetitions was never written down before the T2
 # calibration: the judge writes every spoken word, the T2 reference mostly drops
 # immediate repetitions and restarts. `normalize_for_adjudication` makes the
 # convention explicit and is applied to BOTH sides of every comparison (and to

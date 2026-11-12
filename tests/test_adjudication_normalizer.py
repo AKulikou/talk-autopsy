@@ -90,7 +90,7 @@ def test_normaliser_makes_the_09b_convention_cases_agree():
 
 
 def test_repetition_across_a_span_boundary_is_not_seen():
-    # 09b span 0104: the "I" of the restart sits in the context words, so the span text
+    # T2 calibration span 0104: the "I" of the restart sits in the context words, so the span text
     # "wanted to I wanted to include" holds no immediate repetition (documented limitation)
     assert normalize_for_adjudication("wanted to I wanted to include") == "wanted to I wanted to include"
 

@@ -50,7 +50,7 @@ specification's Definition of Done is amended. The v1.0 comparison is the
 pipeline against raw Whisper, Whisper + Google Translate and a plain Gemini
 translation, on T2 and T6.
 
-Why: running VideoLingo's downloaded installer was blocked by the session's
+Why: running VideoLingo's downloaded installer was blocked by the coding agent's
 permission filter, and the project chose not to bypass it; VideoLingo has also
 switched its default recogniser to Qwen3-ASR.
 
@@ -235,7 +235,7 @@ Decision: the owner moved the Gemini project to the paid tier (Tier 1) with a
 monthly spend cap of EUR 5 in AI Studio. The judge uses the most capable model
 the key offers, `gemini-4-carbon`, with the lowest thinking level (`low`): a
 model different from the one the Gemini STT engine uses (the CLI refuses the
-engine's models). The brief asked for the newest Pro model, but
+engine's models). The newest Pro model was the first choice, but
 `gemini-3.1-pro-preview` answers 404 for this key, and `gemini-2.5-pro` will
 route to `gemini-3.8-flash`, the STT engine's model, from 2026-12-01. Each
 session caps the judge at $3 by its own counter (cost per response from the
@@ -318,7 +318,7 @@ model inside a call would make a row in `results/benchmark.csv` describe a model
 that did not produce it. A refusal is already a hard error in
 `core/structured_call.py`, so a declined block fails visibly instead. Decided
 when the correction stage was written (the Backlog item asked for that), by
-the assistant during the unattended session of 2026-11-09; the owner may
+the assistant while the owner was away on 2026-11-09; the owner may
 reverse it for the v1.0 tool, where availability matters more than attribution.
 
 What it rules out: a run that completes on a different model without saying

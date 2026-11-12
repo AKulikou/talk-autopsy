@@ -178,7 +178,7 @@ launcher re-run with the TV file takes minutes, not seconds (Backlog).
 The specification's comparison for v1.0: Talk Autopsy (`pipeline-v3`) against raw Whisper,
 Whisper + Google Translate and a plain Gemini translation on one set. **VideoLingo is out of v1.0
 scope** (owner's decision 2026-11-11; the specification's Definition of Done amended): running its
-downloaded installer was blocked by the session's permission filter and the project chose not to
+downloaded installer was blocked by the coding agent's permission filter and the project chose not to
 bypass it; it had also switched its default recogniser from WhisperX to Qwen3-ASR since the
 specification was written. The attempt is recorded below. The set is **T2 and T6**: both have
 references, and T6 is no longer sealed after its single run. The same metrics everywhere (Metrics
@@ -215,7 +215,7 @@ is exactly raw Whisper's and only the translation differs from what the owner wi
 The key is registered in `talk_autopsy/secret_registry.py`, not in `config.SECRET_ENV_VARS`: `config.py`
 is a frozen path of `pipeline-v3`. Tests use a fake caller and a fake `urlopen` (no network).
 
-*Run (2026-11-11, prompt 17).* The key (restricted to the Cloud Translation API, free tier) was added to
+*Run (2026-11-11).* The key (restricted to the Cloud Translation API, free tier) was added to
 `.env`; the script now counts every character before the first request and sends nothing above
 `--max-chars`. Planned and sent: **T2 10,660** characters (41 units, 3 requests), **T6 11,022** (156
 units, 3 requests) and the **12 T6 rating items, 668** (1 request; Translation rating below): **22,350
@@ -228,7 +228,7 @@ raw Whisper's metrics; the translation does not change them. Its translation is 
 the owner's rating.
 
 **VideoLingo (2026-11-11): attempted, not run.** VideoLingo (Apache-2.0) was cloned into
-`C:\Projects\videolingo-baseline\VideoLingo` (outside the repository), commit
+a folder outside the repository, commit
 `61d944a46df6970176191606a89e646122da8f0a` (2026-11-10, version string 3.1.1 in its `config.yaml`).
 Its defaults have changed since the specification was written: local recognition is now
 **Qwen3-ASR 1.7B with Qwen3-ForcedAligner** (WhisperX is no longer installed by its installer), on
@@ -238,16 +238,16 @@ defaults with the LLM set to `claude-sonnet-5-5` through Anthropic's OpenAI-comp
 (`https://api.anthropic.com/v1/`; VideoLingo sends no `response_format` by default, which matters
 because the endpoint accepts only a strict `json_schema` there), behind a local logging proxy so that
 the key stays in memory and the token usage is recorded exactly. **The first installation attempt
-was refused by the session's permission policy** (Claude Code auto mode: running code downloaded from
+was refused by the coding agent's permission policy** (Claude Code auto mode: running code downloaded from
 outside the project, "Code from External"), before any package was installed. That is a policy
 decision for the owner, not a technical failure, so it was not retried or worked around; the second
 attempt is left to the owner (below). No API key was written to any file; LLM cost 0 USD.
 
 **Out of v1.0 scope (owner's decision 2026-11-11).** The installer was not retried and the
 permission filter was not bypassed; its default recogniser is now Qwen3-ASR. The notes below are
-kept for a later version. To run it: either the owner allows this session type to run the VideoLingo installer, or runs it
-once by hand (`cd C:\Projects\videolingo-baseline\VideoLingo; uv run start.py --api`) and a later
-session drives the API on `data/test-set/T2.wav` and `T6.wav`; estimate for two 10-minute fragments
+kept for a later version. To run it: either the owner allows the coding agent to run the VideoLingo installer, or runs it
+once by hand (`uv run start.py --api` in the VideoLingo folder) and a later
+run drives the API on `data/test-set/T2.wav` and `T6.wav`; estimate for two 10-minute fragments
 with Sonnet 5.5: under 1 USD (its summary, term extraction, meaning split, two-step translation and
 alignment calls), Qwen3-ASR on the CPU of the order of the fragment length or more (not measured).
 
@@ -311,7 +311,7 @@ committed before any call to Cloud Translation or to the Gemini rater.
 - **Scorer:** `uv run python scripts/translation_check.py score-baselines` after the file is filled;
   it writes the result below and the README column (markers in both files) and prints the same numbers.
 
-**Prepared (2026-11-11, prompt 17).** Google Translate items: `work/baselines/google-translate/T6-units.json`
+**Prepared (2026-11-11).** Google Translate items: `work/baselines/google-translate/T6-units.json`
 (12 units, 668 characters, part of the Google Translate run above). Rating file
 `work/T6/C1-T6-rating-2.md` (16 items: 12 Google Translate, anchors = first-file items 1 and 5 (pipeline)
 and 9 and 22 (Gemini), four different units; shuffled in 5 attempts; checked: the anchors' text equals the
@@ -552,13 +552,13 @@ owner then moved the project to the paid tier (decisions, 2026-11-10).
 - **Model and settings.** `gemini-4-carbon` (paid Standard tier; not the STT
   engine's model), thinking level `low` (the lowest the model allows; it used 0
   thinking tokens on every span), pace 2 s, the prompt and options exactly as
-  in 09a (`audio-judge-v1`). The brief asked for the newest Pro model:
+  in the free-tier attempt (`audio-judge-v1`). The newest Pro model was the first choice:
   `gemini-3.1-pro-preview` answers 404 for this key and `gemini-2.5-pro` routes
   to the STT engine's model from 2026-12-01, so the judge is the pricing page's
   "most capable reasoning model". All 114 spans judged by this one model; no
   free-tier pilot records existed.
 - **The owner's 19.** The owner's list of the spans decided by ear was recorded
-  after 09a (`work/T2/owner-by-ear.json`, 19 span ids); `judge-compare` now
+  after the free-tier attempt (`work/T2/owner-by-ear.json`, 19 span ids); `judge-compare` now
   uses it as its own class (`owner_ear`) and infers the class of the other
   spans as before.
 
@@ -610,7 +610,7 @@ owner then moved the project to the paid tier (decisions, 2026-11-10).
 **This is a post-hoc change made after seeing the calibration result; the
 threshold was not changed and no new judge requests were made.**
 
-- **The 09b numbers, as they were:** agreement 79.0% (90 of 114), the
+- **The calibration's numbers, as they were:** agreement 79.0% (90 of 114), the
   owner's 19 by ear 13 (68.4%), WER between the two T2 references 1.90%:
   failed the rule (agreement >= 90% and WER <= 2%).
 - **Why a rescoring.** 14 of the 24 disagreements were repetitions and false
@@ -635,7 +635,7 @@ threshold was not changed and no new judge requests were made.**
 - **Rescored** (`talk-autopsy judge-compare T2 --normalize-adjudication`, from
   the existing `work/T2/judge.jsonl`; `work/T2/judge.compare.normalized.json`):
 
-| Agreement with the decided T2 text | spans | 09b | rescored |
+| Agreement with the decided T2 text | spans | calibration | rescored |
 |---|---|---|---|
 | **overall** | 114 | 90 (79.0%) | **94 (82.5%)** |
 | decided by the owner's ear (recorded list) | 19 | 13 (68.4%) | 14 (73.7%) |
@@ -773,7 +773,7 @@ other conclusion is drawn. Implemented and tested with a fake client on
 2026-11-11; prepared after the run, not rated yet (below). (As first written:
 20 units of any length, 40 items.)
 
-*Amendment (2026-11-11, before the T6 run; prompt 15).* The owner asked that
+*Amendment (2026-11-11, before the T6 run).* The owner asked that
 the two translations of one unit are never adjacent in the rating file. The
 order under seed 20261112 depends only on the seed, not on any text. Its
 first shuffle puts two units' items side by side (positions 11–12 and 30–31),
@@ -901,7 +901,7 @@ accuracy ≥ 85%, fail if the upper bound < 85%, otherwise inconclusive.
   inside uncertain spans. `T6.glossary.md` stays local (git-ignored) until
   the T6 run is recorded.
 - **Cost and time.** Judge $0.2206 (86 spans, $0.0026 per span, 10 min, no
-  failed spans); glossary $0.0226; Gemini total **$0.2432** by the session's
+  failed spans); glossary $0.0226; Gemini total **$0.2432** by the tools'
   own counters at list price. Claude API and AssemblyAI: none.
 - **The gate** (`metrics.bounded_term_accuracy`, used by `talk-autopsy eval
   T6`): term accuracy against J and against M; per term with `c` certain and
@@ -916,8 +916,8 @@ accuracy ≥ 85%, fail if the upper bound < 85%, otherwise inconclusive.
 - **Known limit.** A term the engines' majority has inside a span where J
   has other words is not counted by the bounds (the glossary and the
   occurrences come from J); the accuracy against M shows that case.
-- **Next:** the frozen `pipeline-v2` on T6 once (after the independent LLM review
-  tonight), then `eval T6 --record`.
+- **Next (as planned then):** the frozen `pipeline-v2` on T6 once, after the
+  independent LLM review, then `eval T6 --record`.
 
 ## T6 result (2026-11-11)
 
@@ -933,7 +933,7 @@ after the numbers were seen.
   hand glossary, no `--domain`, no context; `.env` and shell settings that
   select a model or a version empty; translation `translation-v2.1`. Started
   20:06:46, ended 20:08:56, exit 0, no fallback. `--max-cost 1.0` is the
-  session's Claude budget as a stop; the estimate was 0.21 USD. Outputs in
+  Claude budget of that work as a stop; the estimate was 0.21 USD. Outputs in
   `work/T6/run-pipeline-v3/` (git-ignored); the worktree was removed.
   Scored from the main checkout: `eval T6 --hyp <run>/fixed.json --raw
   <run>/raw2.json --record --engine pipeline-v3 --stage fix`.
@@ -1025,8 +1025,8 @@ baseline; 22 items shuffled with seed 20261112, 2 of them shared). The owner
 rated `work/T6/C1-T6-rating.md` blind, one item at a time, without having
 watched T6; the scorer was then run once:
 `uv run python scripts/translation_check.py score` (defaults: the rating file
-and `work/T6/C1-T6-key.json`). The scorer's numbers equal the planning chat's
-independent check.
+and `work/T6/C1-T6-key.json`). The scorer's numbers equal the owner's
+independent count.
 
 | 12 units, single-rated 1–5 | mean | scores 5 / 4 / 3 / 2 / 1 |
 |---|---|---|
@@ -1047,7 +1047,7 @@ independent check.
   before the run); the rater reads the English first; the baseline translates
   the pipeline's corrected English, so it measures translation alone, not
   Gemini as a whole system. The lowest score of either system is 3.
-- **Cost:** baseline 0.0240 USD (Gemini, prepared in prompt 15); scoring
+- **Cost:** baseline 0.0240 USD (Gemini, prepared before the rating); scoring
   0 USD.
 
 ## Gate 2 -> 3 (2026-11-11)
@@ -1253,11 +1253,11 @@ include upload.
   describes are kept as `ru.v2seg.json` and `<name>.<lang>.v2seg.srt` / `.ass`.
 - **Outputs:** `work/T2.source/T2.source.ru.srt` / `.ass`,
   `T2.source.en.srt` / `.ass`; `work/real-01/real-01.ru.srt` / `.ass`,
-  `real-01.en.srt` / `.ass`. The prompt-05 outputs of the Gemini run are in
+  `real-01.en.srt` / `.ass`. The outputs of the earlier Gemini run are in
   `work/T2.source.prompt05/`. Of the money: the first start of the T2.source
   run was stopped by hand after its upload had begun (the old outputs had
   not been backed up yet); its AssemblyAI pass (up to 0.098 USD) is counted
-  as spent in the session total.
+  as spent in the day's total.
 
 ### YouTube input and output formats (2026-11-10; no pipeline run)
 
@@ -1988,8 +1988,8 @@ linger; cues never cross a segment boundary. Writing both files takes about
 - **Hypothesis:** Claude correction with the video's glossary brings term
   accuracy to the stage 2 target (>= 85%) without changing words that were
   already right (false-edit rate near 0) and without raising WER. (The
-  project plan is not in the repository; the wording follows the session
-  prompt and the stage 2 gate.)
+  project plan is not in the repository; the wording follows the owner's
+  instructions and the stage 2 gate.)
 - **Run:** 2026-11-09, `talk-autopsy fix` (commit 2359042's code),
   prompt `correction-v1` (`talk_autopsy/prompts/correction-v1.md`),
   `claude-sonnet-5-5`, default effort and adaptive thinking, blocks of about
@@ -2132,8 +2132,8 @@ silences near the 10-minute marks), chunks of 580, 608 and 485 s.
 | Attempt | What happened |
 |---|---|
 | 1 (20:00) | chunk 1 on `gemini-3.8-flash`: 104 segments, 749 s. Chunk 2: `gemini-3.8-flash` answered 503 on all attempts (waits 20, 60, 120 s), then `gemini-3.6-flash` the same; at 1405 s the chunk went to faster-whisper, as designed. Stopped by hand: a second faster-whisper decode would have spoiled the A2 timing running at the same time. Chunk 1 stayed cached. |
-| 2 (20:38) | chunk 1 from the cache in 0.6 s. Chunk 2 on `gemini-3.8-flash`: 108 segments, 411 s, no retry. Chunk 3: **429 RESOURCE_EXHAUSTED with a per-day quota**; the run stopped with the message that finished chunks are cached, as designed (12.4 min). No further Gemini call was made in the session (session rule). |
-| 3 (20:56, the 3.6 pipeline run) | `run --gemini-cache-only` (added for this case): chunks 1–2 from the cache, chunk 3 by faster-whisper large-v3 on 8 threads, 887 s for 485 s of audio (0.55x), not cached. Then forced alignment of all 1672 s. |
+| 2 (20:38) | chunk 1 from the cache in 0.6 s. Chunk 2 on `gemini-3.8-flash`: 108 segments, 411 s, no retry. Chunk 3: **429 RESOURCE_EXHAUSTED with a per-day quota**; the run stopped with the message that finished chunks are cached, as designed (12.4 min). No further Gemini call was made that day (the day's rule). |
+| 3 (20:56, the pipeline run) | `run --gemini-cache-only` (added for this case): chunks 1–2 from the cache, chunk 3 by faster-whisper large-v3 on 8 threads, 887 s for 485 s of audio (0.55x), not cached. Then forced alignment of all 1672 s. |
 
 | | Value |
 |---|---|
@@ -2173,7 +2173,7 @@ of them above 17 characters per second (verbatim English of a fast speaker),
   recorded as `meta.cpu_threads`). T2 then T1, nothing else heavy on the CPU
   except a few minutes of light editing and tests; a second faster-whisper
   process started for about one minute near the end of the T1 run (a chunk
-  fallback in the 2.4 smoke test, stopped at once). Test-set runs 7 and 8 of 10.
+  fallback in the smoke test, stopped at once). Test-set runs 7 and 8 of 10.
 - **Numbers** (reviewed glossaries; baseline = A1 (setup) re-scored):
 
   | | T2 baseline | T2 prompt | T1 baseline | T1 prompt |
@@ -2379,7 +2379,7 @@ Ideas that come up during a stage and wait for a later one.
   window. For flagging doubtful segments for correction, use word probabilities
   (for example the minimum or mean per segment) instead.
 
-- Words moved between segments (3.6, 2026-11-09): correction pulled words from
+- Words moved between segments (operational runs, 2026-11-09): correction pulled words from
   the next segment into a garbled one; the edit had a reason, so the validator
   passed it. Add a check that a segment does not gain words its neighbour
   loses, and say in correction-v2 that a garbled segment is left as it is.
