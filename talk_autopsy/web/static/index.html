@@ -1,13 +1,154 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="talk-autopsy-token" content="__TALK_AUTOPSY_TOKEN__">
+<meta name="color-scheme" content="light dark">
 <title>Talk Autopsy</title>
+<link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<main id="app">Talk Autopsy</main>
+<header class="top">
+  <div>
+    <h1 data-i18n="app_title">Talk Autopsy</h1>
+    <p class="subtitle" data-i18n="app_subtitle"></p>
+  </div>
+  <label class="ui-lang">
+    <span data-i18n="ui_language"></span>
+    <select id="ui-lang"></select>
+  </label>
+</header>
+
+<main id="main">
+  <p id="global-error" class="error" role="alert" hidden></p>
+
+  <!-- 1. Form -->
+  <section id="view-form" class="view" aria-labelledby="mode-legend">
+    <form id="form" novalidate>
+      <h2 id="mode-legend" data-i18n="mode_legend"></h2>
+      <div class="tabs" role="tablist" aria-labelledby="mode-legend">
+        <button type="button" role="tab" id="tab-url" aria-controls="panel-url" aria-selected="true"
+                data-mode="url" data-i18n="tab_url"></button>
+        <button type="button" role="tab" id="tab-file" aria-controls="panel-file" aria-selected="false"
+                tabindex="-1" data-mode="file" data-i18n="tab_file"></button>
+      </div>
+
+      <div role="tabpanel" id="panel-url" aria-labelledby="tab-url" class="panel">
+        <label for="url" data-i18n="url_label"></label>
+        <input id="url" name="url" type="text" inputmode="url" autocomplete="off" spellcheck="false"
+               data-i18n-placeholder="url_placeholder">
+      </div>
+
+      <div role="tabpanel" id="panel-file" aria-labelledby="tab-file" class="panel" hidden>
+        <div class="file-row">
+          <button type="button" id="browse" class="secondary" data-i18n="file_browse"></button>
+          <output id="file-chosen" class="file-chosen" aria-live="polite">
+            <span id="file-none" data-i18n="file_none"></span>
+            <span id="file-name-row" hidden><span data-i18n="file_name"></span>: <strong id="file-name"></strong></span>
+            <span id="file-folder-row" hidden><span data-i18n="file_folder"></span>: <span id="file-folder"></span></span>
+          </output>
+        </div>
+        <p id="file-picking" class="muted" data-i18n="file_picking" hidden></p>
+        <div id="manual" hidden>
+          <p class="muted" data-i18n="file_manual_hint"></p>
+          <label for="path" data-i18n="file_manual_label"></label>
+          <input id="path" name="path" type="text" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <fieldset class="profiles">
+        <legend data-i18n="profile_legend"></legend>
+        <label class="choice"><input type="radio" name="profile" value="tv" checked>
+          <span><strong data-i18n="profile_tv"></strong><span class="desc" data-i18n="profile_tv_desc"></span></span></label>
+        <label class="choice"><input type="radio" name="profile" value="laptop">
+          <span><strong data-i18n="profile_laptop"></strong><span class="desc" data-i18n="profile_laptop_desc"></span></span></label>
+        <label class="choice"><input type="radio" name="profile" value="all">
+          <span><strong data-i18n="profile_all"></strong><span class="desc" data-i18n="profile_all_desc"></span></span></label>
+      </fieldset>
+
+      <label class="check"><input type="checkbox" id="web3"> <span data-i18n="web3_label"></span></label>
+
+      <div class="lang-row">
+        <label for="target-lang" data-i18n="lang_label"></label>
+        <select id="target-lang"></select>
+      </div>
+      <p id="lang-note" class="note" data-i18n="lang_not_measured" hidden></p>
+
+      <p id="form-error" class="error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="submit" id="estimate" class="primary" data-i18n="estimate_button"></button>
+      </div>
+    </form>
+  </section>
+
+  <!-- 2. Estimate -->
+  <section id="view-estimate" class="view" hidden aria-labelledby="est-heading">
+    <h2 id="est-heading" data-i18n="est_heading"></h2>
+    <dl class="facts">
+      <dt data-i18n="est_title"></dt><dd id="est-title"></dd>
+      <dt data-i18n="est_duration"></dt><dd id="est-duration"></dd>
+      <dt data-i18n="est_cost"></dt><dd id="est-cost"></dd>
+      <dt data-i18n="est_time"></dt><dd id="est-time"></dd>
+      <dt data-i18n="est_formats"></dt><dd><ul id="est-formats" class="plain"></ul></dd>
+    </dl>
+    <ul id="est-notes" class="notes"></ul>
+    <div id="confirm-box" class="confirm" hidden>
+      <p id="confirm-text"></p>
+      <label class="check"><input type="checkbox" id="confirm"> <span id="confirm-label"></span></label>
+    </div>
+    <p id="est-error" class="error" role="alert" hidden></p>
+    <div class="actions">
+      <button type="button" id="start" class="primary" data-i18n="start_button"></button>
+      <button type="button" id="back" class="secondary" data-i18n="back_button"></button>
+    </div>
+  </section>
+
+  <!-- 3. Running -->
+  <section id="view-run" class="view" hidden aria-labelledby="run-heading">
+    <h2 id="run-heading" data-i18n="run_heading"></h2>
+    <p id="run-title" class="run-title"></p>
+    <dl class="facts compact">
+      <dt data-i18n="run_elapsed"></dt><dd id="run-elapsed">0:00</dd>
+      <dt data-i18n="run_left"></dt><dd id="run-left"></dd>
+      <dt data-i18n="run_cost"></dt><dd id="run-cost">0.00 USD</dd>
+    </dl>
+    <ol id="steps" class="steps"></ol>
+    <p class="muted" data-i18n="run_note"></p>
+    <!-- The text block: plain now; session 2 replaces this element and textlog.js only. -->
+    <section id="textlog" class="textlog" aria-labelledby="log-heading">
+      <h3 id="log-heading" data-i18n="run_log"></h3>
+      <ol id="log" class="log" aria-live="off"></ol>
+    </section>
+  </section>
+
+  <!-- 4. Done / failed -->
+  <section id="view-done" class="view" hidden aria-labelledby="done-heading">
+    <h2 id="done-heading" data-i18n="done_heading"></h2>
+    <p><span data-i18n="done_cost"></span>: <span id="done-cost"></span></p>
+    <h3 data-i18n="done_files"></h3>
+    <ul id="done-files" class="files"></ul>
+    <p class="muted"><code id="done-folder"></code></p>
+    <p id="done-error" class="error" role="alert" hidden></p>
+    <div class="actions">
+      <button type="button" id="open-folder" class="primary" data-i18n="open_folder"></button>
+      <button type="button" id="another" class="secondary" data-i18n="another"></button>
+    </div>
+  </section>
+
+  <section id="view-failed" class="view" hidden aria-labelledby="failed-heading">
+    <h2 id="failed-heading" data-i18n="failed_heading"></h2>
+    <p><strong data-i18n="failed_reason"></strong>: <span id="failed-reason"></span></p>
+    <p id="failed-hint"></p>
+    <div id="doctor" hidden>
+      <h3 data-i18n="doctor_heading"></h3>
+      <ul id="doctor-list" class="doctor"></ul>
+    </div>
+    <div class="actions">
+      <button type="button" id="failed-back" class="primary" data-i18n="back_button"></button>
+    </div>
+  </section>
+</main>
 <script type="module" src="/static/app.js"></script>
 </body>
 </html>
