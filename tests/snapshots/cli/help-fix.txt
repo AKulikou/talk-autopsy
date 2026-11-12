@@ -1,0 +1,19 @@
+exit code: 0
+---
+Usage: root fix [OPTIONS] {transcript}
+
+ Claude correction of TRANSCRIPT: prints the estimate, then corrects block by block.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    transcript      <path>  Raw or aligned transcript JSON. [required]                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out       -o      <path>   Corrected transcript JSON to write. [required]                   │
+│    --glossary          <path>   Glossary Markdown table of the video.                            │
+│    --context           <path>   meta.json with title, description, chapters.                     │
+│    --model             <str>    Claude model. Default: CORRECTION_MODEL.                         │
+│    --prompt            <str>    Prompt version: correction-v1 | correction-v2.                   │
+│                                 [default: correction-v2]                                         │
+│    --max-cost          <float>  Stop if the estimate is above this (USD). [default: 3.0]         │
+│    --help                       Show this message and exit.                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

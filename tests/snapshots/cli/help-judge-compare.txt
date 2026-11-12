@@ -1,0 +1,17 @@
+exit code: 0
+---
+Usage: root judge-compare [OPTIONS] {fragment}
+
+ Agreement of the judge's file with the decided adjudication file, overall and by how each span was
+ decided (inferred), and the WER between the decided reference and one resolved from the judged
+ file. Prints span texts: never use it on a sealed fragment.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    fragment      <str>  Test-set fragment ID with decided spans, e.g. T2. [required]           │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --normalize-adjudication          Compare after the adjudication normaliser on both sides        │
+│                                   (post-hoc rescoring, 2026-11-10); writes                       │
+│                                   judge.compare.normalized.json.                                 │
+│ --help                            Show this message and exit.                                    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -1,0 +1,17 @@
+exit code: 0
+---
+Usage: root judge-refs [OPTIONS] {fragment}
+
+ Two references from the judge's records: J (the judge's text in every judged span) ->
+ <FRAGMENT>.ref.txt, M (the engines' majority where one exists, the judge on splits) ->
+ <FRAGMENT>.ref.majority.txt, and work/<FRAGMENT>/uncertain_spans.json (split spans plus majority
+ spans where J and M differ). With <FRAGMENT>.glossary.md present, also counts its term occurrences
+ in J and inside uncertain spans. Prints counts only.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    fragment      <str>  Test-set fragment ID judged by the audio judge, e.g. T6. [required]    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --force          Overwrite OUT if it exists.                                                     │
+│ --help           Show this message and exit.                                                     │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -1,0 +1,20 @@
+exit code: 0
+---
+Usage: root eval [OPTIONS] {fragment}
+
+ Score HYP against data/test-set/<FRAGMENT>.ref.txt: WER, term accuracy, false-edit rate.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    fragment      <str>  Test-set fragment ID, e.g. T2. [required]                              │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --hyp           <path>  Hypothesis: a Transcript JSON or a plain .txt. [required]             │
+│    --raw           <path>  Raw transcript before correction (JSON or .txt); adds the false-edit  │
+│                            rate.                                                                 │
+│    --record                Append one row to results/benchmark.csv.                              │
+│    --engine        <str>   Engine or prompt version for the benchmark row (with --record).       │
+│    --stage         <str>   Pipeline stage for the benchmark row, e.g. stt or fix (with           │
+│                            --record).                                                            │
+│    --notes         <str>   Free text for the notes column (with --record).                       │
+│    --help                  Show this message and exit.                                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

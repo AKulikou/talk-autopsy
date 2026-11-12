@@ -1,0 +1,16 @@
+exit code: 0
+---
+Usage: root adjudicate [OPTIONS] {fragment}
+
+ Align three transcripts; write the adjudication file and one audio clip per disagreement.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    fragment      <str>  Test-set fragment ID, e.g. T2. [required]                              │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --backbone        <path>  Transcript with word timings (faster-whisper). [required]           │
+│ *  --hyp             <path>  Cloud transcript; give it twice (AssemblyAI, Gemini). [required]    │
+│    --audio           <path>  Audio for the clips. Default: data/test-set/<FRAGMENT>.wav.         │
+│    --force                   Overwrite OUT if it exists.                                         │
+│    --help                    Show this message and exit.                                         │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

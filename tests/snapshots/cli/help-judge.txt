@@ -1,0 +1,27 @@
+exit code: 0
+---
+Usage: root judge [OPTIONS] {fragment}
+
+ Blind audio judge: Gemini listens to every majority and split span's clip, transcribes it, then
+ picks one of the shuffled unlabeled variants or types its own text. Writes
+ work/<FRAGMENT>/judge.jsonl and data/test-set/<FRAGMENT>.adjudication.judged.md. Prints counts and
+ cost only.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    fragment      <str>  Test-set fragment ID, e.g. T2. [required]                              │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --model               <str>                   Gemini model. Default: JUDGE_MODEL                 │
+│                                               (gemini-4-carbon); never the STT engine's model.   │
+│ --limit               <int range> [x>=1]      Judge at most N spans in this run.                 │
+│ --resume                                      Continue work/<FRAGMENT>/judge.jsonl.              │
+│ --pace                <float range> [x>=0.0]  Seconds between request starts. [default: 7.0]     │
+│ --budget              <float range> [x>=0.0]  Session budget in USD (the run's own counter).     │
+│                                               [default: 3.0]                                     │
+│ --spent-before        <float range> [x>=0.0]  USD the session spent before this run.             │
+│                                               [default: 0.0]                                     │
+│ --plan-after          <int range> [x>=0]      Spans of later work in the same budget, for the    │
+│                                               projection (e.g. T6 after T2).                     │
+│                                               [default: 0]                                       │
+│ --help                                        Show this message and exit.                        │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

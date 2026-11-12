@@ -1,0 +1,26 @@
+exit code: 0
+---
+Usage: root transcribe [OPTIONS] {audio}
+
+ Speech recognition of AUDIO: faster-whisper on the CPU, or a cloud engine (the audio is uploaded).
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    audio      <path>  16 kHz mono WAV (from `talk-autopsy cut`). [required]                    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out              -o      <path>              Transcript JSON to write. [required]           │
+│    --engine                   <str>               Speech recognition engine: faster-whisper |    │
+│                                                   assemblyai | gemini | gemini+align.            │
+│                                                   [default: faster-whisper]                      │
+│    --model                    <str>               Model of the engine. Default: large-v3         │
+│                                                   (faster-whisper), universal-3-5-pro            │
+│                                                   (assemblyai), GEMINI_MODEL (gemini), the first │
+│                                                   of GEMINI_MODELS (gemini+align).               │
+│    --glossary                 <path>              Glossary Markdown table of the fragment.       │
+│    --glossary-prompt                              Pass the glossary terms to the engine (Whisper │
+│                                                   prompt, AssemblyAI keyterms, Gemini context).  │
+│    --threads                  <int range> [x>=0]  CPU threads for faster-whisper; 0 = its        │
+│                                                   default (4).                                   │
+│                                                   [default: 0]                                   │
+│    --help                                         Show this message and exit.                    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

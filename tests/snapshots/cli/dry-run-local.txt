@@ -1,0 +1,14 @@
+exit code: 0
+---
+Source: <SOURCE> (local file)
+Target language: ru
+Steps:
+  1. stt        speech recognition (assemblyai; first pass, compressed audio upload) -> raw.json
+  2. glossary   auto-glossary (claude-haiku-5-5) merged with --glossary -> glossary.md
+  3. stt2       speech recognition with the glossary as key terms -> raw2.json
+  4. align      forced alignment where times are model estimates -> aligned.json
+  5. fix        Claude correction (correction-v2, claude-sonnet-5-5) -> fixed.json
+  6. translate  Claude translation (translation-v2.1, claude-sonnet-5-5) -> ru.json
+  7. srt        subtitles -> .ru.srt/.ass and .en.srt/.ass
+Outputs: srt, ass
+Estimate: 0.0 min of video: about 0.00 USD Claude + 0.00 USD AssemblyAI (list price), about 0 min of processing plus download (and burn-in, if asked)

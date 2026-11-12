@@ -1,0 +1,18 @@
+exit code: 1
+---
+MISSING  ffmpeg: not found on PATH
+           fix: winget install Gyan.FFmpeg (or choco install ffmpeg)
+  MISSING  ffprobe: not found on PATH
+           fix: winget install Gyan.FFmpeg (or choco install ffmpeg)
+  ok       JavaScript runtime (YouTube): deno 2.5.0
+  ok       yt-dlp-ejs (YouTube challenge solver): installed
+  ok       yt-dlp version: 2026.10.26, 17 days old
+  warning  align extra (Gemini fallback only): not installed; forced alignment is needed only for the Gemini fallback
+           fix: uv sync --extra align
+  ok       web UI (talk-autopsy web): can start (fastapi, uvicorn installed)
+  MISSING  ANTHROPIC_API_KEY: not set
+           fix: add it to .env
+  warning  ASSEMBLYAI_API_KEY: not set
+           fix: add it to .env
+  warning  GEMINI_API_KEY: not set
+           fix: add it to .env

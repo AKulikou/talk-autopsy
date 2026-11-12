@@ -1,0 +1,23 @@
+exit code: 0
+---
+Usage: root translate [OPTIONS] {transcript}
+
+ Claude translation of TRANSCRIPT into --lang, by sentence units (units.py) unless --per-segment.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    transcript      <path>  Corrected transcript JSON. [required]                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out          -o      <path>   Translated transcript JSON to write. [required]               │
+│    --lang                 <str>    Target language code. Default: TARGET_LANG.                   │
+│    --glossary             <path>   Glossary Markdown table of the video.                         │
+│    --context              <path>   meta.json with title, description, chapters.                  │
+│    --model                <str>    Claude model. Default: TRANSLATION_MODEL.                     │
+│    --prompt               <str>    Prompt version: translation-v1 | translation-v2 |             │
+│                                    translation-v2.1 | translation-v3.                            │
+│                                    [default: translation-v2.1]                                   │
+│    --max-cost             <float>  Stop if the estimate is above this (USD). [default: 3.0]      │
+│    --per-segment                   Translate each segment alone (before 2026-11-10) instead of   │
+│                                    sentence units.                                               │
+│    --help                          Show this message and exit.                                   │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

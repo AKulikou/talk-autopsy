@@ -1,0 +1,11 @@
+exit code: 0
+---
+Usage: root web [OPTIONS]
+
+ Start the local web page (this computer only) and open it in the browser; Ctrl+C stops it.
+
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --port              <int>  Port on 127.0.0.1 (default 8765, or the next free one).               │
+│ --no-browser               Do not open the browser.                                              │
+│ --help                     Show this message and exit.                                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -1,0 +1,14 @@
+exit code: 0
+---
+Usage: root align [OPTIONS] {transcript} {audio}
+
+ Forced alignment: re-time every word of TRANSCRIPT on AUDIO (needs `uv sync --extra align`).
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    transcript      <path>  Transcript JSON (any engine; times may be estimates). [required]    │
+│ *    audio           <path>  The 16 kHz mono WAV the transcript was made from. [required]        │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out   -o      <path>  Aligned transcript JSON to write. [required]                          │
+│    --help                  Show this message and exit.                                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

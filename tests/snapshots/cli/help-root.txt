@@ -1,0 +1,65 @@
+exit code: 0
+---
+Usage: root [OPTIONS] COMMAND [ARGS]...
+
+ English technical talks to subtitles in a target language.
+
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --help          Show this message and exit.                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Commands ───────────────────────────────────────────────────────────────────────────────────────┐
+│ cut            Extract 16 kHz mono WAV audio from SOURCE, optionally only from --start to --end. │
+│ transcribe     Speech recognition of AUDIO: faster-whisper on the CPU, or a cloud engine (the    │
+│                audio is uploaded).                                                               │
+│ fix            Claude correction of TRANSCRIPT: prints the estimate, then corrects block by      │
+│                block.                                                                            │
+│ glossary-auto  Draft the glossary of a video from its first transcript (glossary-auto-v2, helper │
+│                model).                                                                           │
+│ translate      Claude translation of TRANSCRIPT into --lang, by sentence units (units.py) unless │
+│                --per-segment.                                                                    │
+│ srt            Subtitles: .srt and a sibling .ass; cues of up to 3 x 48 characters, 1-7 s, split │
+│                at clause ends.                                                                   │
+│ align          Forced alignment: re-time every word of TRANSCRIPT on AUDIO (needs `uv sync       │
+│                --extra align`).                                                                  │
+│ run            Run the pipeline on SOURCE; every step writes its file in work/<video-id>/ and    │
+│                skips if up to date.                                                              │
+│                Default: AssemblyAI, auto-glossary, AssemblyAI with key terms, correction,        │
+│                translation, subtitles.                                                           │
+│                A YouTube link is downloaded first (up to 1080p) into OUTPUT_DIR/<date> <title>/, │
+│                where the outputs                                                                 │
+│                go; a local file's outputs go to OUTPUT_DIR/<file name>/.                         │
+│ doctor         Check what the tool needs here: ffmpeg, a JavaScript runtime for YouTube, yt-dlp, │
+│                API keys (names).                                                                 │
+│ web            Start the local web page (this computer only) and open it in the browser; Ctrl+C  │
+│                stops it.                                                                         │
+│ eval           Score HYP against data/test-set/<FRAGMENT>.ref.txt: WER, term accuracy,           │
+│                false-edit rate.                                                                  │
+│ adjudicate     Align three transcripts; write the adjudication file and one audio clip per       │
+│                disagreement.                                                                     │
+│ resolve        Compose the reference from the agreed words and the variants chosen in the        │
+│                adjudication file.                                                                │
+│ judge          Blind audio judge: Gemini listens to every majority and split span's clip,        │
+│                transcribes it,                                                                   │
+│                then picks one of the shuffled unlabeled variants or types its own text. Writes   │
+│                work/<FRAGMENT>/judge.jsonl and data/test-set/<FRAGMENT>.adjudication.judged.md.  │
+│                Prints counts                                                                     │
+│                and cost only.                                                                    │
+│ judge-compare  Agreement of the judge's file with the decided adjudication file, overall and by  │
+│                how each                                                                          │
+│                span was decided (inferred), and the WER between the decided reference and one    │
+│                resolved from                                                                     │
+│                the judged file. Prints span texts: never use it on a sealed fragment.            │
+│ judge-refs     Two references from the judge's records: J (the judge's text in every judged      │
+│                span) ->                                                                          │
+│                <FRAGMENT>.ref.txt, M (the engines' majority where one exists, the judge on       │
+│                splits) ->                                                                        │
+│                <FRAGMENT>.ref.majority.txt, and work/<FRAGMENT>/uncertain_spans.json (split      │
+│                spans plus majority                                                               │
+│                spans where J and M differ). With <FRAGMENT>.glossary.md present, also counts its │
+│                term occurrences                                                                  │
+│                in J and inside uncertain spans. Prints counts only.                              │
+│ glossary-ref   Reference glossary drafted by Gemini (not Claude) from                            │
+│                data/test-set/<FRAGMENT>.ref.txt:                                                 │
+│                terms that do not occur in the reference are dropped. Writes                      │
+│                <FRAGMENT>.glossary.md. Counts only.                                              │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

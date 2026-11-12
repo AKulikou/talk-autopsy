@@ -1,0 +1,10 @@
+exit code: 0
+---
+Usage: root doctor [OPTIONS]
+
+ Check what the tool needs here: ffmpeg, a JavaScript runtime for YouTube, yt-dlp, API keys
+ (names).
+
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --help          Show this message and exit.                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

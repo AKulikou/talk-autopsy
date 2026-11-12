@@ -1,0 +1,22 @@
+exit code: 0
+---
+Usage: root resolve [OPTIONS] {fragment}
+
+ Compose the reference from the agreed words and the variants chosen in the adjudication file.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    fragment      <str>  Test-set fragment ID, e.g. T2. [required]                              │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --out                     -o      <path>  Reference to write. Default:                           │
+│                                           data/test-set/<FRAGMENT>.ref.txt.                      │
+│ --adjudication                    <path>  Filled adjudication file. Default:                     │
+│                                           data/test-set/<FRAGMENT>.adjudication.md (the judge's  │
+│                                           copy: <FRAGMENT>.adjudication.judged.md).              │
+│ --force                                   Overwrite OUT if it exists.                            │
+│ --normalize-adjudication                  Pass every span's chosen text through the adjudication │
+│                                           normaliser (repetitions written once, thousands        │
+│                                           separators, key combinations); for a reference built   │
+│                                           from a judged file.                                    │
+│ --help                                    Show this message and exit.                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

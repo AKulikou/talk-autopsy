@@ -1,0 +1,53 @@
+exit code: 0
+---
+Usage: root run [OPTIONS] {source}
+
+ Run the pipeline on SOURCE; every step writes its file in work/<video-id>/ and skips if up to
+ date. Default: AssemblyAI, auto-glossary, AssemblyAI with key terms, correction, translation,
+ subtitles. A YouTube link is downloaded first (up to 1080p) into OUTPUT_DIR/<date> <title>/, where
+ the outputs go; a local file's outputs go to OUTPUT_DIR/<file name>/.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    source      <str>  YouTube video or playlist URL, or a local file. [required]               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --lang                     <str>               Target language code. Default: TARGET_LANG.       │
+│ --steps                    <str>               Comma-separated, any of: stt, glossary, stt2,     │
+│                                                align, fix, translate, srt, dub.                  │
+│                                                [default:                                         │
+│                                                stt,glossary,stt2,align,fix,translate,srt]        │
+│ --engine                   <str>               Speech recognition: assemblyai | faster-whisper | │
+│                                                gemini | gemini+align.                            │
+│                                                [default: assemblyai]                             │
+│ --glossary                 <path>              Your glossary (Markdown table); merged with the   │
+│                                                auto-glossary, your entries win.                  │
+│ --domain                   <str>               Domain glossary glossaries/<DOMAIN>.md (+         │
+│                                                glossaries/local/<DOMAIN>.md), e.g. web3; merged  │
+│                                                after --glossary.                                 │
+│ --context                  <str>               Video title, description, chapter titles: text,   │
+│                                                or a file holding it. A local file's name is not  │
+│                                                context; for a YouTube link it is taken from the  │
+│                                                video.                                            │
+│ --output                   <str>               Comma-separated outputs: srt, ass, bilingual,     │
+│                                                mp4-soft, mp4-burned, or all. mp4-burned is for   │
+│                                                TVs.                                              │
+│                                                [default: srt,ass]                                │
+│ --translation              <str>               Translation prompt: v2 (default:                  │
+│                                                translation-v2.1) or v3 (term classes keep / both │
+│                                                / translate / ui). Default: TRANSLATION_VERSION.  │
+│ --max-cost                 <float>             Stop before the Claude steps of a video if their  │
+│                                                estimate is above this (USD).                     │
+│                                                [default: 3.0]                                    │
+│ --max-videos               <int range> [x>=1]  Playlist: at most N videos.                       │
+│ --max-total-cost           <float>             Playlist: stop before a video that would take the │
+│                                                estimated total (Claude + speech recognition)     │
+│                                                past this (USD).                                  │
+│                                                [default: 10.0]                                   │
+│ --name                     <str>               Name of the run: work/<name>/ and                 │
+│                                                <name>.<lang>.srt. Default: the file name.        │
+│ --dry-run                                      Print the plan (and a link's metadata) and stop.  │
+│ --gemini-cache-only                            No Gemini call: reuse cached Gemini chunks,       │
+│                                                transcribe the rest with faster-whisper (for a    │
+│                                                day when the free quota is used up).              │
+│ --help                                         Show this message and exit.                       │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -1,0 +1,14 @@
+exit code: 0
+---
+Usage: root srt [OPTIONS] {transcript}
+
+ Subtitles: .srt and a sibling .ass; cues of up to 3 x 48 characters, 1-7 s, split at clause ends.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    transcript      <path>  Transcript JSON (aligned English or a translation). [required]      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out       -o      <path>  SRT file to write. [required]                                     │
+│    --glossary          <path>  Glossary: no cue break inside a term.                             │
+│    --help                      Show this message and exit.                                       │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

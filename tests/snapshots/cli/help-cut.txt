@@ -1,0 +1,15 @@
+exit code: 0
+---
+Usage: root cut [OPTIONS] {source}
+
+ Extract 16 kHz mono WAV audio from SOURCE, optionally only from --start to --end.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    source      <path>  Video or audio file. [required]                                         │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out    -o      <path>  WAV file to write. [required]                                        │
+│    --start          <str>   SS, MM:SS or HH:MM:SS. Default: the beginning.                       │
+│    --end            <str>   SS, MM:SS or HH:MM:SS. Default: the end.                             │
+│    --help                   Show this message and exit.                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

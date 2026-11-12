@@ -1,0 +1,20 @@
+exit code: 0
+---
+Usage: root glossary-auto [OPTIONS] {transcript}
+
+ Draft the glossary of a video from its first transcript (glossary-auto-v2, helper model).
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    transcript      <path>  Raw transcript JSON (first speech recognition pass). [required]     │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out       -o      <path>   Glossary Markdown table to write. [required]                     │
+│    --context           <str>    Video title, description, chapter titles: text, or a file        │
+│                                 holding it. A local file's name is not context.                  │
+│    --lang              <str>    Target language code. Default: TARGET_LANG.                      │
+│    --model             <str>    Claude model. Default: HELPER_MODEL.                             │
+│    --compare           <path>   Reference glossary: print coverage (reference terms spelled      │
+│                                 right) and noise.                                                │
+│    --max-cost          <float>  Stop if the estimate is above this (USD). [default: 3.0]         │
+│    --help                       Show this message and exit.                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

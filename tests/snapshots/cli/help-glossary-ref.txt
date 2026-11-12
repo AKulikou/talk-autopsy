@@ -1,0 +1,15 @@
+exit code: 0
+---
+Usage: root glossary-ref [OPTIONS] {fragment}
+
+ Reference glossary drafted by Gemini (not Claude) from data/test-set/<FRAGMENT>.ref.txt: terms
+ that do not occur in the reference are dropped. Writes <FRAGMENT>.glossary.md. Counts only.
+
+┌─ Arguments ──────────────────────────────────────────────────────────────────────────────────────┐
+│ *    fragment      <str>  Test-set fragment ID with a reference, e.g. T6. [required]             │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
+│ --model        <str>  Gemini model. Default: JUDGE_MODEL (gemini-4-carbon).                      │
+│ --force               Overwrite OUT if it exists.                                                │
+│ --help                Show this message and exit.                                                │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
