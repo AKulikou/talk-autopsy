@@ -115,10 +115,21 @@
     </dl>
     <ol id="steps" class="steps"></ol>
     <p class="muted" data-i18n="run_note"></p>
-    <!-- The text block: plain now; session 2 replaces this element and textlog.js only. -->
-    <section id="textlog" class="textlog" aria-labelledby="log-heading">
-      <h3 id="log-heading" data-i18n="run_log"></h3>
-      <ol id="log" class="log" aria-live="off"></ol>
+    <!-- The text as it becomes ready: rows built on the server, rendered by transcript.js. -->
+    <section id="live" class="live" aria-labelledby="live-heading">
+      <div class="live-head">
+        <h3 id="live-heading" data-i18n="live_heading"></h3>
+        <p id="live-status" class="live-status" aria-live="polite"></p>
+      </div>
+      <p class="muted legend" data-i18n="live_legend"></p>
+      <div class="cols" aria-hidden="true">
+        <span></span><span data-i18n="col_english"></span><span id="col-target"></span>
+      </div>
+      <button type="button" id="live-earlier" class="link" data-i18n="live_earlier" hidden></button>
+      <div id="live-rows" class="rows" role="list" tabindex="0" aria-labelledby="live-heading"></div>
+      <button type="button" id="live-later" class="link" data-i18n="live_later" hidden></button>
+      <button type="button" id="live-jump" class="jump" data-i18n="live_jump" hidden></button>
+      <ul id="live-notices" class="notices" aria-live="off"></ul>
     </section>
   </section>
 

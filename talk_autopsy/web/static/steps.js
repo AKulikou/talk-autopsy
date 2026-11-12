@@ -85,7 +85,9 @@ export function apply(event) {
     const parts = [];
     if (event.cost_usd) parts.push(`${event.cost_usd.toFixed(4)} USD`);
     if (event.stt_cost_usd) parts.push(`${event.stt_cost_usd.toFixed(4)} USD (${t("step_stt")})`);
-    if (event.tokens) parts.push(`${event.tokens.input.toLocaleString()} / ${event.tokens.output.toLocaleString()} tokens`);
+    if (event.tokens) {
+      parts.push(t("tokens", { input: event.tokens.input.toLocaleString(), output: event.tokens.output.toLocaleString() }));
+    }
     r.detail.textContent = parts.join(" · ");
     r.started = null;
   }

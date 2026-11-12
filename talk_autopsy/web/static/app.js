@@ -4,7 +4,7 @@ import { api } from "./api.js";
 import { applyStrings, clock, duration, errorText, setStrings, t, usd } from "./i18n.js";
 import { followJob } from "./events.js";
 import * as steps from "./steps.js";
-import * as textlog from "./textlog.js";
+import * as transcript from "./transcript.js";
 
 const $ = (id) => document.getElementById(id);
 const VIEWS = ["view-form", "view-estimate", "view-run", "view-done", "view-failed"];
@@ -30,6 +30,7 @@ const state = {
 
 function show(id) {
   for (const view of VIEWS) $(view).hidden = view !== id;
+  document.body.dataset.view = id; // the running and done screens use the full width
   const heading = $(id).querySelector("h2");
   if (heading) {
     heading.tabIndex = -1;
@@ -248,7 +249,8 @@ function attach(job) {
   $("run-cost").textContent = usd(job.cost_usd + job.stt_cost_usd);
   $("run-left").textContent = timeText(job.preview?.time);
   steps.build($("steps"), job.steps);
-  textlog.reset($("log"));
+  const lang = state.config?.languages.target.find((l) => l.code === job.request.target_lang);
+  transcript.reset(liveElements(), job.id, lang?.name || job.request.target_lang);
   show("view-run");
   clearInterval(state.timer);
   state.timer = setInterval(tick, 1000);
@@ -284,17 +286,26 @@ function onEvent(event) {
         $("run-left").textContent = event.time.seconds === null ? t("run_left_none") : timeText(event.time);
       }
       break;
-    case "text":
+    case "text_changed":
+      transcript.changed();
+      break;
     case "notice":
-      textlog.add(event);
+      transcript.notice(event);
       break;
     default:
       break;
   }
 }
 
+function liveElements() {
+  return { rows: $("live-rows"), status: $("live-status"), target: $("col-target"), notices: $("live-notices"),
+    jump: $("live-jump"), earlier: $("live-earlier"), later: $("live-later") };
+}
+
 function onEnd(event) {
   clearInterval(state.timer);
+  transcript.changed(); // the last text
+  setTimeout(transcript.stop, 1000);
   state.stop = null;
   if (event.type === "finished") showDone(event);
   else showFailed(event);
@@ -394,7 +405,9 @@ function wire() {
 
 async function main() {
   wire();
-  if (!(await loadConfig(null))) return;
+  transcript.wire(liveElements());
+  const ui = new URLSearchParams(window.location.search).get("ui"); // e.g. ?ui=lt, without saving it
+  if (!(await loadConfig(ui))) return;
   setMode("url");
   const { ok, data } = await api("GET", "/api/jobs/current");
   if (ok && data.job && data.job.state === "running") attach(data.job); // a reload reattaches
