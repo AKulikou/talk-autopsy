@@ -1134,6 +1134,15 @@ committed before the change, pass unchanged; T2 from cache gives the same
 SHA-256 for all 22 files with the new and the old code; the prompt files are
 unchanged. v1.0's numbers carry over; details in `docs/decisions.md`.
 
+Exception (2026-11-12), tag `pipeline-v3.2`: dead code and an unused
+dependency out of frozen paths, under the cache-key rule (`docs/decisions.md`):
+the `ingest.download` stub removed (`ingest.py` is in no cache key) and
+`edge-tts` dropped from `uv.lock` (removals only: edge-tts and the nine
+packages only it pulled in). Golden request tests pass unchanged; T2 from cache
+skips every model step (0 USD) and all 22 files keep their SHA-256.
+`metrics.timing_drift` stays: removing it changes the glossary, fix and
+translate cache keys.
+
 Settings: models `claude-haiku-5-5` (auto-glossary) and `claude-sonnet-5-5`
 (correction, translation) as the code's defaults, `.env` settings that select
 a model or a version empty; AssemblyAI `universal-3-5-pro`, two passes;
@@ -2450,9 +2459,13 @@ Ideas that come up during a stage and wait for a later one.
 Decided by the owner on 2026-11-12, with the `v1.0` tag. These touch frozen
 paths, so they wait until those modules are reopened for the web interface.
 
-- Remove the `ingest.download` stub and `metrics.timing_drift` (dead code in
-  frozen modules).
-- Drop the `edge-tts` dependency; re-add it when voice-over is built.
+- Done in v1.1 (tag `pipeline-v3.2`, cache keys unchanged): the
+  `ingest.download` stub removed, the `edge-tts` dependency dropped (re-add it
+  when voice-over is built).
+- `metrics.timing_drift`: dead code kept: removing it would invalidate cached
+  runs (`metrics.py` is hashed into the glossary, fix and translate cache keys,
+  so every cached step would re-run and be billed again). Remove it together
+  with the next change that reopens `metrics.py` anyway.
 - Split `cli.py` (about 1,300 lines) by command group (review #1, finding 15).
 - **Git-history rewrite with name replacement**, once, right before the
   repository is made public: verify with `scripts/check_names.py` and gitleaks

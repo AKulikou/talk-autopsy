@@ -539,6 +539,9 @@ language measured; the code takes any language as a parameter.
 - **Next-video failure modes** not handled: several speakers (no
   diarization), music, videos much longer than 40 minutes (untested).
 - **Costs** are list prices; AssemblyAI ran on its free credit.
+- **Dead code kept:** `metrics.timing_drift` (a stub) stays, because removing
+  it would invalidate cached runs: `metrics.py` is part of three steps' cache
+  keys.
 
 ## Not done
 
@@ -551,9 +554,7 @@ language measured; the code takes any language as a parameter.
 - A human check of the T6 reference (no fluent listener available).
 - Dubbing (stage 4, not started) and the web UI (v1.1).
 - Moved to v1.1 (owner, 2026-11-12): the git history rewritten without
-  identifying details and the repository made public; dead code in frozen
-  modules (`ingest.download`, `metrics.timing_drift`) and the unused `edge-tts`
-  dependency removed.
+  identifying details and the repository made public.
 
 ## Appendix: T1
 

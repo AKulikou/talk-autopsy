@@ -73,6 +73,10 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   `pipeline-v3.1` (2026-11-12) is the one observability exception: progress
   events in `pipeline.py` and `core/structured_call.py`, requests and outputs
   byte-identical (`tests/test_golden_requests.py`, `docs/decisions.md`).
+  **Cache-key rule** (since `pipeline-v3.2`, 2026-11-12): any other change to
+  a frozen path needs (a) golden tests unchanged, (b) the T2 re-run from cache
+  at 0 USD, (c) the 22 files of `work/T2-v3-cache/` byte-identical; else
+  revert it. Modules in `pipeline.STEP_CODE` (e.g. `metrics.py`) cannot pass.
 - **Keys:** never printed, logged or committed; importing a module reads
   neither `.env` nor a secret. A new pipeline key goes into
   `config.SECRET_ENV_VARS`, an evaluation key into `secret_registry`, both

@@ -6,6 +6,37 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-12 — Cache-key rule for frozen modules; `pipeline-v3.2` removes dead code
+
+Decision (owner, v1.1 session 3): a change to a frozen path is allowed without
+a new hold-out only if, afterwards, (a) the golden request tests
+(`tests/test_golden_requests.py`) pass unchanged, (b) the T2 re-run from cache
+(`talk-autopsy run data/test-set/T2.wav --lang ru --name T2-v3-cache`, invalid
+keys in the environment) is served entirely from cache at 0 USD, and (c) all
+22 files of `work/T2-v3-cache/` are byte-identical. If any of the three fails,
+the change is reverted and recorded instead. Prompt files never change under
+this rule.
+
+Applied, one change at a time:
+
+| change | frozen path | cache keys (`pipeline.code_hash`) | (a) golden | (b) T2 from cache | (c) 22 files | result |
+|---|---|---|---|---|---|---|
+| drop `edge-tts` | `uv.lock` (removals only) | unchanged | pass | 6 steps skipped, 0 USD | identical | done |
+| remove `metrics.timing_drift` | `metrics.py` | glossary, fix, translate change | — | would re-run 3 steps | — | reverted, kept |
+| remove `ingest.download` | `ingest.py` | unchanged (not hashed) | pass | 6 steps skipped, 0 USD | identical | done |
+
+The tag `pipeline-v3.2` marks the result. Model requests and outputs are those
+of `pipeline-v3`, so v1.0's measured numbers carry over without re-runs.
+
+Why: session 2 found that the source of frozen modules is part of the cache
+key (`pipeline.STEP_CODE`). A change that moves a key re-runs and re-bills
+finished steps and can move published numbers; a change that keeps every key
+provably changes nothing measured.
+
+What it rules out: removing `metrics.timing_drift` now (it is listed under
+Known limitations and in the Backlog); any change to a hashed module that is
+"cosmetic" only.
+
 ## 2026-11-12 — Observability exception: `pipeline-v3.1` adds progress events only
 
 Decision (owner, approved before the change): the web page's waiting screen

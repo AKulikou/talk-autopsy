@@ -4,7 +4,7 @@ Stage 0 input: audio for speech recognition.
     source video or audio file -> 16 kHz mono 16-bit WAV (optionally a cut by timecodes)
 
 ffmpeg and ffprobe must be on PATH. The video itself never leaves the machine.
-Downloading from a URL (yt-dlp) arrives with stage 1.
+Downloading a YouTube video (yt-dlp) is in youtube.py.
 """
 
 import re
@@ -104,14 +104,6 @@ def extract_audio(source: Path, out_wav: Path, start: float | None = None, end: 
         raise RuntimeError(f"ffmpeg failed on {source}: {result.stderr.strip()}")
     partial.replace(out_wav)
     return out_wav
-
-
-def download(url: str, out_dir: Path) -> Path:
-    """
-    Download the best audio of a video URL with yt-dlp into `out_dir` and return
-    the file path. Stage 1.
-    """
-    raise NotImplementedError("stage 1")
 
 
 def compress_audio(wav: Path, out_flac: Path) -> Path:

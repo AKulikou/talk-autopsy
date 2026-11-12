@@ -70,8 +70,3 @@ def test_timecodes(value, seconds):
 def test_bad_timecodes(value):
     with pytest.raises(ValueError):
         ingest.parse_timecode(value)
-
-
-def test_download_is_a_stage_1_stub(tmp_path):
-    with pytest.raises(NotImplementedError, match="stage 1"):
-        ingest.download("https://example.com/video", tmp_path)
