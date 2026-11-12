@@ -32,7 +32,7 @@ Every event: `{"id": int, "type": str, "t": seconds since the job started, ...}`
 | `step_started` | `step` | pipeline `step-start` (`audio`, `stt`, `glossary`, `stt2`, `align`, `fix`, `translate`); the job itself for `download` and `outputs` |
 | `step_progress` | `step`, `position`, `total`, `unit` (`block` / `chunk`) | pipeline `block-done` ("block n/total": `fix`, `translate`); chunked Gemini `chunk-*` (fallback engine only) |
 | `step_finished` | `step`, `skipped`, `seconds`, `cost_usd`, `stt_cost_usd`, `tokens` (when known) | pipeline `step-done` / `step-skipped`; costs read from the event's text; tokens from the step's output file (`fix`, `translate`) |
-| `text` | `kind` (`recognized` / `edit` / `translated`), `id`, `start`, `text` (and `before` for an edit) | the step's output file, read once the step has finished (`raw.json`, `fixed.json` edits, `<lang>.json`) — not live |
+| `text` | `kind` (`recognized` / `edit` / `translated`), `segment`, `start`, `text` (and `before` for an edit) | the step's output file, read once the step has finished (`raw.json`, `fixed.json` edits, `<lang>.json`) — not live |
 | `estimate_updated` | `claude_usd` and/or `time` (`seconds_left`, `source`) | pipeline `estimate` events; the time estimator (start, step ends, a 30 s tick) |
 | `notice` | `text` | pipeline `fallback` and `srt` lines, output writer messages, a progress-display error |
 | `finished` | `folder`, `files` (`name`, `format`, `purpose`), `cost_usd`, `stt_cost_usd` | the job, after the outputs are written |
