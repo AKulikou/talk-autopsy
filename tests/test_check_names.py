@@ -102,3 +102,39 @@ def test_the_sources_section_is_still_scanned_by_the_committed_patterns(tmp_path
         "# Test set\n\n## Sources\n\nan OpenAI researcher\n", encoding="utf-8")
     hits = check_names.scan(["data/test-set/README.md"], None, PATTERNS, root=tmp_path)
     assert [(h.line, h.source) for h in hits] == [(5, "pattern 5")]
+
+
+# --- scripts/history_rewrite.py: the replacements built on the same list and patterns ----------------
+
+_hr_spec = importlib.util.spec_from_file_location("history_rewrite", ROOT / "scripts" / "history_rewrite.py")
+history_rewrite = importlib.util.module_from_spec(_hr_spec)
+_hr_spec.loader.exec_module(history_rewrite)
+
+
+def _replacer(names):
+    rules = {"names": names, "patterns": [p.pattern for p in PATTERNS], "removed": "[removed]",
+             "exempt": sorted(check_names.EXEMPT),
+             "names_allowed_sections": check_names.NAMES_ALLOWED_SECTIONS}
+    return history_rewrite.Replacer(rules)
+
+
+def test_the_rewrite_leaves_nothing_the_check_would_find(tmp_path):
+    text = ("A talk by Jane\n  Example with an Indian accent (accent: Polish).\n"
+            # [removed]
+            "Files: AbCdEf12345.mp4, AbCdEf12345.wav, ZyXw9876543.mkv.\n")
+    replacer = _replacer(["Jane Example"])
+    new = replacer.text(text)
+    assert _hits(new, names=["Jane Example"], patterns=PATTERNS, tmp_path=tmp_path) == []
+    assert "A talk by [removed] with a regional accent (accent: regional)." in new
+    assert "a staff member, an engineer, and was an engineer." in new
+    assert "source-video-1.mp4, source-video-1.wav, source-video-2.mkv" in new
+    assert replacer.counts["list entries"] == 1
+
+
+def test_the_rewrite_keeps_the_allowed_sources_section():
+    text = ("# Test set\n\nJane Example spoke.\n\n## Sources\n\n- Jane Example: a talk.\n\n"
+            "## Next\n\nJane Example.\n")
+    new = _replacer(["Jane Example"]).text(text, "data/test-set/README.md")
+    assert new == ("# Test set\n\n[removed] spoke.\n\n## Sources\n\n- Jane Example: a talk.\n\n"
+                   "## Next\n\n[removed].\n")
+    assert _replacer(["Jane Example"]).text(text, "docs/other.md").count("Jane Example") == 0
