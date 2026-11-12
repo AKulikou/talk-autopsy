@@ -214,7 +214,7 @@ def test_aligner_is_not_built_when_transcription_fails(silence):
 
 
 def test_transcribe_command_with_gemini_align(silence, tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "ChunkedGeminiTranscriber", FakeInner)
+    monkeypatch.setattr(cli.audio, "ChunkedGeminiTranscriber", FakeInner)
     monkeypatch.setattr(align_module, "Wav2Vec2Emitter", lambda: StubEmitter(spoken([(40, "hello")])))
     out = tmp_path / "T9" / "raw.gemini+align.json"
     result = runner.invoke(cli.app, ["transcribe", str(silence(3.0)), "--engine", "gemini+align",

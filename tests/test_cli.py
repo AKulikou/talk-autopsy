@@ -132,7 +132,7 @@ def test_run_name_reaches_the_pipeline(sine, monkeypatch):
         seen["name"] = settings.name
         return pipeline.RunReport()
     monkeypatch.setattr(pipeline, "run", fake_run)
-    monkeypatch.setattr(cli, "_write_outputs", lambda *args, **kwargs: [])
+    monkeypatch.setattr(cli.runs, "_write_outputs", lambda *args, **kwargs: [])
     result = runner.invoke(cli.app, ["run", str(sine), "--name", "real-01", "--steps", "srt"])
     assert result.exit_code == 0, result.output
     assert seen["name"] == "real-01"  # not the last step name printed in the plan

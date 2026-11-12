@@ -46,7 +46,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from talk_autopsy import config, ingest, outputs, pipeline, secret_registry, youtube
+from talk_autopsy import config, ingest, outputs, pipeline, secret_registry, user_glossary, youtube
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError
 from talk_autopsy.segments import Transcript, load_transcript
@@ -159,9 +159,7 @@ class Core:
     def user_glossary(self, domain: str, work_dir: Path) -> Path | None:
         if domain == "none":
             return None
-        # Borrowed from the CLI until cli.py is split (v1.1 session 3).
-        from talk_autopsy.cli import _run_glossary, _user_glossary_paths
-        return _run_glossary(_user_glossary_paths(None, domain), work_dir)
+        return user_glossary.run_glossary(user_glossary.user_glossary_paths(None, domain), work_dir)
 
     def check_keys(self, settings: pipeline.RunSettings) -> None:
         pipeline.check_keys(settings)

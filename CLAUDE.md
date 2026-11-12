@@ -41,7 +41,9 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
 
 ## Layout
 
-- `talk_autopsy/` — `cli.py` (typer; parsing and printing only), `pipeline.py`,
+- `talk_autopsy/` — `cli/` (typer; parsing and printing only; one module per
+  command group, registered in `cli/__init__.py`), `user_glossary.py` (the run's
+  user glossary, shared by CLI and web), `pipeline.py`,
   `config.py` (settings as functions, model IDs, prices; `load_environment` is
   called only by entry points), `segments.py` (the one JSON format), `stt/`
   (assemblyai, gemini, chunked, faster_whisper), `align.py`, `glossary.py`,

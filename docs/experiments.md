@@ -2466,7 +2466,9 @@ paths, so they wait until those modules are reopened for the web interface.
   runs (`metrics.py` is hashed into the glossary, fix and translate cache keys,
   so every cached step would re-run and be billed again). Remove it together
   with the next change that reopens `metrics.py` anyway.
-- Split `cli.py` (about 1,300 lines) by command group (review #1, finding 15).
+- Done in v1.1: `cli.py` (about 1,300 lines) split into `talk_autopsy/cli/`, one
+  module per command group (review #1, finding 15); help, dry run and doctor
+  output unchanged (`tests/test_cli_snapshots.py`).
 - **Git-history rewrite with name replacement**, once, right before the
   repository is made public: verify with `scripts/check_names.py` and gitleaks
   over every commit, not only the tip; keep the tags (`pipeline-v2`,
