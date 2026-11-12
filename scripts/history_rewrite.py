@@ -15,6 +15,7 @@ Nothing here names anyone: the names come from the git-ignored local list
     uv run python scripts/history_rewrite.py verify --repo <clone>
     # 4. commit hashes cited in the docs: old -> new (needs the clone's filter-repo commit map)
     uv run python scripts/history_rewrite.py hashmap --old . --new <clone>
+    uv run python scripts/history_rewrite.py hashmap --old . --new <clone> --apply   # then commit
 
 What is replaced (file contents, file paths, commit and tag messages):
 
@@ -275,7 +276,12 @@ def verify(repo: Path, names_path: Path, patterns_path: Path) -> int:
 # --- cited hashes -----------------------------------------------------------------------
 
 
-def hashmap(old: Path, new: Path) -> None:
+def hashmap(old: Path, new: Path, apply: bool = False) -> None:
+    """
+    The table of cited hashes. With `apply`, the new repository's working files get the new
+    hashes, line by line (the files must still equal the old ones: the tip's tree is unchanged
+    by the rewrite); commit that as its own change.
+    """
     pairs = (new / ".git" / "filter-repo" / "commit-map").read_text(encoding="utf-8").split("\n")[1:]
     mapping = dict(p.split() for p in pairs if p.strip())
     full = git(old, "rev-list", "--all").split()
@@ -305,6 +311,23 @@ def hashmap(old: Path, new: Path) -> None:
     changed = sum(1 for r in rows if r[2] != r[3])
     print(f"\n{len(rows)} cited hash(es) in {len({r[0] for r in rows})} file(s); {changed} change; "
           f"{unmapped} not in the map")
+    if not apply:
+        return
+    by_file: dict[str, list] = {}
+    for name, number, short, target in rows:
+        if target != short and not target.startswith("("):
+            by_file.setdefault(name, []).append((number, short, target))
+    for name, edits in by_file.items():
+        path = new / name
+        crlf = b"\r\n", b"\n"
+        if path.read_bytes().replace(*crlf) != (old / name).read_bytes().replace(*crlf):
+            raise SystemExit(f"{name} differs between the old and the new repository; not applied")
+        lines = path.read_bytes().decode("utf-8").splitlines(keepends=True)
+        for number, short, target in edits:
+            hit = re.compile(rf"(?<![0-9A-Za-z]){short}(?![0-9A-Za-z])")
+            lines[number - 1] = hit.sub(target, lines[number - 1])
+        path.write_bytes("".join(lines).encode("utf-8"))
+    print(f"applied in {len(by_file)} file(s) of {new}")
 
 
 def main(argv: list[str]) -> int:
@@ -322,6 +345,8 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("hashmap", help="commit hashes cited in the docs, old -> new")
     p.add_argument("--old", type=Path, required=True)
     p.add_argument("--new", type=Path, required=True)
+    p.add_argument("--apply", action="store_true",
+                   help="write the new hashes into the new repository's files")
     args = parser.parse_args(argv)
     patterns = check_names.ROOT / check_names.PATTERNS_FILE
     if args.command == "rules":
@@ -335,7 +360,7 @@ def main(argv: list[str]) -> int:
         return 0
     if args.command == "verify":
         return verify(args.repo.resolve(), args.names, patterns)
-    hashmap(args.old.resolve(), args.new.resolve())
+    hashmap(args.old.resolve(), args.new.resolve(), apply=args.apply)
     return 0
 
 
