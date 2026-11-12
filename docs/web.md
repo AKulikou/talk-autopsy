@@ -156,6 +156,17 @@ the output root that hold `talk-autopsy-result.json` (written by every
 finished web job) or `done.json` (CLI YouTube runs); at most 300 folders
 scanned, 12 listed. After a reload the last result is reachable from there.
 
+**Service files out of sight.** `meta.json` (written by the download),
+`done.json` (CLI YouTube runs and the page) and `talk-autopsy-result.json`
+live in a hidden service folder inside the result folder, `.talk-autopsy/`
+(dot name, plus the Windows hidden attribute), so the result folder shows
+only videos and subtitles. Readers (recent results, the player, the
+playlist's "already done" check) look there first, then at the top level,
+where folders made before 1.1 have them; the next marker written into such a
+folder moves its old service files in. No frozen module reads these files:
+the pipeline's own `meta.json` is in `work/<video-id>/`, so no cache key
+depends on them.
+
 ## API
 
 | method, path | what |

@@ -157,5 +157,6 @@ def test_a_finished_job_names_its_result_and_keeps_audio_playable(client, tmp_pa
     assert end["type"] == "finished" and end["result"] == "lecture"
     assert ("lecture.mp3", "audio") in [(f["name"], f["purpose"]) for f in end["files"]]
     assert (core.output_root() / "lecture" / "lecture.mp3").read_bytes() == b"ID3 audio"
-    marker = json.loads((core.output_root() / "lecture" / RESULT_MARKER).read_text(encoding="utf-8"))
+    marker_file = core.output_root() / "lecture" / ".talk-autopsy" / RESULT_MARKER
+    marker = json.loads(marker_file.read_text(encoding="utf-8"))
     assert marker["target_lang"] == "ru" and marker["title"] == "lecture.mp3"

@@ -67,9 +67,10 @@ def file_in(folder: Path, name: str) -> Path | None:
 
 
 def _marker(folder: Path) -> dict | None:
+    """The page's marker, else the CLI's done marker: in the service folder, or at the top (before 1.1)."""
     for name in (RESULT_MARKER, youtube.DONE_MARKER):
-        path = folder / name
-        if path.is_file():
+        path = youtube.service_file(folder, name)
+        if path is not None:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):

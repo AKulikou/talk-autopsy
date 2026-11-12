@@ -201,7 +201,8 @@ class ReplayRunner(JobRunner):
         marker = {"title": self.recording.title, "target_lang": lang, "replay": True,
                   "untranslated": payload.get("untranslated") or [],
                   "uncorrected": payload.get("uncorrected") or []}
-        (folder / jobs.RESULT_MARKER).write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
+        (youtube.service_dir(folder, create=True) / jobs.RESULT_MARKER).write_text(
+            json.dumps(marker, ensure_ascii=False), encoding="utf-8")
         return folder
 
 

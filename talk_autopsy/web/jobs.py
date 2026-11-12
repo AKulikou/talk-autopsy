@@ -70,7 +70,7 @@ MAX_EVENTS = 20_000  # one job; an hour of video gives a few thousand
 MAX_TEXT_CHARS = 400
 ROWS_PER_EVENT = 100  # recognized segments (and segments read from a cached step's file) per text event
 KEEP_RECORDINGS = 20
-RESULT_MARKER = "talk-autopsy-result.json"  # in every finished result folder: what the start page lists
+RESULT_MARKER = "talk-autopsy-result.json"  # in each result's hidden service folder: the start page lists it
 MAX_REASON_CHARS = 300
 KEEP_JOBS = 5  # finished jobs kept in memory for a page reload
 PREVIEW_TTL_S = 3600.0
@@ -652,8 +652,8 @@ def copy_audio(source: Path, dest: Path, stem: str) -> Path | None:
 def write_result_marker(folder: Path, data: dict) -> None:
     """The marker the start page's recent results read; a failure to write it is logged only."""
     try:
-        (folder / RESULT_MARKER).write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n",
-                                            encoding="utf-8")
+        (youtube.service_dir(folder, create=True) / RESULT_MARKER).write_text(
+            json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     except OSError:
         logger.exception("result marker not written in %s", folder)
 

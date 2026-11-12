@@ -7,7 +7,8 @@ then the ordinary pipeline on that file.
         -> video up to 1080p as MP4 with audio (H.264 preferred, for TVs)
            + English captions if the author provided them (saved, never used by
            the frozen speech recognition path)
-        -> <OUTPUT_DIR>/<upload-date> <title>/  (meta.json, the MP4, captions)
+        -> <OUTPUT_DIR>/<upload-date> <title>/  (the MP4, captions; meta.json and the
+           done marker in the hidden service folder `.talk-autopsy/`)
 
 yt-dlp is used as a library (`yt_dlp.YoutubeDL`), never as a subprocess. Since
 late 2025 YouTube needs a JavaScript challenge solver: the `yt-dlp-ejs`
@@ -28,6 +29,7 @@ import importlib
 import importlib.util
 import json
 import logging
+import os
 import re
 import shutil
 from collections.abc import Callable, Iterable
@@ -45,6 +47,12 @@ FORMAT = ("bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080][ext=mp4
 CAPTION_LANGS = ["en", "en-US", "en-GB"]
 MAX_NAME_CHARS = 80  # keeps <OUTPUT_DIR>/<folder>/<file> well below Windows' 260-character path limit
 DONE_MARKER = "done.json"
+# Inside a result folder: the files nobody watches (meta.json, done.json, the web page's marker), hidden,
+# so the folder shows only videos and subtitles. Folders made before 1.1 have them at the top level: they
+# are still read there, and moved into the service folder the next time one is written.
+SERVICE_DIR = ".talk-autopsy"
+SERVICE_FILES = ("meta.json", DONE_MARKER, "talk-autopsy-result.json")
+_FILE_ATTRIBUTE_HIDDEN = 0x2
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
              *(f"LPT{i}" for i in range(1, 10))}
 _FORBIDDEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -449,7 +457,7 @@ def download(video: VideoInfo, folder: Path, runtimes: Iterable[str],
     """
     factory = ydl_factory or _default_factory
     folder.mkdir(parents=True, exist_ok=True)
-    meta = folder / "meta.json"
+    meta = service_dir(folder, create=True) / "meta.json"
     meta.write_text(json.dumps(video.as_meta(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     stem = video_file_stem(video, folder)
     target = folder / f"{stem}.mp4"
@@ -473,12 +481,53 @@ def download(video: VideoInfo, folder: Path, runtimes: Iterable[str],
     return Download(target, captions, meta)
 
 
+def hide(path: Path) -> None:
+    """The Windows hidden attribute (the dot already hides it elsewhere); a failure only means it shows."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        attributes = kernel32.GetFileAttributesW(str(path))
+        if attributes != -1 and attributes != 0xFFFFFFFF:
+            kernel32.SetFileAttributesW(str(path), attributes | _FILE_ATTRIBUTE_HIDDEN)
+    except (OSError, AttributeError):
+        logger.debug("%s not hidden", path)
+
+
+def service_dir(folder: Path, create: bool = False) -> Path:
+    """
+    The result folder's hidden service folder. With `create`: made, hidden, and
+    the service files of the old layout (top level) moved into it.
+    """
+    service = folder / SERVICE_DIR
+    if create:
+        service.mkdir(parents=True, exist_ok=True)
+        hide(service)
+        for name in SERVICE_FILES:
+            old, new = folder / name, service / name
+            if old.is_file() and not new.exists():
+                try:
+                    old.replace(new)
+                except OSError:
+                    logger.warning("%s not moved into %s", old, SERVICE_DIR)
+    return service
+
+
+def service_file(folder: Path, name: str) -> Path | None:
+    """A service file of a result folder, in the service folder or (older layout) at the top level."""
+    for path in (folder / SERVICE_DIR / name, folder / name):
+        if path.is_file():
+            return path
+    return None
+
+
 def is_done(folder: Path) -> bool:
-    return (folder / DONE_MARKER).is_file()
+    return service_file(folder, DONE_MARKER) is not None
 
 
 def mark_done(folder: Path, outputs: list[str], cost: dict) -> None:
-    (folder / DONE_MARKER).write_text(
+    (service_dir(folder, create=True) / DONE_MARKER).write_text(
         json.dumps({"finished": dt.datetime.now().isoformat(timespec="seconds"), "outputs": outputs,
                     "cost": cost}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -521,8 +570,9 @@ def _done_by_id(parent: Path, video_id: str) -> bool:
     """A finished video found by its id in meta.json (a flat entry may lack the upload date in its name)."""
     if not parent.is_dir() or not video_id:
         return False
-    for meta in parent.glob(f"*/{'meta.json'}"):
-        if is_done(meta.parent):
+    for meta in [*parent.glob(f"*/{SERVICE_DIR}/meta.json"), *parent.glob("*/meta.json")]:
+        folder = meta.parent.parent if meta.parent.name == SERVICE_DIR else meta.parent
+        if is_done(folder):
             try:
                 if json.loads(meta.read_text(encoding="utf-8")).get("id") == video_id:
                     return True

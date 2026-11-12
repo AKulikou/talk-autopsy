@@ -68,7 +68,8 @@ def test_a_replay_plays_every_event_and_builds_a_demo_result(tmp_path):
     english = (folder / f"{stem}.en.srt").read_text(encoding="utf-8")
     assert "Quorvex" in target and "Сегодня я хочу показать" in target and "flinter mesh" in english
     assert "core vex" not in english  # the corrected text, not the recognized one
-    assert json.loads((folder / jobs.RESULT_MARKER).read_text(encoding="utf-8"))["replay"] is True
+    marker = folder / ".talk-autopsy" / jobs.RESULT_MARKER
+    assert json.loads(marker.read_text(encoding="utf-8"))["replay"] is True
     assert runner.active_id is None  # the next replay can start
 
 
