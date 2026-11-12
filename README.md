@@ -523,7 +523,10 @@ language measured; the code takes any language as a parameter.
   its VideoLingo part is out of v1.0 scope.
 - Timing drift and term accuracy of the translation (metrics not implemented).
 - A human check of the T6 reference (no fluent listener available).
-- Dubbing (stage 4; a stub) and the web UI (v1.1).
+- Dubbing (stage 4, not started) and the web UI (v1.1).
+- Before v1.0: the git history rewritten without identifying details, the
+  test-set sources published, the version set to 1.0.0 with the tag (the
+  version is recorded in `uv.lock`, a frozen path), the repository made public.
 
 ## Appendix: T1
 
