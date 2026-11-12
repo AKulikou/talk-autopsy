@@ -10,9 +10,6 @@ requires-python = ">=3.13"
 dependencies = [
     "anthropic>=2.6.0",
     "assemblyai>=1.8.2",
-    # Unused since the dubbing stub was removed (2026-11-12); removal deferred to v1.1 (owner,
-    # 2026-11-12: uv.lock is frozen with pipeline-v3); re-added when voice-over is built.
-    "edge-tts>=7.3.1",
     "fastapi>=0.162.5",
     "faster-whisper>=1.2.1",
     "google-genai>=3.0.0",
