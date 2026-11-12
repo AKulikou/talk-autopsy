@@ -43,7 +43,9 @@ def _invoke(args: list[str]):
 
 
 def _normalize(text: str) -> str:
-    return "\n".join(line.rstrip() for line in text.replace("\r\n", "\n").split("\n")).strip() + "\n"
+    # rich draws rounded box corners on Linux and square ones on Windows (its safe-box fallback)
+    text = text.replace("\r\n", "\n").translate(str.maketrans("╭╮╰╯", "┌┐└┘"))
+    return "\n".join(line.rstrip() for line in text.split("\n")).strip() + "\n"
 
 
 def _check(name: str, exit_code: int, output: str) -> None:
