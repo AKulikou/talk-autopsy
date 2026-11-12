@@ -56,6 +56,7 @@ def transcripts(lang: str) -> dict[str, Transcript]:
     usage = {"input_tokens": 9000, "output_tokens": 4000}
     return {
         "raw.json": Transcript(segments=english, language="en", source="fake"),
+        "raw2.json": Transcript(segments=english, language="en", source="fake"),
         "fixed.json": Transcript(segments=fixed, language="en", source="fake", meta={"correction": {
             "usage": usage, "edits": [{"id": 2, "before": "cloud code", "after": "Claude Code",
                                        "reason": "term"}]}}),

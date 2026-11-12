@@ -178,9 +178,17 @@ def test_file_job_events_in_order(tmp_path, media):
     # burn-in positions are throttled: the first and the last of three reported within 0.5 s
     assert progress == [("fix", 1, 2), ("fix", 2, 2), ("translate", 1, 1), ("outputs", 100, 600),
                         ("outputs", 600, 600)]
-    texts = [(e["kind"], e["text"]) for e in events if e["type"] == "text"]
-    assert texts == [("recognized", "Hello agents."), ("recognized", "We use cloud code."),
-                     ("edit", "Claude Code"), ("translated", "Sveiki.")]
+    # the fake core gives plain events (no block text): every text is read from the step's file
+    texts = [e for e in events if e["type"] in ("transcript", "corrected", "translated")]
+    assert [(e["type"], e.get("source")) for e in texts] == [("transcript", "stt"), ("transcript", "stt2"),
+                                                              ("corrected", None), ("translated", None)]
+    assert [r["text"] for r in texts[0]["rows"]] == ["Hello agents.", "We use cloud code."]
+    assert texts[0]["replace"]
+    assert texts[2]["edits"] == [{"id": 2, "before": "cloud code", "after": "Claude Code"}]
+    assert texts[3]["units"] == [{"id": 1, "text": "Sveiki.", "source": "", "source_ids": [1, 2]}]
+    view = job.view.window(0, 10)
+    assert view["summary"]["edits"] == 1 and view["summary"]["units"] == 1
+    assert [len(row["segments"]) for row in view["rows"]] == [2]  # one unit spans both segments
     claude = [e["claude_usd"] for e in events if e["type"] == "estimate_updated" and "claude_usd" in e]
     assert claude == [0.01, 0.06, 0.14]
     end = events[-1]
@@ -363,14 +371,36 @@ def test_a_cached_run_does_not_touch_the_history(tmp_path, media):
 
 
 def test_text_events_are_capped(tmp_path, media, monkeypatch):
-    monkeypatch.setattr(jobs, "MAX_TEXT_EVENTS_PER_KIND", 1)
+    monkeypatch.setattr(jobs, "MAX_EVENTS", 105)  # text stops 100 events before the cap
+    monkeypatch.setattr(jobs, "ROWS_PER_EVENT", 1)
+    r, _ = runner(tmp_path)
+    events = wait(r.start(request(mode="file", url=None, path=str(media))))
+    assert len([e for e in events if e.get("code") == "text_truncated"]) <= 1
+    assert events[-1]["type"] == "finished"
+
+
+def test_text_is_shortened(tmp_path, media, monkeypatch):
     monkeypatch.setattr(jobs, "MAX_TEXT_CHARS", 10)
     r, _ = runner(tmp_path)
     events = wait(r.start(request(mode="file", url=None, path=str(media))))
-    recognized = [e for e in events if e["type"] == "text" and e["kind"] == "recognized"]
-    assert len(recognized) == 1
-    assert len([e for e in events if e.get("code") == "text_truncated"]) == 1
-    assert events[-1]["type"] == "finished"
+    rows = next(e for e in events if e["type"] == "transcript")["rows"]
+    assert rows[1]["text"] == "We use cl…"
+
+
+def test_live_blocks_are_not_repeated_from_the_file(tmp_path, media):
+    block = {"position": 1, "total": 1, "failed": False, "ids": [1, 2],
+             "segments": [{"id": 1, "text": "Hello agents."}, {"id": 2, "text": "We use Claude Code."}],
+             "edits": [{"id": 2, "before": "cloud code", "after": "Claude Code"}]}
+    script = [pipeline.PipelineEvent("fix", "step-start", 0, 7, 0, 0, 0, "pipeline", "correction-v2"),
+              pipeline.PipelineEvent("fix", "block-done", 0, 7, 0, 0, 0, "pipeline", "block 1/1", data=block),
+              pipeline.PipelineEvent("fix", "step-done", 0, 7, 0, 0, 0, "pipeline", "fixed.json")]
+    r, core = runner(tmp_path)
+    core.script = script
+    job = r.start(request(mode="file", url=None, path=str(media)))
+    events = wait(job)
+    corrected = [e for e in events if e["type"] == "corrected"]
+    assert len(corrected) == 1 and "from_file" not in corrected[0]
+    assert corrected[0]["segments"][1]["text"] == "We use Claude Code." and len(corrected[0]["edits"]) == 1
 
 
 def test_long_text_is_shortened():

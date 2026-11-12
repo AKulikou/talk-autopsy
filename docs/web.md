@@ -112,6 +112,26 @@ reattaches to a running job by replaying its events. No fake progress: a bar
 only where the core reports a position; the remaining time is the server's last
 value, not a client countdown.
 
+## Record and replay
+
+Every job started from the page is recorded to `logs/web/events/<start>-<job>.jsonl`
+(git-ignored; the last 20 are kept): a header line with the job summary, then
+every event as stored (secret values already masked). Recordings of real videos
+hold their transcript text and stay local.
+
+`talk-autopsy web --replay <file> [--speed N]` (hidden from `--help`) plays a
+recording through the normal job and Server-Sent Events path: no pipeline, no
+network, no cost. `--speed 1` is natural speed, `10` ten times faster, `0` all
+at once. The page works as usual: the estimate takes the recording's title and
+duration (a link or file name containing `long` gives four hours, to show the
+over-limit confirmation); "Start" plays the recording whatever the form says;
+the result is a demo folder in a temporary directory with the subtitles rebuilt
+from the recorded text and, if ffmpeg is installed, a test-pattern video of the
+talk's length. Committed recordings (invented talk, no real text):
+`tests/fixtures/replay/synthetic-talk.jsonl` (finished) and
+`synthetic-talk-failed.jsonl` (fails in translation); regenerate with
+`uv run python -m tests.make_replay_fixture`.
+
 ## Later sessions
 
 - Session 2: the rich waiting screen (live transcript, highlighted correction

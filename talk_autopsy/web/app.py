@@ -9,6 +9,7 @@ The local web application: one page and a small JSON API (docs/web.md).
     POST /api/jobs                  start a job (cost gate in the runner)
     GET  /api/jobs/current          the running or last job, for a page reload
     GET  /api/jobs/{id}/events      Server-Sent Events, replay after ?after=<id> or Last-Event-ID
+    GET  /api/jobs/{id}/transcript  a window of the waiting screen's rows (web/transcript.py)
     POST /api/pick-file             the native file dialog on this machine
     POST /api/open-folder           a folder inside the output root, in the file manager
     GET  /api/doctor                the doctor checks (key names, set / not set)
@@ -40,6 +41,7 @@ from talk_autopsy.web import dialogs, jobs
 from talk_autopsy.web import settings as web_settings
 from talk_autopsy.web.jobs import BusyError, GateError, JobRequest, JobRunner
 from talk_autopsy.web.sources import InputError
+from talk_autopsy.web.transcript import TYPES as TEXT_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +100,21 @@ class LocalGuard:
             if not sent or not hmac.compare_digest(sent.encode(), self.token.encode()):
                 return 403, "bad_token", "Reload the page (the server was restarted)."
         return None
+
+
+def outgoing(event: dict) -> dict:
+    """
+    The event as the page gets it: text events (transcript, corrected, translated)
+    only say that the text changed; the page reads the rows it shows from
+    /api/jobs/{id}/transcript, so an hour-long talk never floods the stream.
+    """
+    if event.get("type") not in TEXT_TYPES:
+        return event
+    light = {"id": event["id"], "type": "text_changed", "t": event.get("t"), "kind": event["type"]}
+    for key in ("position", "total", "failed", "source"):
+        if key in event:
+            light[key] = event[key]
+    return light
 
 
 def _validate(payload) -> JobRequest | JSONResponse:
@@ -223,7 +240,7 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
             while True:
                 batch, ended = job.events_after(sent)
                 for event in batch:
-                    yield f"id: {event['id']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    yield f"id: {event['id']}\ndata: {json.dumps(outgoing(event), ensure_ascii=False)}\n\n"
                     sent = event["id"]
                 if ended and not job.events_after(sent)[0]:
                     return
@@ -236,6 +253,13 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
 
         return StreamingResponse(stream(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/jobs/{job_id}/transcript")
+    def transcript(job_id: str, start: int | None = None, count: int = 120, follow: bool = False):
+        job = runner.get(job_id)
+        if job is None:
+            return error(404, "no_job", "This job is not known (the server was restarted).")
+        return job.view.window(start, count, follow=follow or start is None)
 
     @app.post("/api/pick-file")
     def pick_file(payload=Body(default=None)):  # noqa: B008

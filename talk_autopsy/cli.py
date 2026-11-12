@@ -698,10 +698,20 @@ def web(
     port: Annotated[int | None, typer.Option(help="Port on 127.0.0.1 (default 8765, or the next free one).")]
     = None,
     no_browser: Annotated[bool, typer.Option("--no-browser", help="Do not open the browser.")] = False,
+    replay: Annotated[Path | None, typer.Option(
+        hidden=True, help="Play a recorded event stream (.jsonl) instead of running anything (docs/web.md).")]
+    = None,
+    speed: Annotated[float, typer.Option(hidden=True, help="Replay speed: 1 natural, 10 ten times faster, "
+                                                           "0 all at once.")] = 1.0,
 ) -> None:
     """Start the local web page (this computer only) and open it in the browser; Ctrl+C stops it."""
+    from talk_autopsy.web.replay import RecordingError
     from talk_autopsy.web.server import serve
-    serve(port, open_browser=not no_browser, echo=typer.echo)
+    try:
+        serve(port, open_browser=not no_browser, echo=typer.echo, replay=replay, speed=speed)
+    except RecordingError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(2) from None
 
 
 FRAGMENT_ID = re.compile(r"^T\d+$")

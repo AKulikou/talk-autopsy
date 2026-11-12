@@ -14,7 +14,11 @@ turning the core's progress callbacks into an append-only list of events.
   if its estimate after speech recognition is higher.
 - **Events** have increasing integer ids; readers ask for the events after an
   id (replay on reconnect). Text payloads are capped and the list is bounded.
-  Every string is cleaned of secret values before it is stored.
+  Every string is cleaned of secret values before it is stored. The text events
+  (`transcript`, `corrected`, `translated`) are also folded into the job's
+  `TranscriptView` (web/transcript.py), which the page reads in windows.
+- **Recording:** with a `record_dir`, every event is appended to
+  `<record_dir>/<job>.jsonl` (a header line first) for replay (web/replay.py).
 - **Progress** comes only from what the core reports: bytes of the download
   (yt-dlp), correction and translation blocks (pipeline-v3.1 block events, with
   their text), Gemini chunks, seconds of the burn-in (ffmpeg); nothing invented
@@ -27,6 +31,7 @@ The core is reached through `Core`; tests pass a fake with the same methods.
 No FastAPI here.
 """
 
+import json
 import logging
 import math
 import os
@@ -54,12 +59,16 @@ from talk_autopsy.web.sources import (
     is_audio_only,
     normalize_youtube_url,
 )
+from talk_autopsy.web.transcript import TYPES as TEXT_TYPES
+from talk_autopsy.web.transcript import TranscriptView
 
 logger = logging.getLogger(__name__)
 
 MAX_EVENTS = 20_000  # one job; an hour of video gives a few thousand
-MAX_TEXT_EVENTS_PER_KIND = 2_500
 MAX_TEXT_CHARS = 400
+ROWS_PER_EVENT = 100  # recognized segments (and segments read from a cached step's file) per text event
+KEEP_RECORDINGS = 20
+RESULT_MARKER = "talk-autopsy-result.json"  # in every finished result folder: what the start page lists
 MAX_REASON_CHARS = 300
 KEEP_JOBS = 5  # finished jobs kept in memory for a page reload
 PREVIEW_TTL_S = 3600.0
@@ -268,7 +277,8 @@ def scrub(value, secrets: list[str]):
     return value
 
 
-def short(text: str, limit: int = MAX_TEXT_CHARS) -> str:
+def short(text: str, limit: int | None = None) -> str:
+    limit = limit or MAX_TEXT_CHARS
     text = " ".join(str(text).split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
@@ -299,40 +309,77 @@ class Job:
     state: str = "running"  # running | finished | failed
     cost_usd: float = 0.0
     stt_cost_usd: float = 0.0
+    record_to: Path | None = None
+    replay: bool = False
     _events: list[dict] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _next_id: int = 1
-    _text_counts: dict[str, int] = field(default_factory=dict)
     _truncated: bool = False
     _start: float = 0.0
+    _header: dict | None = None
 
     def __post_init__(self) -> None:
         self._start = self.clock()
         self._secrets = secret_values()
+        self.view = TranscriptView()
 
     def add(self, type_: str, **payload) -> dict | None:
         """Append an event; returns it, or None if it was dropped by the caps."""
         with self._lock:
-            if type_ == "text":
-                kind = payload.get("kind", "")
-                count = self._text_counts.get(kind, 0)
-                if count >= MAX_TEXT_EVENTS_PER_KIND or len(self._events) >= MAX_EVENTS - 100:
-                    if not self._truncated:
-                        self._truncated = True
-                        self._append("notice", {"code": "text_truncated",
-                                                "text": "Only the first part of the text is shown."})
-                    return None
-                self._text_counts[kind] = count + 1
-            elif len(self._events) >= MAX_EVENTS and type_ not in ("finished", "failed"):
+            if type_ in TEXT_TYPES and len(self._events) >= MAX_EVENTS - 100:
+                if not self._truncated:
+                    self._truncated = True
+                    self._append("notice", {"code": "text_truncated",
+                                            "text": "Only the first part of the text is shown."})
+                return None
+            if len(self._events) >= MAX_EVENTS and type_ not in ("finished", "failed"):
                 return None
             return self._append(type_, payload)
+
+    def add_recorded(self, event: dict) -> dict:
+        """Append a recorded event as it was (replay): its own type and payload, a new id and time."""
+        payload = {k: v for k, v in event.items() if k not in ("id", "type", "t")}
+        with self._lock:
+            return self._append(event["type"], payload)
 
     def _append(self, type_: str, payload: dict) -> dict:
         event = {**scrub(payload, self._secrets), "id": self._next_id, "type": type_,
                  "t": round(self.clock() - self._start, 1)}
         self._next_id += 1
         self._events.append(event)
+        try:
+            self.view.apply(event)
+        except Exception:
+            logger.exception("job %s: event %s not shown in the transcript view", self.id, event["id"])
+        self._record(event)
         return event
+
+    def _record(self, event: dict) -> None:
+        if self.record_to is None:
+            return
+        try:
+            with self.record_to.open("a", encoding="utf-8", newline="\n") as f:
+                if self._header is not None:
+                    f.write(json.dumps(self._header, ensure_ascii=False) + "\n")
+                    self._header = None
+                f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        except OSError:
+            logger.exception("job %s: event not recorded; recording stopped", self.id)
+            self.record_to = None
+
+    def start_recording(self, folder: Path, header: dict) -> None:
+        """Record every later event to <folder>/<started>-<id>.jsonl, the header line first."""
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            old = sorted(folder.glob("*.jsonl"))[:-KEEP_RECORDINGS + 1] if KEEP_RECORDINGS > 1 else []
+            for path in old:
+                path.unlink(missing_ok=True)
+            stamp = self.started_wall.replace(":", "").replace("-", "")
+            self._header = {"type": "header", "format": 1, **scrub(header, self._secrets)}
+            self.record_to = folder / f"{stamp}-{self.id}.jsonl"
+        except OSError:
+            logger.exception("job %s: recording not started", self.id)
+            self.record_to = None
 
     def events_after(self, after: int = 0) -> tuple[list[dict], bool]:
         """Events with id > `after`, and whether the job has ended (its last event is in the list)."""
@@ -357,7 +404,8 @@ class Job:
                             "profile": self.request.profile, "domain": self.request.domain,
                             "target_lang": self.request.target_lang},
                 "preview": self.preview.as_dict(limit_usd), "cost_usd": round(self.cost_usd, 4),
-                "stt_cost_usd": round(self.stt_cost_usd, 4), "last_event_id": self.last_event_id}
+                "stt_cost_usd": round(self.stt_cost_usd, 4), "last_event_id": self.last_event_id,
+                "replay": self.replay}
 
 
 # --- the progress adapter ------------------------------------------------------------------
@@ -415,6 +463,7 @@ class _Progress:
         self.last_mark = job.clock()
         self.claude_estimate: dict[str, float] = {}
         self.display_error_reported = False
+        self.live_text: set[str] = set()  # steps whose text came block by block
 
     def __call__(self, event: ProgressEvent) -> None:
         try:
@@ -455,6 +504,8 @@ class _Progress:
                 position, total = int(match.group(1)), int(match.group(2))
                 job.add("step_progress", step=step, position=position, total=total, unit="block")
                 self.estimator.step_progress(step, position, total)
+                if data and step in ("fix", "translate"):
+                    self._block_text(step, data)
         elif ev.event == "estimate":
             match = _ESTIMATE_USD.search(ev.detail)
             usd = data.get("usd") if "usd" in data else (float(match.group(1)) if match else None)
@@ -509,32 +560,74 @@ class _Progress:
             logger.exception("job %s: tokens of %s not read", self.job.id, step)
             return None
 
+    def _block_text(self, step: str, data: dict) -> None:
+        """A finished correction or translation block (pipeline-v3.1) -> one corrected / translated event."""
+        self.live_text.add(step)
+        head = {"position": data.get("position"), "total": data.get("total"),
+                "failed": bool(data.get("failed")), "ids": list(data.get("ids") or [])}
+        if step == "fix":
+            self.job.add("corrected", **head, segments=_text_rows(data.get("segments") or []),
+                         edits=_edit_rows(data.get("edits") or []))
+        else:
+            source_ids = data.get("source_ids") or {}
+            units = [{"id": u["id"], "text": short(u["text"]), "source": short(u.get("source", "")),
+                      "source_ids": source_ids.get(str(u["id"]), [])} for u in data.get("units") or []]
+            self.job.add("translated", **head, source_ids=source_ids, units=units)
+
     def _text(self, step: str) -> None:
-        """Text events from the finished step's output file (not live: the core has no text callback)."""
+        """
+        Text events from the finished step's output file: the recognized text (the
+        service returns it at once), and the correction or translation when it did
+        not arrive block by block (a cached step, or an older core).
+        """
         work, core, job = self.settings.work_dir, self.runner.core, self.job
         try:
-            if step == "stt":
-                transcript = core.read_transcript(work / "raw.json")
-                for s in transcript.segments if transcript else []:
-                    if job.add("text", kind="recognized", segment=s.id, start=round(s.start, 2),
-                               text=short(s.text)) is None:
-                        break
-            elif step == "fix":
-                transcript = core.read_transcript(work / "fixed.json")
-                edits = ((transcript.meta.get("correction") or {}).get("edits") or []) if transcript else []
-                for edit in edits:
-                    added = job.add("text", kind="edit", segment=edit.get("id"),
-                                    before=short(edit.get("before", "")), text=short(edit.get("after", "")))
-                    if added is None:
-                        break
-            elif step == "translate":
-                transcript = core.read_transcript(work / f"{self.settings.target_lang}.json")
-                for s in transcript.segments if transcript else []:
-                    if job.add("text", kind="translated", segment=s.id, start=round(s.start, 2),
-                               source_ids=s.source_ids, text=short(s.text)) is None:
-                        break
+            name = {"stt": "raw.json", "stt2": "raw2.json", "fix": "fixed.json",
+                    "translate": f"{self.settings.target_lang}.json"}.get(step)
+            if name is None or step in self.live_text:
+                return
+            transcript = core.read_transcript(work / name)
+            if transcript is None:
+                return
+            segments = transcript.segments
+            total = -(-len(segments) // ROWS_PER_EVENT)
+            edits = (transcript.meta.get("correction") or {}).get("edits") or []
+            for k in range(0, len(segments), ROWS_PER_EVENT):
+                part, number = segments[k:k + ROWS_PER_EVENT], k // ROWS_PER_EVENT + 1
+                ids = [s.id for s in part]
+                if step in ("stt", "stt2"):
+                    rows = [{"id": s.id, "start": round(s.start, 2), "text": short(s.text)} for s in part]
+                    job.add("transcript", source=step, replace=k == 0, part=number, parts=total, rows=rows)
+                elif step == "fix":
+                    rows = _text_rows([{"id": s.id, "text": s.text} for s in part])
+                    job.add("corrected", position=number, total=total, failed=False, ids=ids, from_file=True,
+                            segments=rows, edits=_edit_rows([e for e in edits if e.get("id") in ids]))
+                else:
+                    units = [{"id": s.id, "text": short(s.text),
+                              "source": short(" ".join(w.text for w in s.words or [])),
+                              "source_ids": list(s.source_ids or [s.id])} for s in part]
+                    job.add("translated", position=number, total=total, failed=False, ids=ids, from_file=True,
+                            source_ids={str(u["id"]): u["source_ids"] for u in units}, units=units)
         except Exception:
             logger.exception("job %s: text of step %s not read", job.id, step)
+
+
+def _text_rows(rows: list[dict]) -> list[dict]:
+    return [{"id": r["id"], "text": short(r.get("text", ""))} for r in rows]
+
+
+def _edit_rows(edits: list[dict]) -> list[dict]:
+    return [{"id": e.get("id"), "before": short(e.get("before", ""), 200),
+             "after": short(e.get("after", ""), 200)} for e in edits]
+
+
+def write_result_marker(folder: Path, data: dict) -> None:
+    """The marker the start page's recent results read; a failure to write it is logged only."""
+    try:
+        (folder / RESULT_MARKER).write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n",
+                                            encoding="utf-8")
+    except OSError:
+        logger.exception("result marker not written in %s", folder)
 
 
 # --- failure messages ------------------------------------------------------------------------
@@ -569,8 +662,9 @@ def failure(exc: BaseException) -> tuple[str, str]:
 class JobRunner:
     def __init__(self, core: Core | None = None, history_file: Path | None = None,
                  limit_usd: float = web_settings.COST_LIMIT_USD, clock=time.monotonic, tick_s: float = TICK_S,
-                 engine: str = pipeline.DEFAULT_ENGINE):
+                 engine: str = pipeline.DEFAULT_ENGINE, record_dir: Path | None = None):
         self.core = core or Core()
+        self.record_dir = record_dir
         self.history_file = history_file
         self.limit_usd = limit_usd
         self.clock = clock
@@ -591,7 +685,8 @@ class JobRunner:
             key = self.core.machine_key(self.engine)
         except Exception:
             key = None
-        return TimeEstimator(key, duration, estimator_steps(mode, formats), history_file=self.history_file)
+        return TimeEstimator(key, duration, estimator_steps(mode, formats), history_file=self.history_file,
+                             clock=self.clock)
 
     def preview(self, request: JobRequest) -> Preview:
         """Metadata, cost and time for the estimate screen. InputError / YouTubeError / RuntimeError."""
@@ -650,10 +745,9 @@ class JobRunner:
             job = Job(id=uuid.uuid4().hex[:12], request=request, preview=preview,
                       steps=job_steps(request.mode, preview.formats),
                       started_wall=time.strftime("%Y-%m-%dT%H:%M:%S"), clock=self.clock)
-            self._jobs[job.id] = job
-            for old in [k for k in self._jobs if k != job.id][:-KEEP_JOBS]:
-                self._jobs.pop(old, None)
-            self._active = self._last = job.id
+            self._register(job)
+            if self.record_dir is not None:
+                job.start_recording(self.record_dir, {"summary": job.summary(self.limit_usd)})
             threading.Thread(target=self._execute, args=(job, max_cost), name=f"job-{job.id}",
                              daemon=True).start()
             return job
@@ -661,6 +755,12 @@ class JobRunner:
             self._active = None
             self._busy.release()
             raise
+
+    def _register(self, job: Job) -> None:
+        self._jobs[job.id] = job
+        for old in [k for k in self._jobs if k != job.id][:-KEEP_JOBS]:
+            self._jobs.pop(old, None)
+        self._active = self._last = job.id
 
     def _gate(self, request: JobRequest, preview: Preview) -> float:
         """The pipeline's max_cost_usd for this job, or GateError."""
@@ -779,6 +879,10 @@ class JobRunner:
             files = [w.path.name for w in written]
             if request.mode == "url":
                 core.mark_done(dest, files, {"claude_usd": report.cost_usd, "stt_usd": report.stt_cost_usd})
+            write_result_marker(dest, {"title": preview.title, "target_lang": request.target_lang,
+                                       "finished": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": request.mode,
+                                       "files": files, "cost_usd": round(report.cost_usd, 4),
+                                       "stt_cost_usd": round(report.stt_cost_usd, 4)})
             if not report.fallbacks:  # a fallback engine's times would mislead this machine's history
                 estimator.record()
             final = ("finished", {

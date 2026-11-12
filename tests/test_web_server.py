@@ -69,11 +69,21 @@ def test_no_browser_option(loopback_only, tmp_path, monkeypatch):
 
 def test_cli_registers_the_command(monkeypatch):
     seen = {}
-    monkeypatch.setattr(server, "serve", lambda port, open_browser, echo: seen.update(port=port,
-                                                                                         browser=open_browser))
+    monkeypatch.setattr(server, "serve", lambda port, open_browser, echo, replay, speed: seen.update(
+        port=port, browser=open_browser, replay=replay, speed=speed))
     result = CliRunner().invoke(cli.app, ["web", "--port", "9100", "--no-browser"])
     assert result.exit_code == 0, result.output
-    assert seen == {"port": 9100, "browser": False}
+    assert seen == {"port": 9100, "browser": False, "replay": None, "speed": 1.0}
+    result = CliRunner().invoke(cli.app, ["web", "--replay", "x.jsonl", "--speed", "0"])
+    assert result.exit_code == 0 and seen["replay"].name == "x.jsonl" and seen["speed"] == 0.0
+    assert "--replay" not in CliRunner().invoke(cli.app, ["web", "--help"]).output  # hidden
+
+
+def test_a_bad_recording_is_one_line(tmp_path):
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("{}", encoding="utf-8")
+    result = CliRunner().invoke(cli.app, ["web", "--replay", str(bad), "--no-browser"])
+    assert result.exit_code == 2 and "no recording header" in result.output
 
 
 def test_logging_goes_to_a_file(tmp_path, monkeypatch):
