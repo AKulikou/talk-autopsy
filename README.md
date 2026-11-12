@@ -253,12 +253,14 @@ Every number below is in [results/benchmark.csv](results/benchmark.csv) or the
 prompts were iterated on it, so its numbers are optimistic; T6 is the hold-out,
 run once.
 
-**In short.** What the measurements support is **term recognition**: an
-automatic glossary drafted from a first transcript and sent back to the speech
-recognition service as key terms puts technical terms, product names and
-commands in place. Term accuracy (v2) on T2 (development fragment, three runs):
-**94.4–96.3%** micro, 92.4–94.9% without the most frequent term, 84.6–89.7%
-macro. On the hold-out T6 (one run): **72 of 72** term occurrences, but 6 of
+**In short.** What the measurements support is **term recognition** on the
+English side. On T2 (development fragment, three runs) an automatic glossary
+drafted from a first transcript and sent back to the speech recognition
+service as key terms lifts term accuracy (v2) from 80.4% to **94.4–96.3%**
+micro (92.4–94.9% without the most frequent term, 84.6–89.7% macro). On the
+hold-out T6 (one run) the recogniser alone already had 71 of 72 occurrences;
+the key terms added none and correction's one edit added the last. The
+pipeline's result there is **72 of 72** term occurrences, but 6 of
 them sit in spans whose reference is uncertain, so the lower bound is 66/72 =
 91.7% (Wilson 95% 83.0–96.1%) and the verdict written before the run is
 **"pass (not demonstrated)"**. A **single Gemini call** on the same T2 audio,
@@ -324,8 +326,21 @@ it. No overfitting signal (T6 is not below the T2 repeats). The 85% target is
 defined on the micro-average; one of the three T2 repeats has a macro-average
 of 84.6%, below it.
 
-**What does the work:** the key terms (T2, development fragment: 80.4% without
-key terms, 94.4–96.3% with the auto-glossary as key terms). **Correction made 0
+**What does the work:** on T2 the key terms; on T6, the recogniser itself.
+Ablation from existing transcripts (no new run;
+[key-term ablation on T6](docs/experiments.md#key-term-ablation-on-t6-2026-11-12)):
+
+| Term accuracy (v2), micro / without the top term / macro | without key terms | with the auto-glossary as key terms | after correction (`pipeline-v3`) |
+|---|---|---|---|
+| T2 (development fragment) | 80.4% / 89.9% / 81.8% (one run) | 96.3% / 94.9% / 89.7% (B5, one run) | 94.4–96.3% / 92.4–94.9% / 84.6–89.7% (three runs; 0 edits) |
+| T6 (hold-out), reference J | 98.6% / 100% / 99.6% (71/72) | 98.6% / 100% / 99.6% (71/72) | 100% / 100% / 100% (72/72; 1 edit) |
+
+The T2 "without key terms" number comes from the transcript made for the
+reference consensus; on T6 that transcript and the run's own first pass score
+the same (71/72). Both were among the engines that built the references, so
+they are biased in their favour. On T6 the key terms changed no term
+occurrence: the one miss ("agentic engineering" heard as another word) stayed
+until correction fixed it. **Correction made 0
 edits in the four T1/T2 `pipeline-v3` runs and 1 (correct) edit on T6**, at
 about 0.065 USD per 10 minutes. It is kept as insurance for the fallback
 engines, but that insurance is **not shown for the shipped version**: the

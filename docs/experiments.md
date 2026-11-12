@@ -968,8 +968,40 @@ AssemblyAI among them (the pipeline's own engine, so its numbers are biased in
 its favour, as on T1 and T2), and a Gemini audio judge that failed its
 calibration; the glossary was drafted by Gemini from reference J, so it holds
 only terms J contains. Correction changed one word, so these numbers measure
-mostly AssemblyAI with the auto-glossary as key terms. Translation quality on
+mostly AssemblyAI; the key terms changed no term occurrence on T6 (Key-term
+ablation on T6, 2026-11-12). Translation quality on
 T6 is the separate pre-registered check below.
+
+## Key-term ablation on T6 (2026-11-12)
+
+No new run and no API call: existing T6 transcripts scored with `eval T6`
+(term accuracy v2 against J and M, bounds), to see what the key terms do on
+the hold-out (independent LLM review #2 asked for the ablation on T6, not only
+on T2).
+
+| T6, against J (M) | WER | micro | without the top term | macro | precision |
+|---|---|---|---|---|---|
+| AssemblyAI, no key terms (the transcript of the reference consensus, 2026-11-10) | 4.56% (3.13%) | 98.61%, 71/72 (98.59%, 70/71) | 100.00% | 99.61% | 100.00% (98.59%) |
+| the `pipeline-v3` run's first pass (`raw.json`, no key terms) | 4.56% (3.13%) | 98.61%, 71/72 (98.59%, 70/71) | 100.00% | 99.61% | 100.00% (98.59%) |
+| its second pass (`raw2.json`, 32 auto-glossary key terms) | 4.75% (2.94%) | 98.61%, 71/72 (98.59%, 70/71) | 100.00% | 99.61% | 100.00% (98.59%) |
+| after correction (`fixed.json`, the T6 result) | 4.70% (2.89%) | 100.00%, 72/72 (71/71) | 100.00% | 100.00% | 100.00% (98.61%) |
+
+Lower and upper bounds are 91.67% and 100.00% in every row (the 6 uncertain
+occurrences are in place in all four). Benchmark row: `assemblyai`, stage
+`stt`, 2026-11-12 (the first row of the table).
+
+- **Reading.** On T6 the key terms changed no term occurrence: the
+  recogniser alone had 71 of 72. The one miss, "agentic engineering" written
+  as another word, stayed through the second pass and was fixed by
+  correction's single edit (`genetic` -> `agentic`). On T2 the key terms do
+  the work (80.4% -> 96.3% with the B5 auto-glossary, 94.4–96.3% in the
+  `pipeline-v3` repeats). So "the key terms do the work" holds on the
+  development fragment, not on the hold-out, where the speech is easier for
+  the recogniser (T6 raw Whisper 87.5% against 61.7% on T2).
+- **Bias.** The no-key-term transcript was one of the three engines that
+  built both T6 references (AssemblyAI is also the pipeline's own engine), so
+  its numbers are biased in its favour, as on T2.
+- **Not changed:** no prompt, setting or rule; the T6 verdict stands.
 
 ## T6 translation check result (2026-11-11)
 
@@ -1321,6 +1353,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |
 |---|---|---|---|---|---|---|
+| T6 key-term ablation | 2026-11-12 | none: what the key terms do on the hold-out | `eval T6` on existing transcripts (no API call): AssemblyAI without key terms, the run's first and second pass | without key terms 98.61% (71/72), with key terms 98.61%, after correction 100% | on T6 the key terms changed no occurrence; correction's one edit added the last; on T2 the key terms do the work | recorded; README "what does the work" gives T2 and T6 |
 | C1 (baselines) | 2026-11-12 | the pipeline's blind mean is at least 1 point above Whisper + Google Translate (spec C1, Google Translate part) | owner rated `C1-T6-rating-2.md` (12 Google Translate items + 4 anchors) blind; pipeline and Gemini from the first T6 rating; `translation_check.py score-baselines` | pipeline 4.42, Google Translate 4.42, Gemini 4.33; pipeline − Google Translate 0.00 [−0.42, +0.42]; anchor drift 0.00 (4/4 identical) | **not met** (0.00 < 1.0): on random sentences the three systems rate equal; the measured difference is in terms on accented speech | recorded; no decision yet (owner) |
 | LLM rater | 2026-11-12 | none: can Gemini serve as a second translation rater? | `gemini-rater-v1` on all 38 items, compared with the owner after the owner rated | Spearman 0.05; Gemini's own translations 4.93 vs pipeline 3.93, Google Translate 3.83; rater − owner +0.57 on Gemini items, −0.58 on the others | self-preference measured; no agreement with the owner | Gemini rater not usable; owner's rating stays the only one |
 | T6 (hold-out) | 2026-11-11 | the frozen pipeline keeps term accuracy v2 >= 85% on an unseen fragment (T6 protocol: bounds, Wilson intervals, overfitting signal) | `run` once from a clean worktree of tag `pipeline-v3` (d180a73), auto-glossary only, no cache; `eval T6 --record` | J 100.00% (72/72), M 100.00% (71/71), lower 91.67% (Wilson 83.0–96.1%), upper 100.00%; WER 2.89–4.70%; correction 1 edit, 0 false; 52.5% of Russian cues above 17 cps; 0.140 USD Claude, 0.078 USD AssemblyAI | **pass (not demonstrated)**, the best verdict T6 allows; overfitting signal no; same-topic transfer only | recorded; translation check on T6 prepared, owner rates next |
