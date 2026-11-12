@@ -52,7 +52,7 @@ from talk_autopsy.glossary import GlossaryError
 from talk_autopsy.segments import Transcript, load_transcript
 from talk_autopsy.stt.chunked import ProgressEvent
 from talk_autopsy.time_estimate import NO_ESTIMATE, MachineKey, TimeEstimate, TimeEstimator
-from talk_autopsy.web import notices
+from talk_autopsy.web import labels, notices
 from talk_autopsy.web import settings as web_settings
 from talk_autopsy.web.sources import (
     PLAYLIST_MESSAGE,
@@ -877,7 +877,8 @@ class JobRunner:
             if request.mode == "url":
                 video = preview.video
                 name, context = f"yt-{youtube.safe_name(video.id, 40)}", video.context()
-                dest, stem = output_root / youtube.video_folder_name(video), youtube.video_file_stem(video)
+                dest = output_root / youtube.video_folder_name(video, output_root)
+                stem = youtube.video_file_stem(video, dest)
                 source = Path(".")  # replaced after the download
             else:
                 source = Path(request.path)
@@ -936,7 +937,8 @@ class JobRunner:
                 estimator.record()
             final = ("finished", {
                 "folder": str(dest), "result": result_id(output_root, dest),
-                "files": [{"name": w.path.name, "format": w.format, "purpose": FILE_PURPOSE.get(w.format, "")}
+                "files": [{"name": w.path.name, "format": w.format, "purpose": FILE_PURPOSE.get(w.format, ""),
+                           "kind": labels.file_kind(w.path.name, stem, request.target_lang)}
                           for w in written],
                 "cost_usd": round(report.cost_usd, 4), "stt_cost_usd": round(report.stt_cost_usd, 4),
                 "fallbacks": [short(f, 200) for f in report.fallbacks], **gaps})

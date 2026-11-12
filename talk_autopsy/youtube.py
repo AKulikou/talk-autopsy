@@ -304,11 +304,20 @@ def fetch_video(url: str, runtimes: Iterable[str], ydl_factory: YdlFactory | Non
 # --- names, estimate, download -------------------------------------------------------------
 
 
-def safe_name(text: str, limit: int = MAX_NAME_CHARS) -> str:
-    """A file or folder name valid on Windows: no reserved characters or names, no trailing dot or space."""
+def safe_name(text: str, limit: int = MAX_NAME_CHARS, words: bool = False) -> str:
+    """
+    A file or folder name valid on Windows: no reserved characters or names, no
+    trailing dot or space. With `words`, a name over `limit` is cut at the last
+    space before it (when that keeps at least half), not in the middle of a word.
+    """
     name = _FORBIDDEN.sub(" ", text)
     name = re.sub(r"\s+", " ", name).strip()
-    name = name[:limit].rstrip(" .")
+    cut = name[:limit]
+    if words and len(name) > limit and name[limit] != " ":
+        space = cut.rfind(" ")
+        if space >= limit // 2:
+            cut = cut[:space]
+    name = cut.rstrip(" .-,;") if words else cut.rstrip(" .")
     if not name:
         name = "video"
     if name.split(".")[0].upper() in _RESERVED:
@@ -316,12 +325,36 @@ def safe_name(text: str, limit: int = MAX_NAME_CHARS) -> str:
     return name
 
 
-def video_folder_name(video: VideoInfo) -> str:
-    return safe_name(f"{video.upload_date} {video.title}".strip())
+def video_folder_name(video: VideoInfo, parent: Path | None = None) -> str:
+    """
+    `<upload date> <title>`, cut at a word. A result folder made before 1.1 (names
+    cut in the middle of a word) is found under its old name in `parent`, so it
+    is reused, not duplicated.
+    """
+    text = f"{video.upload_date} {video.title}".strip()
+    name, legacy = safe_name(text, words=True), safe_name(text)
+    if parent is not None and legacy != name and (parent / legacy).is_dir() and not (parent / name).exists():
+        return legacy
+    return name
 
 
-def video_file_stem(video: VideoInfo) -> str:
-    return safe_name(video.title, limit=60)
+def video_file_stem(video: VideoInfo, folder: Path | None = None) -> str:
+    """
+    The video's title as a file stem, cut at a word. In a `folder` that already
+    holds the video under a stem cut mid-word (before 1.1), that stem is kept, so
+    the download is reused and the files keep their names.
+    """
+    name, legacy = safe_name(video.title, limit=60, words=True), safe_name(video.title, limit=60)
+    if (folder is not None and legacy != name and (folder / f"{legacy}.mp4").is_file()
+            and not (folder / f"{name}.mp4").is_file()):
+        return legacy
+    return name
+
+
+def playlist_folder_name(title: str, parent: Path) -> str:
+    """A playlist's folder, cut at a word; an existing folder with the name cut mid-word is kept."""
+    name, legacy = safe_name(title, words=True), safe_name(title)
+    return legacy if legacy != name and (parent / legacy).is_dir() and not (parent / name).exists() else name
 
 
 @dataclass(frozen=True)
@@ -418,7 +451,7 @@ def download(video: VideoInfo, folder: Path, runtimes: Iterable[str],
     folder.mkdir(parents=True, exist_ok=True)
     meta = folder / "meta.json"
     meta.write_text(json.dumps(video.as_meta(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    stem = video_file_stem(video)
+    stem = video_file_stem(video, folder)
     target = folder / f"{stem}.mp4"
     wanted = [lang for lang in CAPTION_LANGS if lang in video.author_captions]
     params = {**_base_params(runtimes), "format": FORMAT, "merge_output_format": "mp4",
@@ -471,7 +504,7 @@ def plan_playlist(playlist: PlaylistInfo, parent: Path, max_videos: int | None, 
     todo, done, over = [], [], []
     total = 0.0
     for index, video in enumerate(entries):
-        if is_done(parent / video_folder_name(video)) or _done_by_id(parent, video.id):
+        if is_done(parent / video_folder_name(video, parent)) or _done_by_id(parent, video.id):
             done.append(video)
             continue
         e = estimate(video.duration)

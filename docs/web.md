@@ -130,7 +130,11 @@ cost. Right: the text, in two aligned columns.
 
 The Done screen has a player: an HTML5 `<video>` with two subtitle tracks
 (the target language on, English off), served as WebVTT converted from the
-result's `.srt` on request (no extra pipeline output). It plays the video
+result's `.srt` on request (no extra pipeline output). Under the video, the
+page's own buttons choose the subtitles (target language / English / off;
+the choice is stated in words beside them): the built-in controls of
+Firefox-family browsers offer no track menu. Tried in Firefox 159 and Edge
+(Chromium), headless, on the replay demo. It plays the video
 without burned-in subtitles when there is one (the downloaded original
 `<stem>.mp4`, then the subtitle-track `<stem>.subs.mp4`); with only the
 burned-in `<stem>.<lang>.mp4` the tracks start off and a note says why. A file
@@ -138,6 +142,13 @@ input's original video lives outside the output folder and is not served, so a
 file-mode result plays one of the produced MP4s. An audio-only input is linked
 (or copied) into its result folder and gets an `<audio>` player with its text
 beside it, following the audio (a click on a line seeks there).
+
+The file list says what each file is for, by its name (`web/labels.py`):
+"Subtitles (Russian) — for the TV and VLC", "Subtitles (English)", "Video with
+the Russian subtitles burned in — for the TV", and so on, with the file name
+below. New YouTube result folders and files are named after the title cut at
+a word (`youtube.safe_name(words=True)`); a folder or a download made before
+keeps its old name, so a re-run reuses it.
 
 The start page lists the last finished results (title, date, target language)
 with "Watch" and "Open folder": a read-only scan of the folders directly inside

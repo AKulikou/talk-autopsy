@@ -301,3 +301,34 @@ def test_the_web_gate_uses_the_same_limit():
     assert preview.needs_confirmation(config.COST_CONFIRMATION_USD) == youtube.over_video_limit(
         e, config.COST_CONFIRMATION_USD) is True
     assert preview.needs_confirmation(4.0) is False
+
+
+# --- names cut at a word (v1.1 session 4); folders and files made before keep theirs ----------------
+
+LONG_TITLE = "Create a Smart Contract in under 15 mins Step-by-Step Tutorial"
+
+
+def _video(title=LONG_TITLE):
+    return youtube.VideoInfo(id="v1", url="https://y/v1", title=title, upload_date="2024-07-05")
+
+
+def test_long_names_are_cut_at_a_word():
+    assert youtube.video_file_stem(_video()) == "Create a Smart Contract in under 15 mins Step-by-Step"
+    assert youtube.safe_name("word " * 30, limit=12, words=True) == "word word"
+    assert youtube.safe_name("x" * 200, words=True) == "x" * 80  # one long word: cut where it must be
+    assert youtube.safe_name("short title", limit=60, words=True) == "short title"
+
+
+def test_a_folder_and_a_download_made_before_keep_their_names(tmp_path):
+    video = _video("A" * 30 + " " + "B" * 60)
+    legacy_folder = youtube.safe_name(f"{video.upload_date} {video.title}")
+    assert youtube.video_folder_name(video, tmp_path) != legacy_folder  # nothing there yet: the new name
+    (tmp_path / legacy_folder).mkdir()
+    assert youtube.video_folder_name(video, tmp_path) == legacy_folder
+    folder = tmp_path / legacy_folder
+    legacy_stem = youtube.safe_name(video.title, limit=60)
+    assert youtube.video_file_stem(video, folder) != legacy_stem
+    (folder / f"{legacy_stem}.mp4").write_bytes(b"downloaded before")
+    assert youtube.video_file_stem(video, folder) == legacy_stem  # the download is reused, names kept
+    course = "Course " * 20
+    assert youtube.playlist_folder_name(course, tmp_path) == youtube.safe_name(course, words=True)

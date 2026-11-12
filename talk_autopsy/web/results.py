@@ -21,6 +21,7 @@ import re
 from pathlib import Path
 
 from talk_autopsy import youtube
+from talk_autopsy.web import labels
 from talk_autopsy.web import settings as web_settings
 from talk_autopsy.web.jobs import RESULT_MARKER
 
@@ -77,13 +78,6 @@ def _marker(folder: Path) -> dict | None:
     return None
 
 
-def _stem(files: list[str]) -> str | None:
-    """The result's file stem: the name of its target-language .srt."""
-    targets = sorted(f for f in files
-                     if f.endswith(".srt") and not f.endswith(".en.srt") and ".youtube." not in f)
-    return targets[0][:-4] if targets else None
-
-
 def choose_media(files: list[str], stem: str) -> tuple[str | None, bool]:
     """(file to play, subtitles burned in): the original, the subtitle-track MP4, a burned-in MP4, audio."""
     for name in (f"{stem}.mp4", f"{stem}.subs.mp4"):
@@ -102,7 +96,7 @@ def describe(folder: Path) -> dict:
     """Title, date, language, files, the media to play and its subtitle tracks."""
     marker = _marker(folder) or {}
     files = sorted(p.name for p in folder.iterdir() if p.is_file() and not p.name.endswith(".partial.mp4"))
-    stem = _stem(files)
+    stem = labels.stem_of(files)
     lang = str(marker.get("target_lang") or "")
     media, burned = choose_media(files, stem) if stem else (None, False)
     if media and burned and not lang:  # <stem>.<lang>.mp4
@@ -124,8 +118,9 @@ def describe(folder: Path) -> dict:
         except OSError:
             finished = ""
     return {"id": folder.name, "folder": str(folder), "title": str(marker.get("title") or folder.name),
-            "finished": finished, "target_lang": lang, "files": [f for f in files if f not in (
-                RESULT_MARKER, youtube.DONE_MARKER, "meta.json")],
+            "finished": finished, "target_lang": lang,
+            "files": [{"name": f, "kind": labels.file_kind(f, stem, lang)} for f in files
+                      if f not in (RESULT_MARKER, youtube.DONE_MARKER, "meta.json")],
             "media": media, "kind": kind, "burned": burned, "tracks": tracks,
             "cost_usd": marker.get("cost_usd"), "stt_cost_usd": marker.get("stt_cost_usd"),
             "untranslated": _ranges(marker.get("untranslated")),

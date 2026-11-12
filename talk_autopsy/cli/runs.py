@@ -219,7 +219,7 @@ def _run_youtube(url: str, settings_for, extra_context: str, formats: list[str],
     except youtube.YouTubeError as e:
         fail(str(e))
     if isinstance(info, youtube.PlaylistInfo):
-        parent = config.output_dir() / youtube.safe_name(info.title)
+        parent = config.output_dir() / youtube.playlist_folder_name(info.title, config.output_dir())
         plan = youtube.plan_playlist(info, parent, max_videos, max_total_cost, max_cost)
         typer.echo(f"Playlist: {info.title} ({len(info.entries)} videos) -> {parent}")
         for video in info.entries[:max_videos] if max_videos else info.entries:
@@ -249,7 +249,7 @@ def _youtube_video(video, parent: Path, runtimes: list[str], settings_for, extra
             video = youtube.fetch_video(video.url, runtimes)
     except youtube.YouTubeError as e:
         fail(str(e))
-    folder = parent / youtube.video_folder_name(video)
+    folder = parent / youtube.video_folder_name(video, parent)
     e = youtube.estimate(video.duration)
     typer.echo(f"Video: {video.title}" + (f" ({video.channel})" if video.channel else ""))
     typer.echo(f"  {e.line()}")
@@ -271,8 +271,8 @@ def _youtube_video(video, parent: Path, runtimes: list[str], settings_for, extra
     try:
         report = pipeline.run(settings, progress=print_progress)
         _print_report(report)
-        written = _write_outputs(settings, formats, folder, youtube.video_file_stem(video), download.video,
-                                 video.duration)
+        stem = youtube.video_file_stem(video, folder)
+        written = _write_outputs(settings, formats, folder, stem, download.video, video.duration)
     except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError, GlossaryError) as err:
         fail(str(err))
     youtube.mark_done(folder, [w.path.name for w in written],

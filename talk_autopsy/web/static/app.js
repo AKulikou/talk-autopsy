@@ -323,7 +323,25 @@ function onEnd(event) {
 
 function playerElements() {
   return { box: $("player-box"), media: $("player-media"), text: $("player-text"), note: $("player-note"),
-    none: $("player-none") };
+    none: $("player-none"), subs: $("player-subs"), subsButtons: $("player-subs-buttons"),
+    subsState: $("player-subs-state") };
+}
+
+// A result file: what it is for, in words (by kind, web/labels.py), then its name.
+function langName(code) {
+  const own = t(`langname_${code}`);
+  if (own !== `langname_${code}`) return own;
+  return state.config?.languages.target.find((l) => l.code === code)?.name || code;
+}
+
+function fileItem(name, kind, lang, purpose) {
+  const li = document.createElement("li");
+  const key = kind && kind !== "other" ? `file_${kind}` : purpose ? `purpose_${purpose}` : "";
+  const label = Object.assign(document.createElement("strong"), {
+    textContent: key ? t(key, { lang: langName(lang) }) : name });
+  li.append(label);
+  if (key) li.append(Object.assign(document.createElement("span"), { className: "file-name", textContent: name }));
+  return li;
 }
 
 function costText(claude, stt) {
@@ -336,16 +354,8 @@ async function showDone(event) {
   $("done-cost-row").hidden = false;
   $("done-cost").textContent = costText(event.cost_usd, event.stt_cost_usd);
   player.clear(playerElements());
-  $("done-files").replaceChildren(...event.files.map((f) => {
-    const li = document.createElement("li");
-    const name = document.createElement("strong");
-    name.textContent = f.name;
-    const purpose = document.createElement("span");
-    purpose.className = "purpose";
-    purpose.textContent = ` — ${t(`purpose_${f.purpose}`)}`;
-    li.append(name, purpose);
-    return li;
-  }));
+  const lang = state.job?.request.target_lang || "";
+  $("done-files").replaceChildren(...event.files.map((f) => fileItem(f.name, f.kind, lang, f.purpose)));
   $("done-folder").textContent = event.folder;
   setWarning("done-warning", gapsWarning(event.untranslated, event.uncorrected));
   setError("done-error", "");
@@ -366,11 +376,7 @@ async function watch(id) {
   const known = info.cost_usd !== null && info.cost_usd !== undefined;
   $("done-cost-row").hidden = !known;
   if (known) $("done-cost").textContent = costText(info.cost_usd, info.stt_cost_usd || 0);
-  $("done-files").replaceChildren(...info.files.map((name) => {
-    const li = document.createElement("li");
-    li.append(Object.assign(document.createElement("strong"), { textContent: name }));
-    return li;
-  }));
+  $("done-files").replaceChildren(...info.files.map((f) => fileItem(f.name, f.kind, info.target_lang)));
   $("done-folder").textContent = info.folder;
   setWarning("done-warning", gapsWarning(info.untranslated, info.uncorrected));
   setError("done-error", "");

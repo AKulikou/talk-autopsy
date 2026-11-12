@@ -33,7 +33,10 @@ def test_the_original_video_wins_over_the_burned_one(tmp_path):
     assert (info["media"], info["kind"], info["burned"]) == ("Talk.mp4", "video", False)
     assert [(t["file"], t["srclang"], t["default"]) for t in info["tracks"]] == [
         ("Talk.srt", "ru", True), ("Talk.en.srt", "en", False)]
-    assert info["tracks"][0]["label"] == "Русский" and RESULT_MARKER not in info["files"]
+    assert info["tracks"][0]["label"] == "Русский"
+    assert [(f["name"], f["kind"]) for f in info["files"]] == [
+        ("Talk.en.srt", "subs_en"), ("Talk.mp4", "original"), ("Talk.ru.mp4", "tv"),
+        ("Talk.srt", "subs_target"), ("Talk.subs.mp4", "video_tracks")]  # the marker is not listed
 
 
 def test_only_a_burned_video_plays_with_tracks_off(tmp_path):
@@ -49,7 +52,7 @@ def test_audio_and_nothing_to_play(tmp_path):
     none = results.describe(result(tmp_path, "b", files=("Talk.srt",)))
     assert none["media"] is None and none["kind"] is None
     partial = results.describe(result(tmp_path, "c", files=("Talk.srt", "Talk.ru.partial.mp4")))
-    assert partial["media"] is None and "Talk.ru.partial.mp4" not in partial["files"]
+    assert partial["media"] is None and "Talk.ru.partial.mp4" not in [f["name"] for f in partial["files"]]
 
 
 @pytest.mark.parametrize("name", ["..", ".", "", "a/b", "a\\b", "x\x00", "missing", "no-marker"])

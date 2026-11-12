@@ -1,7 +1,9 @@
 // The Done screen's player and the start page's recent results. The server picks what to play
 // (a video without burned-in subtitles when there is one) and serves only files inside the output
 // folder; subtitles come as WebVTT converted from the result's .srt. An audio result shows its
-// text beside the player, following the audio.
+// text beside the player, following the audio. A video gets its own subtitle buttons under the
+// player (target language / English / off): some browsers' built-in controls (the Firefox family)
+// offer no way to choose a track.
 import { api } from "./api.js";
 import { t } from "./i18n.js";
 
@@ -34,6 +36,9 @@ export function clear(els) {
   els.media.replaceChildren();
   els.text.replaceChildren();
   els.text.hidden = true;
+  els.subs.hidden = true;
+  els.subsButtons.replaceChildren();
+  els.subsState.textContent = "";
   els.box.hidden = true;
   els.note.hidden = true;
   els.none.hidden = true;
@@ -67,6 +72,35 @@ export function show(els, info) {
     els.note.hidden = false;
   }
   if (info.kind === "audio" && trackElements.length) followText(els, media, trackElements[0]);
+  else if (trackElements.length) subtitleButtons(els, media, info, trackElements);
+}
+
+// Subtitle choice under a video: one button per track and "off"; the choice is applied to the
+// tracks' modes (not left to the browser's menu) and stated in words next to the buttons.
+function subtitleButtons(els, media, info, trackElements) {
+  const names = info.tracks.map((tr) => (tr.srclang === "en" ? t("subs_english") : tr.label || tr.srclang));
+  const choices = [...names.map((name, index) => ({ name, index })), { name: t("subs_off"), index: -1 }];
+  let chosen = info.burned ? -1 : Math.max(0, info.tracks.findIndex((tr) => tr.default));
+  const buttons = choices.map((c) => {
+    const b = node("button", "secondary", c.name);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      chosen = c.index;
+      apply();
+    });
+    return b;
+  });
+  const apply = () => {
+    trackElements.forEach((el, k) => { el.track.mode = k === chosen ? "showing" : "disabled"; });
+    buttons.forEach((b, k) => b.setAttribute("aria-pressed", String(choices[k].index === chosen)));
+    els.subsState.textContent = chosen < 0 ? t("subs_state_off") : t("subs_state_on", { name: names[chosen] });
+  };
+  els.subsButtons.replaceChildren(...buttons);
+  els.subs.hidden = false;
+  apply();
+  // some browsers reset the modes once the media or a track has loaded: apply the choice again
+  media.addEventListener("loadedmetadata", apply);
+  for (const el of trackElements) el.addEventListener("load", apply);
 }
 
 // Audio: the subtitle cues as a list beside the player; the current one is marked and kept in view.

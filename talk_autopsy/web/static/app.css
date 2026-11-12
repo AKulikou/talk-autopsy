@@ -211,7 +211,14 @@ button.jump {
 
 .files { padding-left: 1.1rem; }
 .files li { margin: 0.25rem 0; overflow-wrap: anywhere; }
-.files .purpose { color: var(--muted); }
+.files .file-name { display: block; color: var(--muted); font-size: 0.9rem; }
+.subs-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+.subs-buttons { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; }
+.subs-buttons button { padding: 0.3rem 0.8rem; }
+.subs-buttons button[aria-pressed="true"] {
+  background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600;
+}
+.subs-state { color: var(--muted); font-size: 0.9rem; }
 .doctor { list-style: none; padding: 0; }
 .doctor li { margin: 0.3rem 0; }
 .doctor .missing { color: var(--bad); font-weight: 600; }

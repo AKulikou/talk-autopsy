@@ -193,6 +193,7 @@ def test_file_job_events_in_order(tmp_path, media):
     assert claude == [0.01, 0.06, 0.14]
     end = events[-1]
     assert end["folder"] == str(tmp_path / "output" / "talk")
+    assert [f["kind"] for f in end["files"]] == ["subs_target", "tv"]
     assert [(f["name"], f["purpose"]) for f in end["files"]] == [("talk.srt", "subtitles"),
                                                                   ("talk.lt.mp4", "tv")]
     assert end["cost_usd"] == pytest.approx(0.119) and end["stt_cost_usd"] == pytest.approx(0.08)
