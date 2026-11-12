@@ -403,7 +403,9 @@ async function loadRecent() {
 
 async function showFailed(event) {
   if (state.job && event.step) steps.fail(event.step);
-  $("failed-reason").textContent = event.reason || t("err_network");
+  // an unexpected error is named by its type in the interface language; known errors keep the server's line
+  $("failed-reason").textContent = event.error_type ? t("err_unexpected", { type: event.error_type })
+    : event.reason || t("err_network");
   const hint = event.hint || "log";
   $("failed-hint").textContent = hint === "network" ? "" : t(`hint_${hint}`);
   $("doctor").hidden = true;

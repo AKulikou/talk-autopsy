@@ -134,22 +134,27 @@ Requirements: [uv](https://docs.astral.sh/uv/) (it installs Python 3.13) and
 stages.
 
 On Windows, without the command line: double-click `scripts\windows\Talk Autopsy.bat`
-(or the desktop shortcut `scripts\windows\create-shortcut.ps1` makes); it asks, in
+(or the desktop shortcut "Talk Autopsy (console)" that `create-shortcut.ps1` makes); it asks, in
 Russian, for a YouTube link or a video file, shows the estimate and writes a TV file and
 subtitles.
 
-**Web UI (preview, v1.1 in progress).** `uv run talk-autopsy web` starts a page on this
-computer only (`http://127.0.0.1:8765`, or the next free port) and opens it in the
-browser. Choose a YouTube link or a file on this computer (the native file dialog), what
-you want to get (for the TV: subtitles burned into the picture plus an `.srt`; for the
-laptop: `.srt`, `.ass`, bilingual `.ass` and an MP4 with subtitle tracks; or everything),
-the Web3 glossary and the target language. The page shows the cost and time estimate
-before anything is spent and asks for an explicit confirmation above 3 USD per video;
-then the steps (a progress bar only where the pipeline reports a position, otherwise a
-spinner and the elapsed time), the running cost and the text of each finished step; at
-the end, the files and an "Open folder" button. Still coming: the side-by-side live
-view, an in-browser player and a desktop shortcut for the page. Playlists stay with the
-launcher and the CLI. Design and security model: [docs/web.md](docs/web.md).
+**Web UI (preview, v1.1 in progress).** `uv run talk-autopsy web` (on Windows: the
+desktop shortcut "Talk Autopsy", made by `scripts\windows\create-shortcut.ps1`) starts a
+page on this computer only (`http://127.0.0.1:8765`, or the next free port) and opens it
+in the browser; closing its console window stops it, and a second start opens the
+running page. Choose a YouTube link or a file on this computer (the native file dialog),
+what you want to get (for the TV: subtitles burned into the picture plus an `.srt`; for
+the laptop: `.srt`, `.ass`, bilingual `.ass` and an MP4 with subtitle tracks; or
+everything), the Web3 glossary and the target language. The page shows the cost and time
+estimate before anything is spent and asks for an explicit confirmation above 3 USD per
+video. While it runs: the steps with real progress where there is a position (download,
+correction and translation blocks, burn-in; a spinner and the elapsed time elsewhere),
+tokens and the running cost, and the text in two columns, English on the left
+(recognised, then each correction shown in place: struck-through words replaced by
+underlined ones) and the translation on the right, filled block by block. At the end:
+an in-browser player with the subtitles, the files and "Open folder"; the start page
+lists recent results. Playlists stay with the console shortcut "Talk Autopsy (console)"
+and the CLI. Design and security model: [docs/web.md](docs/web.md).
 
 ```bash
 git clone https://github.com/AKulikou/talk-autopsy.git

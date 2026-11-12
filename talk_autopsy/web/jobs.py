@@ -929,6 +929,7 @@ class JobRunner:
             if last_step == "pipeline" and progress is not None:
                 last_step = progress.open_step or progress.last_step
             final = ("failed", {"reason": reason, "hint": hint, "step": last_step,
+                                "error_type": type(e).__name__ if hint == "log" else None,
                                 "cost_usd": round(job.cost_usd, 4),
                                 "stt_cost_usd": round(job.stt_cost_usd, 4)})
             if not isinstance(e, Exception):

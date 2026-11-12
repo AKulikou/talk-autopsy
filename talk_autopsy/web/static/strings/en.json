@@ -143,5 +143,6 @@
   "player_none": "There is no video or audio in the result folder to play here; the subtitle files are in the folder.",
   "player_burned": "Only the video with burned-in subtitles is in the folder, so the subtitle tracks start switched off.",
   "err_no_result": "This result is no longer in the output folder.",
-  "purpose_audio": "a copy of the audio, for the player on this page"
+  "purpose_audio": "a copy of the audio, for the player on this page",
+  "err_unexpected": "Unexpected error ({type})."
 }

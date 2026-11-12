@@ -130,3 +130,16 @@ def test_a_second_start_opens_the_running_page(loopback_only, tmp_path, monkeypa
         thread.join(5)
         sock.close()
     assert server.running_instance(port, tries=1) is None
+
+
+def test_a_dropped_browser_connection_is_not_an_error():
+    import logging
+    gone = server.ClientGone()
+    try:
+        raise ConnectionResetError(10054, "closed by the remote host")
+    except ConnectionResetError:
+        import sys
+        error = sys.exc_info()
+    record = logging.LogRecord("asyncio", logging.ERROR, "x", 1, "Exception in callback", None, error)
+    assert gone.filter(record) is False
+    assert gone.filter(logging.LogRecord("asyncio", logging.ERROR, "x", 1, "other", None, None)) is True

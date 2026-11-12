@@ -1418,6 +1418,38 @@ Through the web server's HTTP API (`talk-autopsy web`), the frozen
   the measured-speed rescaling (the estimate jumped to 119 s left with 37 s to
   go); `srt` was never timed (the core reports it without a start event); the
   history kept one rate for every kind of output.
+- **The 2,162 input tokens** (smoke 2), checked read-only in session 2: not a
+  bug. The sentence units matched the segments one to one (79 = 79) and
+  correction made one small edit, so both steps sent the same English text in
+  two blocks (6,220 and 6,226 characters, the user messages differing only in
+  "correct" / "translate"); cache and output tokens differ. Smoke 3 below
+  shows the same (1,866 and 1,866).
+
+### Web UI smoke run (2026-11-12, v1.1 session 2; not scored)
+
+- **Smoke 3, link mode, fresh video, through the page.** A 5:43 public
+  conference lightning talk (not in the test set, not T6, not the smoke-2
+  video), profile `tv` (burned-in MP4 + `.srt`), Russian, on `pipeline-v3.1`.
+  Estimate before start: 0.08 USD Claude + 0.04 USD AssemblyAI. Spent:
+  **0.0708 USD Claude, 0.0449 USD AssemblyAI** (list price); 273.7 s from start
+  to `finished` (download 14.0 s, stt 15.1 s, glossary 13.7 s, stt2 14.0 s,
+  fix 13.0 s, translate 19.4 s, srt 0.2 s, outputs 184.2 s); 413 events,
+  recorded locally.
+- **Block by block:** correction arrived in 2 blocks (58 and 1 segments, at
+  68.7 s and 69.9 s), translation in 2 blocks (at 86.9 s and 89.3 s), each
+  shown as it came. The model made 0 corrections on this talk, so highlighted
+  edits were seen only with the synthetic replay (8 edits).
+- **Real positions:** download 12 byte positions (the expected size grew from
+  47.6 to 53.2 MB when the audio part started); burn-in 352 positions over
+  184 s, 0 to 343 s of video. The burn-in ran at 0.54 s per second of video,
+  twice the 0.27 measured on 2026-11-10 (`outputs.BURN_SPEED`, not changed:
+  one run).
+- **Cost shown = cost in the run report:** the page's Done screen
+  (0.0708 + 0.0449 USD), the last running total, the finished event,
+  `done.json` (0.070839 / 0.0449) and the result marker agree; the step files
+  give 0.032983 (fix) + 0.036152 (translate) + 0.0017 (glossary).
+- **Player:** the downloaded original (no burned-in subtitles) with the
+  Russian track on (76 cues) and English off; the right cue showed at 1:00.
 
 ## Summary
 
@@ -2425,8 +2457,13 @@ paths, so they wait until those modules are reopened for the web interface.
 - **Git-history rewrite with name replacement**, once, right before the
   repository is made public: verify with `scripts/check_names.py` and gitleaks
   over every commit, not only the tip; keep the tags (`pipeline-v2`,
-  `pipeline-v3`, `v1.0`) pointing at the rewritten commits; update the commit
+  `pipeline-v3`, `pipeline-v3.1`, `v1.0`) pointing at the rewritten commits; update the commit
   hashes cited in the docs from the filter-repo commit map.
+- Web UI: sessions 1 and 2 done (docs/web.md); still open: align the CLI's cost
+  limit (Claude only) with the page's (Claude + speech recognition); a cancel
+  button (needs cooperative cancellation in the core); re-measure
+  `outputs.BURN_SPEED` (smoke 3 burned at 0.54x, the constant says 0.27x);
+  native check of the Lithuanian interface strings.
 - Diarization for interviews (speaker labels; stress-01, review #1 finding 14).
 - translation-v4 idea (below: short glosses, no acronym expansion, common
   jargon kept); needs a blind rating against v2.1 before it can replace it.

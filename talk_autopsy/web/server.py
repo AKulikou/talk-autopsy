@@ -64,6 +64,18 @@ def running_instance(preferred: int = DEFAULT_PORT, tries: int = PORT_TRIES,
     return None
 
 
+class ClientGone(logging.Filter):
+    """
+    Windows' asyncio logs a full traceback (ConnectionResetError) whenever the
+    browser drops a connection: a reload, leaving a playing video, a closed tab.
+    It is harmless, so it is kept out of the console and the log.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        error = record.exc_info[1] if record.exc_info else None
+        return not isinstance(error, ConnectionResetError)
+
+
 def setup_logging(log_dir: Path | None = None) -> Path:
     log_dir = log_dir or config.LOGS_DIR / "web"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -74,6 +86,7 @@ def setup_logging(log_dir: Path | None = None) -> Path:
     console.setLevel(logging.WARNING)
     console.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     logging.basicConfig(level=logging.INFO, handlers=[file_handler, console], force=True)
+    logging.getLogger("asyncio").addFilter(ClientGone())
     for noisy in ("httpx", "uvicorn.access"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     return log_file

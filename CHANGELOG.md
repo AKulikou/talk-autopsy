@@ -28,6 +28,30 @@
 - Real positions for the YouTube download (bytes) and the burn-in (seconds of
   video encoded).
 
+**Web UI (v1.1, session 2 of 3)**
+
+- The waiting screen shows the text as it becomes ready, in two aligned
+  columns: English (the recognised text, then each correction block's changes
+  in place: removed words struck through, added words underlined) and the
+  translation, filled block by block. It follows the newest text until you
+  scroll up ("jump to the latest text" brings it back), keeps at most one
+  window of rows in the page (an hour-long talk stays smooth), and a reload
+  rebuilds it. Tokens per step are shown.
+- In-browser player on the Done screen: the video without burned-in
+  subtitles when there is one, with the target-language and English subtitles
+  as switchable tracks; audio-only inputs get an audio player with the text
+  beside it.
+- The start page lists recent results with "Watch" and "Open folder".
+- Desktop shortcuts: "Talk Autopsy" starts the page (closing its window stops
+  it; a second start opens the running page), "Talk Autopsy (console)" keeps
+  the console launcher for playlists.
+- Every job's events are recorded locally; `talk-autopsy web --replay <file>`
+  plays a recording back with no pipeline, network or cost (synthetic
+  recordings in `tests/fixtures/replay/`).
+- An unexpected error is named in the interface language; harmless "connection
+  reset" tracebacks no longer appear in the console; page assets are
+  revalidated after an update.
+
 ## 1.0.0 — 2026-11-12
 
 First release: the CLI tool of stage 3, on the frozen pipeline `pipeline-v3`.

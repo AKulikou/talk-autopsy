@@ -141,8 +141,8 @@ legend { font-weight: 600; padding: 0; margin-bottom: 0.25rem; }
 /* The running and done screens use more width: two text columns, a player. */
 body[data-view="view-run"] main, body[data-view="view-run"] .top,
 body[data-view="view-done"] main, body[data-view="view-done"] .top { max-width: 72rem; }
-@media (min-width: 62rem) {
-  #view-run { display: grid; grid-template-columns: minmax(17rem, 22rem) 1fr; gap: 0 1.5rem; }
+@media (min-width: 56rem) {
+  #view-run { display: grid; grid-template-columns: minmax(16rem, 22rem) 1fr; gap: 0 1.5rem; }
   #view-run > :not(.live) { grid-column: 1; }
   #view-run > .live { grid-column: 2; grid-row: 1 / span 6; min-width: 0; }
 }
@@ -156,8 +156,8 @@ body[data-view="view-done"] main, body[data-view="view-done"] .top { max-width: 
 .live-head h3 { margin-bottom: 0.25rem; }
 .live-status { color: var(--muted); margin: 0; font-size: 0.92rem; }
 .legend { font-size: 0.85rem; }
-.cols, .row { display: grid; grid-template-columns: 3.2rem 1fr 1fr; gap: 0 0.9rem; }
-.cols { font-size: 0.8rem; color: var(--muted); font-weight: 600; padding: 0.25rem 0.6rem; }
+.cols, .row { display: grid; grid-template-columns: 3.2rem 1fr 1fr; gap: 0 0.9rem; padding-left: 0.5rem; }
+.cols { font-size: 0.8rem; color: var(--muted); font-weight: 600; padding: 0.25rem 0.6rem 0.25rem 1.1rem; }
 .rows {
   height: min(62vh, 38rem);
   overflow-y: auto;
@@ -167,7 +167,7 @@ body[data-view="view-done"] main, body[data-view="view-done"] .top { max-width: 
   padding: 0 0.6rem;
   overscroll-behavior: contain;
 }
-.row { padding: 0.45rem 0; border-bottom: 1px solid var(--line); font-size: 0.95rem; }
+.row { padding-top: 0.45rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--line); font-size: 0.95rem; }
 .row:last-child { border-bottom: none; }
 .row[data-newest="true"] { box-shadow: inset 3px 0 0 var(--accent); }
 .row .time { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; padding-top: 0.15rem; }
