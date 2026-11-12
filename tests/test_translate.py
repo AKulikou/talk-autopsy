@@ -115,3 +115,66 @@ def test_per_segment_translation_keeps_the_segment_ids(fake_claude):
     result = translate.translate(t, GLOSSARY, "ru", units=False)
     assert result.ids() == [1, 2] and all(s.words is None and s.source_ids is None for s in result.segments)
     assert result.meta["translation"]["units"] is None
+
+
+# --- segments with nothing to translate (bug found on a real video, 2026-11-12) -------------------
+# A bare version number ("0.8.26.") was taken for a sentence left in English: both attempts were
+# rejected and the whole first block (five minutes) stayed in English. A segment whose correct
+# translation is the segment itself must pass; an ordinary English sentence must still be rejected.
+
+NOTHING_TO_TRANSLATE = [
+    "0.8.26.",                      # the observed segment: a version number
+    "42",                           # digits only
+    "1, 2, 3...",                   # numbers and punctuation
+    "--> = 100%",                   # symbols
+    "msg.sender.",                  # member access
+    "uint256",                      # letters and digits in one identifier
+    "balanceOf()",                  # camelCase call
+    "transfer()",                   # a call
+    "snake_case_name",              # snake_case
+    "Counter.sol",                  # a file name
+    "https://example.org/docs/start",  # a URL
+    "www.example.org",              # a web address
+    "msg.sender, msg.value, tx.origin.",  # several identifiers
+    "Claude Code.",                 # a kept glossary term (already passed before the fix)
+]
+
+
+@pytest.mark.parametrize("text", NOTHING_TO_TRANSLATE)
+def test_a_segment_with_nothing_to_translate_may_stay_as_it_is(text):
+    assert not left_in_english(text, text, GLOSSARY)
+    answer = TranslationAnswer(segments=[SegmentText(id=29, text=text)])
+    assert validate_block([seg(29, text)], GLOSSARY, "ru", answer) == []
+
+
+def test_the_observed_block_with_a_version_number_is_accepted():
+    sources = [seg(28, "So we're gonna say pragma solidity and then 0.8.0."), seg(29, "0.8.26."),
+               seg(30, "Now if you go to the compiler, the latest version is 0.8.26, so we'll use that.")]
+    answer = TranslationAnswer(segments=[
+        SegmentText(id=28, text="Итак, пишем pragma solidity, а затем 0.8.0."),
+        SegmentText(id=29, text="0.8.26."),
+        SegmentText(id=30, text="Если открыть компилятор, последняя версия — 0.8.26, её и возьмём.")])
+    assert validate_block(sources, GLOSSARY, "ru", answer) == []
+
+
+@pytest.mark.parametrize("text", [
+    "Open the terminal now.",
+    "We use version 0.8.26 here.",        # numbers do not excuse English words
+    "Open Counter.sol and call balanceOf.",  # identifiers do not excuse English words
+    "Then we read msg.sender, msg.value and tx.origin.",
+    "Okay.",
+    "Step 1 of 3.",
+])
+def test_an_english_sentence_is_still_rejected(text):
+    assert left_in_english(text, text, GLOSSARY)
+    answer = TranslationAnswer(segments=[SegmentText(id=1, text=text)])
+    assert any("left in English" in p for p in validate_block([seg(1, text)], GLOSSARY, "ru", answer))
+
+
+@pytest.mark.parametrize("source, target", [
+    ("Step 1 2 3 4.", "Шаг 1 2 3 4."),                         # digits are not English words
+    ("Version 0.8.26.1 is out.", "Версия 0.8.26.1."),
+    ("Then msg.sender, msg.value, tx.origin.", "Затем msg.sender, msg.value, tx.origin."),
+])
+def test_numbers_and_identifiers_do_not_count_as_english_words(source, target):
+    assert not left_in_english(source, target, GLOSSARY)
