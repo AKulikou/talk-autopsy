@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from talk_autopsy import cli, youtube
+from talk_autopsy import cli, config, youtube
 
 SNAPSHOTS = Path(__file__).parent / "snapshots" / "cli"
 UPDATE = os.environ.get("UPDATE_CLI_SNAPSHOTS") == "1"
@@ -27,6 +27,15 @@ runner = CliRunner()
 
 COMMANDS = ["cut", "transcribe", "fix", "glossary-auto", "translate", "srt", "align", "run", "doctor", "web",
             "eval", "adjudicate", "resolve", "judge", "judge-compare", "judge-refs", "glossary-ref"]
+
+
+@pytest.fixture(autouse=True)
+def _fixed_help_layout(monkeypatch):
+    """typer reads the width and the terminal flag once, when its help renderer is first imported."""
+    from typer import rich_utils
+
+    monkeypatch.setattr(rich_utils, "MAX_WIDTH", 100)
+    monkeypatch.setattr(rich_utils, "FORCE_TERMINAL", False)
 
 
 def _invoke(args: list[str]):
@@ -65,7 +74,9 @@ def test_command_help(command):
 
 
 def _source_neutral(output: str, source: Path) -> str:
-    return output.replace(str(source), "<SOURCE>")
+    """No machine paths: the source and the project's glossaries folder become placeholders."""
+    return (output.replace(str(source), "<SOURCE>")
+            .replace(str(config.GLOSSARIES_DIR / "web3.md"), "<GLOSSARIES>/web3.md"))
 
 
 def test_run_dry_run_on_a_local_file(sine):
