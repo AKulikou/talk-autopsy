@@ -126,16 +126,22 @@ def align_extra_installed() -> bool:
     return all(importlib.util.find_spec(name) is not None for name in ("torch", "torchaudio"))
 
 
+def web_ui_installed() -> bool:
+    """True if the web UI's server packages (fastapi, uvicorn) are importable (not imported here)."""
+    return all(importlib.util.find_spec(name) is not None for name in ("fastapi", "uvicorn"))
+
+
 def doctor(which: Callable[[str], str | None] = shutil.which, runtimes: list[tuple[str, str]] | None = None,
            version: str | None = None, ejs: bool | None = None, align: bool | None = None,
            key_is_set: Callable[[str], bool] = config.key_is_set,
-           today: dt.date | None = None) -> list[Check]:
+           today: dt.date | None = None, web: bool | None = None) -> list[Check]:
     """
     What the tool needs on this machine: ffmpeg and ffprobe, a JavaScript runtime
     yt-dlp can use, the solver package, the yt-dlp version and its age, the
     optional `align` extra (forced alignment, needed only for the Gemini
-    fallback), and which API keys are set (names only, never values). Arguments
-    replace the real probes in tests.
+    fallback), whether the web UI can start (`talk-autopsy web`), and which API
+    keys are set (names only, never values). Arguments replace the real probes
+    in tests.
     """
     checks = []
     for tool in ("ffmpeg", "ffprobe"):
@@ -161,6 +167,10 @@ def doctor(which: Callable[[str], str | None] = shutil.which, runtimes: list[tup
                         "installed (torch, torchaudio)" if align
                         else "not installed; forced alignment is needed only for the Gemini fallback",
                         ALIGN_EXTRA_FIX, required=False))
+    web = web_ui_installed() if web is None else web
+    checks.append(Check("web UI (talk-autopsy web)", web,
+                        "can start (fastapi, uvicorn installed)" if web else "fastapi or uvicorn is missing",
+                        "uv sync", required=False))
     for name in config.SECRET_ENV_VARS:
         if name in ("ANTHROPIC_AUTH_TOKEN", "GOOGLE_API_KEY", "HF_TOKEN"):
             continue  # SDK-read credentials this project does not use

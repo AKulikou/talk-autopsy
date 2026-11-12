@@ -47,3 +47,14 @@ def test_profiles_use_existing_formats_only():
         assert set(formats) <= set(outputs.FORMATS)
     assert settings.PROFILES["all"] == outputs.FORMATS
     assert "mp4-burned" not in settings.PROFILES["laptop"]
+
+
+def test_string_files_have_the_same_keys_and_no_empty_values():
+    files = {lang: json.loads((settings.STRINGS_DIR / f"{lang}.json").read_text(encoding="utf-8"))
+             for lang in settings.ui_codes()}
+    keys = set(files["en"])
+    for lang, strings in files.items():
+        assert set(strings) == keys, lang
+        assert all(isinstance(v, str) and v.strip() for v in strings.values()), lang
+    assert settings.ui_strings("ru")["tab_file"] == "Файл на этом компьютере"
+    assert settings.ui_strings("xx") == settings.ui_strings("lt")

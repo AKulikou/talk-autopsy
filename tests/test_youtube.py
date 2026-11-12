@@ -183,6 +183,18 @@ def test_doctor_reports_names_only():
     assert {c.detail for c in checks if c.name.endswith("_KEY")} <= {"set", "not set"}
 
 
+def test_doctor_reports_whether_the_web_ui_can_start():
+    def checks(web):
+        found = youtube.doctor(which=lambda name: "/bin/x", runtimes=[("deno", "2")], version="2026.11.01",
+                               ejs=True, align=True, key_is_set=lambda name: True,
+                               today=dt.date(2026, 11, 12), web=web)
+        return {c.name: c for c in found}["web UI (talk-autopsy web)"]
+    assert checks(True).ok and "can start" in checks(True).detail
+    missing = checks(False)
+    assert not missing.ok and not missing.required and missing.fix == "uv sync"
+    assert youtube.web_ui_installed()  # a regular dependency: installed by a plain uv sync
+
+
 def test_cli_youtube_run_passes_context_and_writes_outputs(fake_ydl, monkeypatch, tmp_path):
     seen = {}
 
