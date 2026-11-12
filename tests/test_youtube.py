@@ -142,7 +142,7 @@ def _playlist(durations):
 def test_playlist_order_cap_and_max_videos(tmp_path):
     playlist = _playlist([3600, 3600, 3600, 3600])
     plan = youtube.plan_playlist(playlist, tmp_path, max_videos=3, max_total_usd=2.7,
-                                 max_video_claude_usd=3.0)
+                                 max_video_usd=3.0)
     assert [v.id for v in plan.todo] == ["v1", "v2"]  # 1.29 USD each; the third would cross 2.7
     assert [v.id for v in plan.over_cap] == ["v3"]  # max_videos=3: v4 is not considered
 
@@ -248,3 +248,56 @@ def test_cli_doctor_reports_the_align_extra_as_a_warning_with_the_command(monkey
     installed = runner.invoke(cli.app, ["doctor"])
     assert "ok       align extra (Gemini fallback only): installed" in installed.output
     assert "--extra align" not in installed.output
+
+
+# --- one per-video cost limit (v1.1): Claude + speech recognition, CLI and web alike ---------
+
+THREE_HOURS = 3 * 3600  # Claude 2.46 USD (under 3), Claude + AssemblyAI 3.87 USD (over 3)
+
+
+def test_the_per_video_limit_counts_claude_and_speech_recognition():
+    e = youtube.estimate(THREE_HOURS)
+    assert e.claude_usd <= config.COST_CONFIRMATION_USD < e.total_usd
+    assert youtube.over_video_limit(e, config.COST_CONFIRMATION_USD)
+    assert not youtube.over_video_limit(e, 4.0)
+    assert not youtube.over_video_limit(youtube.estimate(None), 0.0)  # unknown: the caller decides
+
+
+def test_playlist_stops_before_a_video_over_the_per_video_limit(tmp_path):
+    plan = youtube.plan_playlist(_playlist([600, THREE_HOURS, 600]), tmp_path, None, 100.0, 3.0)
+    assert [v.id for v in plan.todo] == ["v1"] and [v.id for v in plan.over_cap] == ["v2", "v3"]
+
+
+def test_cli_link_over_the_per_video_limit_stops_before_the_download(fake_ydl):
+    long_video = {**VIDEO_INFO, "duration": THREE_HOURS}
+    fake_ydl.infos = {VIDEO_INFO["webpage_url"]: long_video}
+    result = runner.invoke(cli.app, ["run", VIDEO_INFO["webpage_url"], "--dry-run"])
+    assert result.exit_code == 1
+    expected = "the estimate 3.87 USD (Claude 2.46 + speech recognition 1.41) is above --max-cost 3.00"
+    assert expected in result.output
+    result = runner.invoke(cli.app, ["run", VIDEO_INFO["webpage_url"], "--dry-run", "--max-cost", "4"])
+    assert result.exit_code == 0, result.output
+    assert not [c for c in fake_ydl.calls if c[0] == "download"]
+
+
+def test_cli_local_file_over_the_per_video_limit_stops_before_any_work(sine, monkeypatch):
+    from talk_autopsy import ingest
+
+    started = []
+    monkeypatch.setattr(ingest, "probe", lambda path: float(THREE_HOURS))
+    monkeypatch.setattr(pipeline, "run", lambda *a, **k: started.append(1))
+    result = runner.invoke(cli.app, ["run", str(sine), "--steps", "srt"])
+    assert result.exit_code == 1 and "above --max-cost 3.00 USD" in result.output and started == []
+    result = runner.invoke(cli.app, ["run", str(sine), "--dry-run", "--max-cost", "4"])
+    assert result.exit_code == 0, result.output
+
+
+def test_the_web_gate_uses_the_same_limit():
+    from talk_autopsy.web import jobs
+
+    e = youtube.estimate(THREE_HOURS)
+    preview = jobs.Preview(mode="url", source="x", title="t", duration_s=THREE_HOURS, cost=e, formats=["srt"],
+                           time=jobs.NO_ESTIMATE)
+    assert preview.needs_confirmation(config.COST_CONFIRMATION_USD) == youtube.over_video_limit(
+        e, config.COST_CONFIRMATION_USD) is True
+    assert preview.needs_confirmation(4.0) is False

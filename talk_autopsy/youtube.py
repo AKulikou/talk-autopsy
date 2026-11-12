@@ -343,6 +343,17 @@ class Estimate:
                 "processing plus download (and burn-in, if asked)")
 
 
+def over_video_limit(estimate: Estimate, limit_usd: float) -> bool:
+    """
+    The one per-video cost limit, for the CLI (`run --max-cost`, playlists) and
+    the web page's cost gate: the whole estimate, Claude plus speech
+    recognition, against the limit. An unknown estimate (no duration) is not
+    over the limit; each caller decides what "no estimate" means (the page asks
+    for a confirmation, the CLI relies on the pipeline's own Claude estimate).
+    """
+    return estimate.minutes is not None and estimate.total_usd > limit_usd
+
+
 def estimate(duration_seconds: float | None) -> Estimate:
     """Cost and time from the measured per-hour figures in config (before the pipeline's own estimate)."""
     if duration_seconds is None:
@@ -448,12 +459,12 @@ class PlaylistPlan:
 
 
 def plan_playlist(playlist: PlaylistInfo, parent: Path, max_videos: int | None, max_total_usd: float,
-                  max_video_claude_usd: float) -> PlaylistPlan:
+                  max_video_usd: float) -> PlaylistPlan:
     """
     Videos in playlist order, up to `max_videos`; finished ones (done marker)
     skipped; the list stops before the first video whose estimate would take the
-    total past `max_total_usd` or whose Claude estimate is above
-    `max_video_claude_usd` (and before a video of unknown duration, which cannot
+    total past `max_total_usd` or whose own estimate is over the per-video
+    limit `max_video_usd` (`over_video_limit`; and before a video of unknown duration, which cannot
     be estimated).
     """
     entries = playlist.entries[:max_videos] if max_videos else list(playlist.entries)
@@ -464,7 +475,7 @@ def plan_playlist(playlist: PlaylistInfo, parent: Path, max_videos: int | None, 
             done.append(video)
             continue
         e = estimate(video.duration)
-        too_much = e.claude_usd > max_video_claude_usd or total + e.total_usd > max_total_usd
+        too_much = over_video_limit(e, max_video_usd) or total + e.total_usd > max_total_usd
         if video.duration is None or too_much:
             over = [v for v in entries[index:] if v not in done]
             break

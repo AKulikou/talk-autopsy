@@ -146,7 +146,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Запуск невозможен: см. сообщение Error выше." -ForegroundColor Red
     Stop-Launcher 1
 }
-Write-Host "Лимит: не больше 3 USD за видео на Claude (иначе программа остановится сама)."
+Write-Host "Лимит: не больше 3 USD за видео, Claude и распознавание речи вместе (иначе программа остановится сама)."
 if ($DryRun) {
     Write-Host "Пробный режим (-DryRun): обработка не запускалась."
     Stop-Launcher 0

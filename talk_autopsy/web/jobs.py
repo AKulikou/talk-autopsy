@@ -219,7 +219,7 @@ class Preview:
         return round(self.cost.total_usd, 2) if self.cost_known else None
 
     def needs_confirmation(self, limit_usd: float) -> bool:
-        return not self.cost_known or self.cost.total_usd > limit_usd
+        return not self.cost_known or youtube.over_video_limit(self.cost, limit_usd)
 
     def as_dict(self, limit_usd: float) -> dict:
         return {
@@ -793,7 +793,7 @@ class JobRunner:
                                                        "confirm that you want to start anyway.")
             return self.limit_usd
         amount = preview.amount_usd
-        if preview.cost.total_usd <= self.limit_usd:
+        if not youtube.over_video_limit(preview.cost, self.limit_usd):
             return self.limit_usd
         if request.confirmed_cost_usd is None:
             raise GateError("confirm_cost", f"The estimate {amount:.2f} USD is above the limit of "

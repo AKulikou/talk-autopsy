@@ -178,7 +178,8 @@ treated as hostile.
   Media and subtitles also carry `Cross-Origin-Resource-Policy: same-origin`.
   No CORS headers, so another site cannot read any response.
 - The cost gate lives in the job runner: above the per-video limit (3 USD,
-  Claude + speech recognition) or with no estimate, a job starts only if the
+  Claude + speech recognition; `youtube.over_video_limit`, the same check as
+  `run --max-cost`) or with no estimate, a job starts only if the
   request sends back that exact estimate (or confirms "no estimate").
 - Local input paths: absolute, existing, a regular file with a media
   extension; read in place, never served or executed.
@@ -216,8 +217,7 @@ Committed recordings (an invented talk, no real text):
 ## Not in v1.1
 
 No cancel / stop button (the core has no cooperative cancellation); no
-playlists in the page; the CLI's cost limit is not yet aligned with the page's
-(Claude only vs Claude + speech recognition). Session 3: dead code out of
+playlists in the page. Session 3: dead code out of
 frozen modules, `cli.py` split (the glossary helpers the web runner borrows
 from it move to a shared module), screenshots, README, history rewrite, tag
 `v1.1`.

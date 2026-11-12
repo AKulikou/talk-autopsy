@@ -35,8 +35,9 @@ Usage: root run [OPTIONS] {source}
 │ --translation              <str>               Translation prompt: v2 (default:                  │
 │                                                translation-v2.1) or v3 (term classes keep / both │
 │                                                / translate / ui). Default: TRANSLATION_VERSION.  │
-│ --max-cost                 <float>             Stop before the Claude steps of a video if their  │
-│                                                estimate is above this (USD).                     │
+│ --max-cost                 <float>             Per-video limit: stop before a video whose        │
+│                                                estimate (Claude + speech recognition) is above   │
+│                                                this (USD).                                       │
 │                                                [default: 3.0]                                    │
 │ --max-videos               <int range> [x>=1]  Playlist: at most N videos.                       │
 │ --max-total-cost           <float>             Playlist: stop before a video that would take the │

@@ -52,6 +52,21 @@
   reset" tracebacks no longer appear in the console; page assets are
   revalidated after an update.
 
+**Cleanup and one cost limit (v1.1, session 3 of 4)**
+
+- **Changed: one per-video cost limit.** `run --max-cost` (default 3 USD) is
+  now compared with the whole estimate, Claude plus speech recognition, as the
+  web page already did; before, the CLI compared the Claude part only. A video
+  of about 2.3 to 3.7 hours, which passed before, now stops before any work
+  (and before the download) unless `--max-cost` is raised. Playlists apply the
+  same per-video limit. One function (`youtube.over_video_limit`) serves the
+  CLI and the page.
+- `cli.py` split into the package `talk_autopsy/cli/` (one module per command
+  group); help, dry-run and doctor output unchanged, checked by snapshot tests.
+- The unused `edge-tts` dependency and the `ingest.download` stub removed (tag
+  `pipeline-v3.2`: cache keys, model requests and outputs unchanged).
+  `metrics.timing_drift` stays: removing it would invalidate cached runs.
+
 ## 1.0.0 — 2026-11-12
 
 First release: the CLI tool of stage 3, on the frozen pipeline `pipeline-v3`.

@@ -2474,8 +2474,9 @@ paths, so they wait until those modules are reopened for the web interface.
   over every commit, not only the tip; keep the tags (`pipeline-v2`,
   `pipeline-v3`, `pipeline-v3.1`, `v1.0`) pointing at the rewritten commits; update the commit
   hashes cited in the docs from the filter-repo commit map.
-- Web UI: sessions 1 and 2 done (docs/web.md); still open: align the CLI's cost
-  limit (Claude only) with the page's (Claude + speech recognition); a cancel
+- Done in v1.1: the CLI's per-video cost limit is the page's (Claude + speech
+  recognition; `youtube.over_video_limit`).
+- Web UI: sessions 1 and 2 done (docs/web.md); still open: a cancel
   button (needs cooperative cancellation in the core); re-measure
   `outputs.BURN_SPEED` (smoke 3 burned at 0.54x, the constant says 0.27x);
   native check of the Lithuanian interface strings.

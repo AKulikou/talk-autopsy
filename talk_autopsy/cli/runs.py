@@ -73,12 +73,20 @@ def _write_outputs(settings, formats: list[str], dest: Path, stem: str, video: P
     return written
 
 
-def _local_estimate(source: Path) -> str:
-    """The per-hour estimate for a local file (as for a link), or why there is none."""
+def _local_estimate(source: Path) -> tuple[youtube.Estimate | None, str]:
+    """The per-hour estimate for a local file (as for a link) and its line, or None and why there is none."""
     try:
-        return youtube.estimate(ingest.probe(source)).line()
-    except RuntimeError as e:  # includes ffprobe missing
-        return f"none ({e})"
+        e = youtube.estimate(ingest.probe(source))
+    except RuntimeError as err:  # includes ffprobe missing
+        return None, f"none ({err})"
+    return e, e.line()
+
+
+def _check_video_limit(e: youtube.Estimate, max_cost: float) -> None:
+    """Stop before a video whose whole estimate is over --max-cost (the same limit as the web page)."""
+    if youtube.over_video_limit(e, max_cost):
+        fail(f"the estimate {e.total_usd:.2f} USD (Claude {e.claude_usd:.2f} + speech recognition "
+             f"{e.stt_usd:.2f}) is above --max-cost {max_cost:.2f} USD; raise it to confirm")
 
 
 def run(
@@ -102,7 +110,8 @@ def run(
         help="Translation prompt: v2 (default: translation-v2.1) or v3 (term classes keep / both / "
              "translate / ui). Default: TRANSLATION_VERSION.")] = None,
     max_cost: Annotated[float, typer.Option(
-        help="Stop before the Claude steps of a video if their estimate is above this (USD).")]
+        help="Per-video limit: stop before a video whose estimate (Claude + speech recognition) is "
+             "above this (USD).")]
     = config.COST_CONFIRMATION_USD,
     max_videos: Annotated[int | None, typer.Option(min=1, help="Playlist: at most N videos.")] = None,
     max_total_cost: Annotated[float, typer.Option(
@@ -162,7 +171,10 @@ def run(
         typer.echo(f"User glossary: {', '.join(str(p) for p in glossary_paths)} (earlier files win)")
     extra_context = glossary_auto.read_context(context)
     if not is_url(source):  # a link's estimate is printed with its metadata
-        typer.echo(f"Estimate: {_local_estimate(Path(source))}")
+        local_estimate, line = _local_estimate(Path(source))
+        typer.echo(f"Estimate: {line}")
+        if local_estimate is not None:
+            _check_video_limit(local_estimate, max_cost)
 
     def settings_for(video_source: Path, run_name: str, video_context: str):
         settings = pipeline.RunSettings(source=video_source, target_lang=target_lang, steps=selected,
@@ -244,8 +256,7 @@ def _youtube_video(video, parent: Path, runtimes: list[str], settings_for, extra
     typer.echo(f"  author's captions: {', '.join(video.author_captions) or 'none'}; "
                f"chapters: {len(video.chapters)}")
     typer.echo(f"  folder: {folder}")
-    if e.claude_usd > max_cost:
-        fail(f"the Claude estimate {e.claude_usd:.2f} USD is above --max-cost {max_cost:.2f} USD")
+    _check_video_limit(e, max_cost)
     if dry_run:
         return
     try:
