@@ -30,7 +30,11 @@ gate and in B5, 2026-11-09):
   `code`: a hash of the step's prompt file and of the modules that validate
   or post-process its output (`code_hash`, `STEP_CODE`). A step whose output
   exists with a matching stamp is skipped; anything else reruns it, so a
-  prompt or validator fix invalidates the old results.
+  prompt or validator fix invalidates the old results. A correction or
+  translation with failed blocks is never up to date (its stamp names them,
+  `write_result_stamp`): the next run does the step again; for the
+  translation only the failed blocks are sent, the accepted ones are reused
+  (`accepted_texts`, since pipeline-v3.3).
 - **Fail fast.** Keys a selected step needs are checked before any work.
 - **Cost.** Before the first Claude step the estimate of all Claude steps is
   emitted; above `max_cost_usd` the run stops before spending. `RunReport` has
@@ -234,6 +238,45 @@ def up_to_date(output: Path, inputs: dict[str, str]) -> bool:
 
 def write_stamp(output: Path, inputs: dict[str, str]) -> None:
     _stamp_path(output).write_text(_stamp(inputs), encoding="utf-8")
+
+
+INCOMPLETE = "incomplete"  # stamp key of a correction or translation with failed blocks (pipeline-v3.3)
+
+
+def write_result_stamp(output: Path, inputs: dict[str, str], failed_blocks: list[dict]) -> None:
+    """
+    The stamp of a correction or translation result. With failed blocks it also
+    names them, so it never equals the inputs' stamp: the step is not up to date
+    and runs again next time (a block that fell back is not a finished result).
+    """
+    if not failed_blocks:
+        write_stamp(output, inputs)
+        return
+    numbers = ", ".join(str(b["block"]) for b in failed_blocks)
+    write_stamp(output, {**inputs, INCOMPLETE: f"failed blocks {numbers}"})
+
+
+def accepted_texts(output: Path, inputs: dict[str, str], stage: str) -> dict[int, str] | None:
+    """
+    Segment id -> text of the blocks an earlier, incomplete run of the same
+    inputs accepted (its stamp equals `inputs` plus INCOMPLETE); None otherwise.
+    """
+    stamp = _stamp_path(output)
+    if not (output.is_file() and stamp.is_file()):
+        return None
+    try:
+        earlier = json.loads(stamp.read_text(encoding="utf-8"))
+        if not isinstance(earlier, dict) or INCOMPLETE not in earlier:
+            return None
+        earlier.pop(INCOMPLETE)
+        if earlier != inputs:
+            return None
+        result = load_transcript(output)
+        failed = {i for b in result.meta[stage]["failed_blocks"] for i in b["ids"]}
+        return {s.id: s.text for s in result.segments if s.id not in failed}
+    except Exception:  # an unreadable earlier result: translate everything again
+        logger.exception("the earlier result %s cannot be reused; the step runs in full", output.name)
+        return None
 
 
 # --- engines ----------------------------------------------------------------------
@@ -552,7 +595,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
             finally:
                 structured_call.result_observer.reset(observing)
             save_transcript(result, fixed)
-            write_stamp(fixed, inputs)
+            write_result_stamp(fixed, inputs, result.meta["correction"]["failed_blocks"])
             cost = result.meta["correction"]["cost_usd"]
             tokens = _usage_numbers(result.meta["correction"].get("usage"))
         step_done("fix", fixed, skipped, cost, t0, tokens=tokens)
@@ -572,21 +615,31 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         skipped = up_to_date(translated, inputs)
         tokens = None
         if not skipped:
-            emit("step-start", "translate", f"{version}, {settings.translation_model}")
+            # an earlier run with failed blocks: send only those again (never for v3's whole-video markers)
+            done = accepted_texts(translated, inputs, "translation") if version != translate.V3 else None
+            emit("step-start", "translate", f"{version}, {settings.translation_model}"
+                 + (", only the blocks that failed before" if done else ""))
             source_transcript = load_transcript(source_file)
             answers, parts = _BlockAnswers(), _blocks_or_none(source_transcript, sentence_units=True)
             sources = {seg.id: seg.text for part in parts for seg in part.segments}
+
+            def translated_block(n: int, total: int) -> None:
+                block = parts[n - 1] if 0 < n <= len(parts) else None
+                if done and block and not answers.pending and all(s.id in done for s in block.segments):
+                    answers("reused", translate.TranslationAnswer(segments=[  # its text, as if just accepted
+                        translate.SegmentText(id=s.id, text=done[s.id]) for s in block.segments]))
+                block_done("translate", answers, parts, sources, n, total)
+
             observing = structured_call.result_observer.set(answers)
             try:
                 result = translate.translate(source_transcript, glossary_now, lang, context=context,
                                              model=settings.translation_model, version=version,
                                              refusal_fallback=settings.refusal_fallback,
-                                             progress=lambda n, total: block_done("translate", answers, parts,
-                                                                                  sources, n, total))
+                                             progress=translated_block, **({"done": done} if done else {}))
             finally:
                 structured_call.result_observer.reset(observing)
             save_transcript(result, translated)
-            write_stamp(translated, inputs)
+            write_result_stamp(translated, inputs, result.meta["translation"]["failed_blocks"])
             cost += result.meta["translation"]["cost_usd"]
             tokens = _usage_numbers(result.meta["translation"].get("usage"))
         step_done("translate", translated, skipped and not cost, cost, t0, tokens=tokens)

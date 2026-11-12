@@ -82,6 +82,12 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   a frozen path needs (a) golden tests unchanged, (b) the T2 re-run from cache
   at 0 USD, (c) the 22 files of `work/T2-v3-cache/` byte-identical; else
   revert it. Modules in `pipeline.STEP_CODE` (e.g. `metrics.py`) cannot pass.
+  **Bugs are not frozen** (owner, 2026-11-12, `pipeline-v3.3`): a bug in a
+  frozen module is fixed with a failing test committed first, the golden
+  request snapshots unchanged, every cached T2/T6 answer getting the same
+  verdict offline, no paid test-set re-run, a new tag and a decisions entry;
+  a moved cache key is carried over by a one-off local script. A fix that
+  changes what is sent to the models is not made. Improvements stay frozen.
 - **Keys:** never printed, logged or committed; importing a module reads
   neither `.env` nor a secret. A new pipeline key goes into
   `config.SECRET_ENV_VARS`, an evaluation key into `secret_registry`, both

@@ -613,6 +613,10 @@ language as a parameter.
 - **No comparison with VideoLingo**, the closest open-source tool: not run,
   out of v1.0 scope (installer blocked by the permission filter, not bypassed;
   its default recogniser is now Qwen3-ASR).
+- **A failed translation block stays in English as a whole:** if the model's
+  answer for a block (about five minutes) fails the checks twice, every
+  segment of that block keeps its English text, not only the one that failed.
+  Running the video again sends that block again.
 - **Reading speed** is above the usual guideline on fast speakers; nothing is cut.
 - **Timing** of subtitles is not validated against hand-labelled onsets.
 - **Next-video failure modes** not handled: several speakers (no

@@ -2,9 +2,11 @@
 
 ## 1.1.0 — DATE-TBD (set when the `v1.1` tag is created)
 
-A local web page over the same core, on the frozen pipeline (`pipeline-v3.2`:
-model requests and outputs identical to `pipeline-v3`, so 1.0's measured
-numbers carry over without re-runs).
+A local web page over the same core, on the frozen pipeline (`pipeline-v3.3`:
+model requests identical to `pipeline-v3`, plus two bug fixes in how
+translation answers are checked and cached; every cached T2 and T6 answer gets
+the same verdict as before, so 1.0's measured numbers carry over without
+re-runs).
 
 **Web UI**
 
@@ -49,6 +51,19 @@ numbers carry over without re-runs).
   the download) unless `--max-cost` is raised. Playlists apply the same
   per-video limit. One function (`youtube.over_video_limit`) serves the CLI
   and the page.
+
+**Fixed**
+
+- A translation block was rejected, and its five minutes left in English, when
+  one segment had nothing to translate (a bare version number such as
+  `0.8.26.`): numbers, identifiers, file names and URLs no longer count as
+  English words in the "left in English" check (`pipeline-v3.3`). Ordinary
+  English sentences are still rejected.
+- A translation or correction with a failed block was cached as finished, so
+  running the video again never retried it. Now the next run sends only the
+  failed translation blocks (the accepted ones are reused, nothing is billed
+  twice) and redoes a correction with a failed block. Existing finished
+  results stay cached.
 
 **Pipeline (observability and cleanup only)**
 

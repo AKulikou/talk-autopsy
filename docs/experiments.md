@@ -2483,6 +2483,18 @@ paths, so they wait until those modules are reopened for the web interface.
 - Diarization for interviews (speaker labels; stress-01, review #1 finding 14).
 - translation-v4 idea (below: short glosses, no acronym expansion, common
   jargon kept); needs a blind rating against v2.1 before it can replace it.
+- One failed segment, not a failed block (owner's first real video,
+  2026-11-12): when one segment of a translation block fails the checks twice,
+  keep the block's other segments translated and leave only that segment in
+  English (now the whole block, about five minutes, stays English until a
+  re-run). Needs a change to `translate.py` and a new tag.
+- Segments the "left in English" check still rejects although they may be
+  correct as they are (left out of the `pipeline-v3.3` bug fix because telling
+  them from ordinary English needs more than the token's shape): a bare acronym
+  ("EVM.", "ABI."), a product name outside the glossary ("Remix."), code read
+  aloud in plain words ("pragma solidity"). Possible fix: let the glossary's
+  `keep` terms and an all-capitals rule count as verbatim, measured on the
+  cached answers first.
 
 ### Earlier entries
 

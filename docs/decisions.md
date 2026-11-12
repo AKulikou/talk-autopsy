@@ -6,6 +6,68 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-12 — Bugs in frozen modules are fixed; `pipeline-v3.3` (untranslatable segments, failed blocks)
+
+Decision (owner, v1.1 session 4): the freeze holds for improvements, not for
+bugs, and every bug found before publication is fixed before publication. A
+bug fix in a frozen module needs: (a) a failing test that reproduces it,
+committed first; (b) the golden request snapshots unchanged (prompts and
+everything sent to the models byte-identical); (c) every cached model answer of
+T2 and T6 accepted or rejected by the new code exactly as by the old one,
+checked offline; (d) no paid re-run of the test set; (e) a new tag. A fix that
+cannot be made without changing what is sent to the models is not made.
+
+The bug (the owner's first real video, a 13:40 programming tutorial):
+segment 29 of translation block 1 was a bare version number, `0.8.26.`. The
+"left in English" check counted digits as English words, so a correct
+translation (the same digits) was rejected twice, and the whole first block,
+about five minutes, stayed in English; both rejected attempts were billed. A
+second bug made it permanent: the translation was stamped as up to date with
+the failed block in it, so a re-run kept the English block.
+
+Fixes (`pipeline-v3.3`):
+
+- `translate.left_in_english` counts only plain words: tokens with a letter,
+  outside tokens that stay as they are in a correct translation (URLs and web
+  addresses, paths and file names, member access, snake_case, camelCase,
+  letters joined with digits, calls). A segment with no plain word has
+  nothing to leave in English. An ordinary English sentence is rejected as
+  before, with or without numbers and identifiers in it (tests).
+- A correction or translation with failed blocks gets a stamp that names them
+  (`incomplete`), so it is never up to date. The next run of the translation
+  sends only the failed blocks, with exactly the request of the first time
+  (same prefix, context and segments; tested), and takes the accepted blocks
+  from the earlier result (`translate(done=...)`, `meta.translation.reused_blocks`).
+  A correction with a failed block runs again in full (cheap; changing
+  `correct.py` for per-block reuse was not worth a second cache-key move).
+
+Proofs:
+
+| | result |
+|---|---|
+| (a) | `Tests: reproduce untranslatable-segment validation failure` (21 failing tests on the old code; the "English is still rejected" tests passed on it and still pass) |
+| (b) | `pipeline_requests`, `direct_requests`, `direct_outputs` snapshots unchanged; `pipeline_outputs` differs in one value, the hash of `ru.json.stamp.json`, because the stamp holds the translate step's code hash: with the old hash substituted, the whole snapshot (requests, every file, every event) is identical |
+| (c) | offline over every cached translation in `work/` (T2 cache, T2 repeats, T2 experiments, T6, three operational and three web videos): 74 accepted block answers, 74 identical verdicts and problem lists (two translation-v3 experiment outputs skipped: their input is not stored next to them). Control, the English source as the answer: the old and the new check reject the same 3,334 segments; on the failed block of the owner's video the new check stops rejecting exactly one segment, `0.8.26.` |
+| (d) | no paid run; the T2 re-run from cache: every step skipped, 0 USD, the 22 files of `work/T2-v3-cache/` unchanged by the run |
+
+Cache keys: `code_hash("translate", ...)` changes for every prompt version
+(translation-v2.1: `6d5c408c0c2bc825` -> `9455a8051df5d39c`); the correction,
+glossary and speech keys do not. A one-off local script carried the cached
+translations over: each translation stamp whose code was the `pipeline-v3.2`
+hash of its prompt got the new hash (9 stamps; 6 older experiment stamps were
+already stale and were left alone), and the owner's video, whose result has a
+failed block, also got `incomplete`, so its re-run sends only block 1. The old
+stamps were backed up first. No prompt file changed.
+
+Why: the check exists to catch a model that answers in English; a segment
+with nothing to translate is not that. A block that fell back to English is a
+failure, and caching it as a result hides it for good.
+
+Rules out: loosening the check for ordinary sentences (a short English
+sentence such as "Okay." is still rejected; product names outside the
+glossary still count as English words); keeping the rest of a block when one
+segment fails (Backlog).
+
 ## 2026-11-12 — One per-video cost limit for the CLI and the web page
 
 Decision: `run --max-cost` (default 3 USD per video) is compared with the

@@ -13,10 +13,14 @@ an argument: no language is assumed. The prompt is `prompts/<version>.md`.
 
 Output per block: `{segments: [{id, text}]}`, validated by `validate_block`: the
 same ids, no empty segment, no segment left in English (unless every word of it
-is a kept glossary term), agreed glossary translations used where the term
+is a kept glossary term; numbers, identifiers, file names and URLs are not
+counted as English words), agreed glossary translations used where the term
 occurs. A rejected answer is retried once, then the block fails: its segments
 keep their English text and the block is listed in
-`meta.translation.failed_blocks`.
+`meta.translation.failed_blocks`. With `done` (the pipeline's re-run of a
+translation that had failed blocks), a block whose every unit was accepted
+before is taken from `done` and not sent; the others are sent exactly as the
+first time.
 
 **translation-v3** (an option since 2026-11-10; the default stays v2 until the
 owner's blind rating): the glossary carries a policy per term (keep / both /
@@ -104,13 +108,53 @@ def _kept_words(glossary: Glossary) -> set[str]:
     return {w for e in glossary.entries if e.keep for w in _words(e.term)}
 
 
+_EDGE = "\"'“”‘’«»()[]{}<>.,;:!?…"
+_URL_START = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
+_CALL = re.compile(r"\w\(")  # transfer(), balanceOf(address)
+_JOINED = re.compile(r"[A-Za-z0-9][._:@#]+[A-Za-z0-9]")  # msg.sender, Counter.sol, snake_case, std::vector
+_CAMEL = re.compile(r"[a-z][A-Z]")  # balanceOf, OpenZeppelin
+_LETTER = re.compile(r"[A-Za-z]")
+_DIGIT = re.compile(r"\d")
+
+
+def _verbatim(token: str) -> bool:
+    """
+    A whitespace-separated token whose correct translation is the token itself:
+    a URL or web address, a path or file name, a code identifier (member access,
+    snake_case, camelCase, letters joined with digits, a call).
+    """
+    core = token.strip(_EDGE)
+    if not core:
+        return False
+    if _URL_START.match(core) or _CALL.search(token) or _JOINED.search(core) or _CAMEL.search(core):
+        return True
+    if "/" in core and ("." in core or core.startswith(("/", "~"))):
+        return True
+    return bool(_LETTER.search(core) and _DIGIT.search(core))  # uint256, ERC20
+
+
+def _plain_words(text: str) -> list[str]:
+    """
+    The words of `text` that a translation would change: outside verbatim tokens
+    and with at least one letter (a number or a version is not an English word).
+    """
+    kept = " ".join(token for token in text.split() if not _verbatim(token))
+    return [w for w in _words(kept) if any(c.isalpha() for c in w)]
+
+
 def left_in_english(source: str, target: str, glossary: Glossary) -> bool:
     """
     True if `target` is mostly the source's own words (ENGLISH_OVERLAP or more of
     its words occur in the source), unless every such word is part of a kept
     glossary term ("Claude Code" may stay "Claude Code").
+
+    Only plain words count (`_plain_words`): numbers, versions, identifiers,
+    file names and URLs stay as they are in a correct translation, so a segment
+    made only of them ("0.8.26.", "msg.sender") has nothing to leave in English.
+    (pipeline-v3.3, 2026-11-12: before, digits counted as English words and a bare
+    version number failed a whole block of a real video.)
     """
-    target_words = _words(target)
+    target_words = _plain_words(target)
     if not target_words:
         return False
     source_words = set(_words(source))
@@ -296,12 +340,20 @@ def estimate(transcript: Transcript, glossary: Glossary, target_lang: str,
 
 def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, model: str | None = None,
               context: blocks.VideoContext | None = None, version: str = PROMPT_VERSION,
-              progress=None, refusal_fallback: bool = False, units: bool = True) -> Transcript:
+              progress=None, refusal_fallback: bool = False, units: bool = True,
+              done: dict[int, str] | None = None) -> Transcript:
     """
     The translated transcript, texts in `target_lang`, usage in `meta.translation`:
     one segment per sentence unit (`units=True`), or the input's ids and times
     (`units=False`).
+
+    `done`: unit id -> text accepted by an earlier run with the same inputs. A
+    block whose every unit is in it is not sent (listed in
+    `meta.translation.reused_blocks`); the other blocks are requested as usual.
+    Not for translation-v3, whose markers are rendered over the whole video.
     """
+    if done and version == V3:
+        raise ValueError("done (reusing accepted blocks) is not supported for translation-v3")
     config.require_api_key()
     target_lang = config.check_lang(target_lang)
     model = model or config.translation_model()
@@ -317,8 +369,18 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     served_by: set[str] = set()
     started = time.perf_counter()
     parts = blocks.make_blocks(transcript)
+    reused: list[int] = []
     for block in parts:
         label = f"{version} block {block.number}/{len(parts)}"
+        if done and all(s.id in done for s in block.segments):
+            earlier = TranslationAnswer(segments=[SegmentText(id=s.id, text=done[s.id])
+                                                  for s in block.segments])
+            texts.update({s.id: s.text for s in earlier.segments})
+            warnings.extend(kept_terms_missing(block.segments, glossary, earlier))
+            reused.append(block.number)
+            if progress is not None:
+                progress(block.number, len(parts))
+            continue
         try:
             response = request_structured(
                 client, label=label, model=model, max_tokens=config.MAX_TOKENS, system="",
@@ -358,6 +420,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
         "target_lang": target_lang,
         "blocks": len(parts),
         "failed_blocks": failed,
+        **({"reused_blocks": reused} if done else {}),
         "warnings": warnings,
         **({"marker_warnings": marker_warnings} if version == V3 else {}),
         "units": transcript.meta.get("units") if units else None,
