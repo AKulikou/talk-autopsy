@@ -246,7 +246,7 @@ function attach(job) {
   state.startedAt = new Date(job.started);
   $("run-title").textContent = job.preview?.title || job.request.source;
   $("run-cost").textContent = usd(job.cost_usd + job.stt_cost_usd);
-  $("run-left").textContent = timeText(job.preview?.time).split(";")[0];
+  $("run-left").textContent = timeText(job.preview?.time);
   steps.build($("steps"), job.steps);
   textlog.reset($("log"));
   show("view-run");
@@ -281,8 +281,7 @@ function onEvent(event) {
       break;
     case "estimate_updated":
       if (event.time) {
-        $("run-left").textContent = event.time.seconds === null ? t("run_left_none")
-          : `≈ ${duration(event.time.seconds)}`;
+        $("run-left").textContent = event.time.seconds === null ? t("run_left_none") : timeText(event.time);
       }
       break;
     case "text":

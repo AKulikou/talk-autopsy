@@ -1381,6 +1381,37 @@ test-set runs used.
 
 Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whisper as fallback, free tier only; formal decision at the gate.
 
+### Web UI smoke runs (2026-11-12, v1.1 session 1; not scored)
+
+Through the web server's HTTP API (`talk-autopsy web`), the frozen
+`pipeline-v3` path unchanged. No benchmark row: nothing is scored.
+
+- **Smoke 1, file mode, from cache.** T2's audio (already fully cached in
+  `work/T2-v3-cache/`, see the cache re-run above) under the file name that
+  maps to that folder, profile `laptop`, with well-formed but invalid keys so
+  that a stale step would fail instead of spending. Every model step skipped;
+  audio re-extracted (new path), subtitles and five output files written (`.srt`, `.ass`, English pair, bilingual);
+  2.4 s from start to the `finished` event; 328 events in order (148
+  recognized and 156 translated text events); 0 USD. Open-folder refused
+  `C:/Windows`, `output/../work`, a missing folder and a relative path (403).
+- **Smoke 2, link mode, fresh video.** A 6:34 public conference lightning talk
+  (not in the test set), profile `laptop`. Estimate before start: 0.09 USD
+  Claude + 0.05 USD AssemblyAI. Spent: **0.0775 USD Claude, 0.0515 USD
+  AssemblyAI** (list price); 98.4 s from start to `finished` (download 17.5 s,
+  stt 15.3 s, glossary 14.1 s, stt2 14.5 s, fix 15.2 s, translate 20.2 s, srt
+  0.2 s, outputs with the subtitle-track MP4 0.9 s); 197 events. Real
+  positions came only from correction (2 blocks) and translation (2 blocks);
+  download, both AssemblyAI passes, glossary, align, srt and outputs showed a
+  spinner and elapsed time. The first-run time estimate was 66 s for the
+  pipeline without download and outputs (actual pipeline 79.7 s). Correction
+  and translation both recorded 2,162 input tokens in their output files
+  (`meta.*.usage`); passed through as recorded, not investigated (frozen
+  modules).
+- **Found and fixed by the smoke runs:** a download without history inflated
+  the measured-speed rescaling (the estimate jumped to 119 s left with 37 s to
+  go); `srt` was never timed (the core reports it without a start event); the
+  history kept one rate for every kind of output.
+
 ## Summary
 
 | ID | Date | Hypothesis | Run | Numbers | Conclusion | Decision |

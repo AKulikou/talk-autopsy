@@ -72,6 +72,7 @@ button.primary { background: var(--accent); color: var(--accent-text); font-weig
 button.secondary { background: transparent; color: var(--accent); }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+h2[tabindex="-1"]:focus { outline: none; } /* moved there for screen readers, not a control */
 
 .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--line); margin-bottom: 0.75rem; flex-wrap: wrap; }
 .tabs [role="tab"] {

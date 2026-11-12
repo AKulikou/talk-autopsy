@@ -172,7 +172,7 @@ def test_file_job_events_in_order(tmp_path, media):
     finished = {e["step"]: e for e in events if e["type"] == "step_finished"}
     assert list(finished) == ["stt", "glossary", "stt2", "align", "fix", "translate", "srt", "outputs"]
     assert finished["stt"]["stt_cost_usd"] == 0.04 and finished["glossary"]["cost_usd"] == 0.009
-    assert finished["fix"]["tokens"] == {"input": 9000, "output": 4000}
+    assert finished["fix"]["tokens"] == {"input": 9000, "output": 4000, "cache_write": 0, "cache_read": 0}
     assert finished["glossary"]["tokens"] is None  # the core does not report them for this step
     progress = [(e["step"], e["position"], e["total"]) for e in events if e["type"] == "step_progress"]
     assert progress == [("fix", 1, 2), ("fix", 2, 2), ("translate", 1, 1)]
@@ -388,3 +388,18 @@ def test_output_step_names_keep_slow_and_fast_outputs_apart():
     assert jobs.output_step(["srt", "ass", "bilingual", "mp4-soft"]) == "outputs_soft"
     assert jobs.output_step(["srt", "ass", "bilingual"]) == "outputs_subs"
     assert jobs.estimator_steps("url", ["srt"])[0] == "download"
+
+
+def test_steps_without_a_start_event_are_timed_unless_passed_through(tmp_path, media):
+    script = [pe("stt", "step-start", "AssemblyAI"), pe("stt", "step-done", "raw.json"),
+              pe("stt2", "step-done", "raw2.json; passed through (no glossary terms)"),
+              pe("srt", "step-done", "talk.lt.srt")]
+    ticks = iter(range(10_000))
+    core = FakeCore(tmp_path, script=script)
+    r = JobRunner(core=core, history_file=tmp_path / "history.json", tick_s=3600,
+                  clock=lambda: float(next(ticks)))  # every reading is one second later
+    wait(r.start(request(mode="file", url=None, path=str(media))))
+    machines = json.loads((tmp_path / "history.json").read_text(encoding="utf-8"))["machines"]
+    rates = next(iter(machines.values()))["rates"]
+    assert "srt" in rates and rates["srt"][0] > 0  # timed from the end of the previous step
+    assert "stt2" not in rates  # a pass-through says nothing about a real second pass

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+**Web UI preview (v1.1, session 1 of 3)**
+
+- `talk-autopsy web`: a local page (127.0.0.1 only) that runs one video end to
+  end: a YouTube link or a file on this computer (native file dialog), output
+  profile (TV, laptop, everything), Web3 glossary, target language; cost and
+  time estimate first, an explicit confirmation above 3 USD per video; steps,
+  running cost and the text of each finished step as Server-Sent Events; the
+  produced files and "Open folder" at the end. Interface in Lithuanian, Russian
+  and English. Design and security model: `docs/web.md`.
+- Time estimate from this machine's own history (user cache directory), with
+  measured built-in values on a first run; it never blocks a run.
+- `doctor` reports whether the web UI can start; `fastapi` and `uvicorn` are
+  regular dependencies.
+- Not yet: the side-by-side live view, an in-browser player, a desktop shortcut
+  for the page, playlists in the page, cancelling a run.
+
 ## 1.0.0 — 2026-11-12
 
 First release: the CLI tool of stage 3, on the frozen pipeline `pipeline-v3`.

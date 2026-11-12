@@ -138,6 +138,19 @@ On Windows, without the command line: double-click `scripts\windows\Talk Autopsy
 Russian, for a YouTube link or a video file, shows the estimate and writes a TV file and
 subtitles.
 
+**Web UI (preview, v1.1 in progress).** `uv run talk-autopsy web` starts a page on this
+computer only (`http://127.0.0.1:8765`, or the next free port) and opens it in the
+browser. Choose a YouTube link or a file on this computer (the native file dialog), what
+you want to get (for the TV: subtitles burned into the picture plus an `.srt`; for the
+laptop: `.srt`, `.ass`, bilingual `.ass` and an MP4 with subtitle tracks; or everything),
+the Web3 glossary and the target language. The page shows the cost and time estimate
+before anything is spent and asks for an explicit confirmation above 3 USD per video;
+then the steps (a progress bar only where the pipeline reports a position, otherwise a
+spinner and the elapsed time), the running cost and the text of each finished step; at
+the end, the files and an "Open folder" button. Still coming: the side-by-side live
+view, an in-browser player and a desktop shortcut for the page. Playlists stay with the
+launcher and the CLI. Design and security model: [docs/web.md](docs/web.md).
+
 ```bash
 git clone https://github.com/AKulikou/talk-autopsy.git
 cd talk-autopsy
@@ -226,6 +239,8 @@ talk_autopsy/
   secret_registry.py       the pipeline's secret names + the evaluation tooling's
   subtitles.py             .srt and .ass output, up to 3 lines, reading speed report
   pipeline.py              run: stt, glossary, stt2, align, fix, translate, srt; fallbacks; skip-if-unchanged
+  time_estimate.py         time estimate from this machine's history (built-in values on a first run)
+  web/                     local web UI (preview): FastAPI app, one-job runner, the page (docs/web.md)
   core/                    shared Claude request code from the Autopsy template
 tests/                     unit tests with a fake Claude client
 data/test-set/             test set description and glossaries (media stay local)
@@ -450,7 +465,7 @@ Independent LLM review #2 was done on 2026-11-12
 [v1.0 checklist](docs/experiments.md#v10-checklist) with evidence). The
 repository stays private until v1.1.
 
-**Next** (v1.1): the web interface; the git history rewritten so that old
+**Next** (v1.1): the web interface (a preview runs today: `talk-autopsy web`); the git history rewritten so that old
 commits carry no identifying details, then the repository made public; T3 on a
 new domain ([Backlog › v1.1](docs/experiments.md#v11-web-interface-the-repository-becomes-public-with-it)).
 

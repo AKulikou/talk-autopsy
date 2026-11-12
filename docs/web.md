@@ -2,16 +2,19 @@
 
 A local web page that replaces the console launcher: paste a YouTube link or
 pick a file, see the estimate, start, watch the steps, open the result folder.
-One user, one machine, one job at a time. Session 1 of 3 builds the server and a
-plain page; this note is kept in step with the code.
+One user, one machine, one job at a time. Session 1 of 3 (2026-11-12) built the
+server and a plain page; this note describes the code as built.
 
 ## Architecture
 
 ```
-talk-autopsy web  ->  uvicorn on 127.0.0.1:<port>  ->  FastAPI app (web/app.py)
-   page: web/static/ (one HTML file, vanilla JS/CSS, strings/<lang>.json; no build, no CDN)
-   POST /api/estimate -> web/preview.py: metadata (yt-dlp or ffprobe), cost, time (time_estimate.py)
-   POST /api/jobs     -> web/jobs.py: JobRunner, one worker thread
+talk-autopsy web (web/server.py)  ->  uvicorn on 127.0.0.1:8765 (or the next free port)
+   ->  LocalGuard (Host, Origin, token)  ->  FastAPI app (web/app.py)
+   page: web/static/ (index.html, app.css, app.js + api, i18n, events, steps, textlog modules,
+         strings/<lang>.json; no build step, no CDN)
+   POST /api/estimate -> JobRunner.preview: metadata (yt-dlp or ffprobe), cost (youtube.estimate),
+                         time (time_estimate.py)
+   POST /api/jobs     -> web/jobs.py: JobRunner, cost gate, one worker thread
         worker: [download] -> pipeline.run(progress=...) -> outputs.write_outputs -> finished
         core progress callbacks -> append-only event list (ids 1, 2, 3, ...)
    GET /api/jobs/{id}/events -> Server-Sent Events, replay from ?after=<id> or Last-Event-ID
@@ -21,7 +24,18 @@ talk-autopsy web  ->  uvicorn on 127.0.0.1:<port>  ->  FastAPI app (web/app.py)
 `Core` object (download, pipeline, outputs) that tests replace with a fake.
 Nothing in the frozen `pipeline-v3` paths changes: the web code only listens to
 the progress callback the pipeline already has and reads the files each step
-already writes.
+already writes. Logs: `logs/web/web-<date>.log` (git-ignored); the console shows
+the address and warnings only.
+
+Time estimate (`time_estimate.py`): seconds of work per second of video for each
+step, from this machine's history (`%LOCALAPPDATA%	alk-autopsy	ime-history.json`,
+keyed by engine, models, compute type, device and core count), else built-in
+values measured on the operational runs (flagged `first_run_rough`; download and
+the subtitle-track MP4 have none and are listed as not counted); after a minute
+of real work the rest is rescaled by the measured speed. Output steps are kept
+apart in the history (`outputs_burn`, `outputs_soft`, `outputs_subs`). Cached
+steps, a reused download and runs with an engine fallback are not recorded. Any
+failure gives "no estimate", never an error.
 
 ## Events the server streams
 
@@ -29,14 +43,19 @@ Every event: `{"id": int, "type": str, "t": seconds since the job started, ...}`
 
 | type | payload | from |
 |---|---|---|
-| `step_started` | `step` | pipeline `step-start` (`audio`, `stt`, `glossary`, `stt2`, `align`, `fix`, `translate`); the job itself for `download` and `outputs` |
+| `step_started` | `step`, `detail` (the core's own line; `audio: ...` while the audio is extracted) | pipeline `step-start` (`audio`, `stt`, `glossary`, `stt2`, `align`, `fix`, `translate`); the job itself for `download` and `outputs` |
 | `step_progress` | `step`, `position`, `total`, `unit` (`block` / `chunk`) | pipeline `block-done` ("block n/total": `fix`, `translate`); chunked Gemini `chunk-*` (fallback engine only) |
-| `step_finished` | `step`, `skipped`, `seconds`, `cost_usd`, `stt_cost_usd`, `tokens` (when known) | pipeline `step-done` / `step-skipped`; costs read from the event's text; tokens from the step's output file (`fix`, `translate`) |
+| `step_finished` | `step`, `skipped`, `seconds`, `cost_usd`, `stt_cost_usd`, `tokens` (when known), running `total_cost_usd` / `total_stt_cost_usd` | pipeline `step-done` / `step-skipped`; costs read from the event's text; tokens from the step's output file (`fix`, `translate`) |
 | `text` | `kind` (`recognized` / `edit` / `translated`), `segment`, `start`, `text` (and `before` for an edit) | the step's output file, read once the step has finished (`raw.json`, `fixed.json` edits, `<lang>.json`) — not live |
-| `estimate_updated` | `claude_usd` and/or `time` (`seconds_left`, `source`) | pipeline `estimate` events; the time estimator (start, step ends, a 30 s tick) |
-| `notice` | `text` | pipeline `fallback` and `srt` lines, output writer messages, a progress-display error |
-| `finished` | `folder`, `files` (`name`, `format`, `purpose`), `cost_usd`, `stt_cost_usd` | the job, after the outputs are written |
-| `failed` | `reason` (one short line), `hint` | any exception, mapped to a plain message; secret values are masked |
+| `estimate_updated` | `claude_usd` + `claude_parts`, and/or `time` (`seconds`, `source`, `first_run_rough`, `excludes`); at the start also `cost` | pipeline `estimate` events ("about X USD" in their text); the time estimator (start, every step end, a 30 s tick when the value moved) |
+| `notice` | `code`, `text` | pipeline `fallback` and `srt` lines, output writer messages, a progress-display error |
+| `finished` | `folder`, `files` (`name`, `format`, `purpose`), `cost_usd`, `stt_cost_usd`, `fallbacks` | the job, after the outputs are written (costs: the pipeline's own report) |
+| `failed` | `reason` (one short line), `hint` (`doctor`, `youtube`, `outputs`, `cost_limit`, `input`, `log`), `step` | any exception, mapped to a plain message; secret values are masked |
+
+Bounds: at most 2,500 text events per kind (then one `text_truncated` notice),
+400 characters per text, 20,000 events per job; five finished jobs kept in
+memory. The one-job lock is released before the last event, so the page can
+start the next video as soon as it sees the end.
 
 Steps with a real position: `fix` and `translate` (blocks), the Gemini fallback
 (chunks). Everything else (download, audio, AssemblyAI passes, glossary, align,
@@ -53,7 +72,7 @@ is in `work/STATUS.md` ("Progress events missing").
 | `POST /api/estimate` | title, duration, cost, time estimate (or none, `first_run_rough`), files the profile gives |
 | `POST /api/jobs` | start a job (cost confirmation when needed) |
 | `GET /api/jobs/current` | the running or last job and its state, for a page reload |
-| `GET /api/jobs/{id}/events?after=<id>` | SSE stream with replay and a heartbeat comment every 15 s |
+| `GET /api/jobs/{id}/events?after=<id>` | SSE stream with replay (also from `Last-Event-ID`), a heartbeat comment every 15 s, closed after the last event |
 | `POST /api/pick-file` | native file dialog on this machine; `{"available": false}` without a display |
 | `POST /api/open-folder` | open a folder in the file manager, only inside the output root |
 | `POST /api/settings` | remember the default target and UI language (git-ignored `web.local.json`) |
@@ -80,8 +99,18 @@ The server can spend money and open folders, so the browser is treated as hostil
 - Local paths: absolute, existing, a regular file with a media extension; the
   server reads the file in place and never serves or executes a client path.
   `open-folder` opens only folders inside the output root.
-- Errors are one short line: no stack trace, no environment values, no key
-  values (the job masks every secret value it knows before an event is stored).
+- Errors are one short line with a code: no stack trace, no environment
+  values, no key values (the job masks every secret value it knows before an
+  event is stored).
+- The page has a strict Content-Security-Policy (`'self'` only, no frames).
+
+The page: two tabs for the source ("YouTube link" / "File on this computer";
+switching keeps what was entered, the request carries only the active one);
+the file comes from the native dialog (Tk's, which is the Windows dialog, in a
+separate process), a typed path only when no dialog is available. A reload
+reattaches to a running job by replaying its events. No fake progress: a bar
+only where the core reports a position; the remaining time is the server's last
+value, not a client countdown.
 
 ## Later sessions
 

@@ -439,8 +439,10 @@ class _Progress:
         tokens = None if skipped else self._tokens(step)
         if step in self.started_at:
             self.estimator.step_finished(step, None if not skipped else seconds, skipped)
-        else:  # passed through or skipped without a start event: not a measurement
+        elif skipped or "passed through" in detail:  # cached, or nothing to do this time: not a measurement
             self.estimator.step_finished(step, None, skipped)
+        else:  # the core reports srt without a start: the time since the previous step ended is its time
+            self.estimator.step_finished(step, max(seconds, 0.0), skipped)
         self.open_step, self.last_step = None, step
         job.add("step_finished", step=step, skipped=skipped, seconds=round(max(seconds, 0.0), 1),
                 cost_usd=round(claude, 4), stt_cost_usd=round(stt, 4), tokens=tokens,
@@ -460,7 +462,9 @@ class _Progress:
             usage = (transcript.meta.get(key) or {}).get("usage") if transcript else None
             if not usage:
                 return None
-            return {"input": int(usage.get("input_tokens", 0)), "output": int(usage.get("output_tokens", 0))}
+            return {"input": int(usage.get("input_tokens", 0)), "output": int(usage.get("output_tokens", 0)),
+                    "cache_write": int(usage.get("cache_creation_input_tokens", 0)),
+                    "cache_read": int(usage.get("cache_read_input_tokens", 0))}
         except Exception:
             logger.exception("job %s: tokens of %s not read", self.job.id, step)
             return None
