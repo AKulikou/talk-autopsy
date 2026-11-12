@@ -94,11 +94,13 @@ def test_an_hour_of_talk_stays_fast():
                  for i in ids]
         view.apply({"type": "translated", "position": block + 1, "total": 12, "failed": False, "ids": ids,
                     "units": units})
-    started = time.perf_counter()
+    # CPU time of this process, not wall time: other load on the machine made the wall-clock version
+    # fail once in five full runs (1.25 s against about 0.1 s idle; v1.1 session 4)
+    started = time.process_time()
     for start in range(0, 1500, 100):
         window = view.window(start, 120)
         assert len(window["rows"]) <= 120
-    assert time.perf_counter() - started < 1.0  # 15 windows of an hour-long talk
+    assert time.process_time() - started < 1.0  # 15 windows of an hour-long talk
 
 
 def test_other_events_change_nothing():

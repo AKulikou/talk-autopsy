@@ -37,6 +37,8 @@ def test_binds_loopback_and_falls_back_when_busy(loopback_only):
 
 
 class FakeServer:
+    opened = None  # set by a test: an Event the browser callback sets
+
     def __init__(self, config):
         self.config = config
         self.started = False
@@ -45,18 +47,26 @@ class FakeServer:
     def run(self, sockets=None):
         self.sockets = sockets
         self.started = True
-        import time
-        time.sleep(0.3)  # the browser thread sees `started`
+        # stay "up" until the browser thread has seen `started` (not a fixed sleep: on a busy machine the
+        # thread may not run within a fraction of a second)
+        if self.opened is not None:
+            self.opened.wait(10)
 
 
 def test_serve_prints_the_address_and_opens_the_browser(loopback_only, tmp_path, monkeypatch):
     monkeypatch.setattr(server, "setup_logging", lambda: tmp_path / "web.log")
     lines, opened, made = [], [], []
+    seen = threading.Event()
 
     def factory(config):
         made.append(FakeServer(config))
+        made[0].opened = seen
         return made[0]
-    server.serve(0, echo=lines.append, browser_open=opened.append, server_factory=factory)
+
+    def browser_open(url):
+        opened.append(url)
+        seen.set()
+    server.serve(0, echo=lines.append, browser_open=browser_open, server_factory=factory)
     sock = made[0].sockets[0]
     assert isinstance(sock, socket.socket) and sock.fileno() == -1  # closed after the stop
     url = lines[0 if lines[0].startswith("Talk") else 1].split(": ", 1)[1]
