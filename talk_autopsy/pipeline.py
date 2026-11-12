@@ -41,6 +41,13 @@ gate and in B5, 2026-11-09):
   Experiments (`fix`, `translate`, `eval`) keep it off, so a benchmark row
   describes one model.
 - **Progress:** `ProgressEvent`s, as in stt/chunked.py, for every step.
+  Since pipeline-v3.1 (observability only; docs/decisions.md) the events of
+  estimates, finished steps and finished correction and translation blocks are
+  `PipelineEvent`s: the same fields and text, plus `data` with numbers (cost,
+  tokens, seconds) and a block's text (corrected segments and edits, or
+  translated units with their source). The block text comes from
+  `structured_call.result_observer`; model requests and outputs are unchanged,
+  and a progress callback that raises is logged, never fails the run.
 
 No CLI input or output here, so a web UI can call `run` the same way.
 """
@@ -67,6 +74,7 @@ from talk_autopsy import (
     units,
     youtube,
 )
+from talk_autopsy.core import structured_call
 from talk_autopsy.glossary import Glossary, load_glossary, to_markdown
 from talk_autopsy.segments import Transcript, load_transcript, save_transcript
 from talk_autopsy.stt.chunked import ProgressEvent, file_sha256
@@ -82,6 +90,42 @@ NL = chr(10)
 
 class PipelineError(RuntimeError):
     """A run cannot go on: a missing input, a cost above the limit, a failed step."""
+
+
+@dataclass(frozen=True)
+class PipelineEvent(ProgressEvent):
+    """A ProgressEvent with numbers and text for a display (pipeline-v3.1, observability only)."""
+
+    data: dict = field(default_factory=dict, compare=False, hash=False)
+
+
+class _BlockAnswers:
+    """The accepted answers of one step's blocks, in order, as structured_call reports them."""
+
+    def __init__(self) -> None:
+        self.pending: list = []
+
+    def __call__(self, label: str, result) -> None:
+        self.pending.append(result)
+
+    def take(self):
+        """The answer of the block just finished, or None if it failed validation."""
+        answer = self.pending[-1] if self.pending else None
+        self.pending.clear()
+        return answer
+
+
+def _usage_numbers(usage: dict | None) -> dict | None:
+    if not usage:
+        return None
+    return {"input": int(usage.get("input_tokens", 0)), "output": int(usage.get("output_tokens", 0)),
+            "cache_write": int(usage.get("cache_creation_input_tokens", 0)),
+            "cache_read": int(usage.get("cache_read_input_tokens", 0))}
+
+
+def _estimate_data(e: blocks.Estimate, part: str) -> dict:
+    return {"usd": e.usd, "blocks": e.blocks, "input_tokens": e.input_tokens,
+            "output_tokens": e.output_tokens, "part": part}
 
 
 @dataclass
@@ -266,9 +310,35 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
     started = time.perf_counter()
     report = RunReport()
 
-    def emit(event: str, step: str, detail: str = "") -> None:
-        emit_to(ProgressEvent(step, event, 0, len(steps), 0.0, 0.0, round(time.perf_counter() - started, 1),
-                              "pipeline", detail))
+    def emit(event: str, step: str, detail: str = "", data: dict | None = None) -> None:
+        fields = (step, event, 0, len(steps), 0.0, 0.0, round(time.perf_counter() - started, 1), "pipeline",
+                  detail)
+        try:
+            emit_to(ProgressEvent(*fields) if data is None else PipelineEvent(*fields, data=data))
+        except Exception:  # a display problem never stops a run (pipeline-v3.1)
+            logger.exception("progress callback failed on %s %s; the run goes on", step, event)
+
+    def block_done(step: str, answers: _BlockAnswers, parts: list, sources: dict[int, str] | None,
+                   n: int, total: int) -> None:
+        """The block-done event of `fix` or `translate`, with the block's text when it was accepted."""
+        data = None
+        try:
+            answer = answers.take()
+            block = parts[n - 1] if 0 < n <= len(parts) else None
+            data = {"position": n, "total": total, "failed": answer is None,
+                    "ids": [seg.id for seg in block.segments] if block else []}
+            if answer is not None and step == "fix":
+                data["segments"] = [{"id": seg.id, "text": seg.text} for seg in answer.segments]
+                data["edits"] = [{"id": e.id, "before": e.before, "after": e.after} for e in answer.edits]
+            elif answer is not None:
+                data["units"] = [{"id": seg.id, "text": translate.visible_text(seg.text),
+                                  "source": (sources or {}).get(seg.id, "")} for seg in answer.segments]
+            if block is not None and step == "translate":
+                data["source_ids"] = {str(seg.id): seg.source_ids or [] for seg in block.segments}
+        except Exception:
+            logger.exception("block text of %s block %s not prepared; the run goes on", step, n)
+            data = None
+        emit("block-done", step, f"block {n}/{total}", data)
 
     # meta.json: the context the Claude steps see; a local file's name is not context
     audio, flac, meta_path = work / "audio.wav", work / "audio.flac", work / "meta.json"
@@ -291,13 +361,16 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         return path
 
     def step_done(step: str, output: Path, skipped: bool, cost: float, t0: float, stt_cost: float = 0.0,
-                  detail: str = "") -> None:
-        report.steps.append(StepRecord(step, str(output), skipped, round(cost, 6),
-                                       round(time.perf_counter() - t0, 1), round(stt_cost, 6), detail))
+                  detail: str = "", tokens: dict | None = None) -> None:
+        record = StepRecord(step, str(output), skipped, round(cost, 6), round(time.perf_counter() - t0, 1),
+                            round(stt_cost, 6), detail)
+        report.steps.append(record)
         spent = f", {cost:.4f} USD" if cost else ""
         spent += f", speech recognition {stt_cost:.4f} USD" if stt_cost else ""
         emit("step-skipped" if skipped else "step-done", step,
-             f"{output.name}" + ("" if skipped else spent) + (f"; {detail}" if detail else ""))
+             f"{output.name}" + ("" if skipped else spent) + (f"; {detail}" if detail else ""),
+             {"skipped": skipped, "seconds": record.seconds, "cost_usd": record.cost_usd,
+              "stt_cost_usd": record.stt_cost_usd, "tokens": None if skipped else tokens})
 
     def current_glossary() -> tuple[Glossary, str]:
         """The run's glossary: glossary.md once the glossary step wrote it, else the user's (or none)."""
@@ -343,20 +416,21 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         total = 0.0
         if "glossary" in steps:
             e = glossary_auto.estimate(base, lang, settings.context, settings.helper_model)
-            emit("estimate", "glossary", e.line())
+            emit("estimate", "glossary", e.line(), _estimate_data(e, "glossary"))
             total += e.usd
         if "fix" in steps:
             e = correct.estimate(base, glossary_now, context, settings.correction_model)
-            emit("estimate", "fix", e.line())
+            emit("estimate", "fix", e.line(), _estimate_data(e, "fix"))
             total += e.usd
         if "translate" in steps:
             if settings.translation_version == translate.V3:
                 e = term_policy.estimate(glossary_now, user_glossary, lang, settings.helper_model)
-                emit("estimate", "translate", f"term classification: {e.line()}")
+                emit("estimate", "translate", f"term classification: {e.line()}",
+                     _estimate_data(e, "term_classification"))
                 total += e.usd
             e = translate.estimate(base, glossary_now, lang, context, settings.translation_model,
                                    version=settings.translation_version)
-            emit("estimate", "translate", e.line())
+            emit("estimate", "translate", e.line(), _estimate_data(e, "translate"))
             total += e.usd
         report.estimate_usd = round(total, 4)
         if total > settings.max_cost_usd:
@@ -371,7 +445,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
                   "prompt": glossary_auto.PROMPT_VERSION,
                   "code": code_hash("glossary", glossary_auto.PROMPT_VERSION)}
         skipped = up_to_date(glossary_path, inputs)
-        cost, detail = 0.0, ""
+        cost, detail, tokens = 0.0, "", None
         if not skipped:
             emit("step-start", "glossary", f"{glossary_auto.PROMPT_VERSION}, {settings.helper_model}")
             result = glossary_auto.generate(load_transcript(raw), lang, settings.context,
@@ -389,9 +463,10 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
                                      newline=NL)
             write_stamp(glossary_path, inputs)
             cost = result.cost_usd
+            tokens = _usage_numbers(result.usage.as_dict())
             detail = (f"{len(result.glossary.entries)} auto terms, {len(result.heard_as)} with corrected "
                       f"mis-recognitions, {len(merged.entries)} in the run glossary")
-        step_done("glossary", glossary_path, skipped, cost, t0, detail=detail)
+        step_done("glossary", glossary_path, skipped, cost, t0, detail=detail, tokens=tokens)
 
     # --- stt2: second pass with key terms ---------------------------------------------
     if "stt2" in steps:
@@ -462,18 +537,25 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
                   "context": context_hash, "model": settings.correction_model,
                   "prompt": correct.PROMPT_VERSION, "code": code_hash("fix", correct.PROMPT_VERSION)}
         skipped = up_to_date(fixed, inputs)
-        cost = 0.0
+        cost, tokens = 0.0, None
         if not skipped:
             emit("step-start", "fix", f"{correct.PROMPT_VERSION}, {settings.correction_model}")
-            result = correct.correct(load_transcript(english), glossary_now, context,
-                                     model=settings.correction_model,
-                                     refusal_fallback=settings.refusal_fallback,
-                                     progress=lambda n, total: emit("block-done", "fix",
-                                                                    f"block {n}/{total}"))
+            english_transcript = load_transcript(english)
+            answers, parts = _BlockAnswers(), _blocks_or_none(english_transcript)
+            observing = structured_call.result_observer.set(answers)
+            try:
+                result = correct.correct(english_transcript, glossary_now, context,
+                                         model=settings.correction_model,
+                                         refusal_fallback=settings.refusal_fallback,
+                                         progress=lambda n, total: block_done("fix", answers, parts, None, n,
+                                                                              total))
+            finally:
+                structured_call.result_observer.reset(observing)
             save_transcript(result, fixed)
             write_stamp(fixed, inputs)
             cost = result.meta["correction"]["cost_usd"]
-        step_done("fix", fixed, skipped, cost, t0)
+            tokens = _usage_numbers(result.meta["correction"].get("usage"))
+        step_done("fix", fixed, skipped, cost, t0, tokens=tokens)
 
     if "translate" in steps:
         t0 = time.perf_counter()
@@ -488,17 +570,26 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
                   "lang": lang, "model": settings.translation_model, "prompt": version,
                   "units": units.VERSION, "code": code_hash("translate", version)}
         skipped = up_to_date(translated, inputs)
+        tokens = None
         if not skipped:
             emit("step-start", "translate", f"{version}, {settings.translation_model}")
-            result = translate.translate(load_transcript(source_file), glossary_now, lang, context=context,
-                                         model=settings.translation_model, version=version,
-                                         refusal_fallback=settings.refusal_fallback,
-                                         progress=lambda n, total: emit("block-done", "translate",
-                                                                        f"block {n}/{total}"))
+            source_transcript = load_transcript(source_file)
+            answers, parts = _BlockAnswers(), _blocks_or_none(source_transcript, sentence_units=True)
+            sources = {seg.id: seg.text for part in parts for seg in part.segments}
+            observing = structured_call.result_observer.set(answers)
+            try:
+                result = translate.translate(source_transcript, glossary_now, lang, context=context,
+                                             model=settings.translation_model, version=version,
+                                             refusal_fallback=settings.refusal_fallback,
+                                             progress=lambda n, total: block_done("translate", answers, parts,
+                                                                                  sources, n, total))
+            finally:
+                structured_call.result_observer.reset(observing)
             save_transcript(result, translated)
             write_stamp(translated, inputs)
             cost += result.meta["translation"]["cost_usd"]
-        step_done("translate", translated, skipped and not cost, cost, t0)
+            tokens = _usage_numbers(result.meta["translation"].get("usage"))
+        step_done("translate", translated, skipped and not cost, cost, t0, tokens=tokens)
 
     if "srt" in steps:
         t0 = time.perf_counter()
@@ -520,6 +611,19 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
     emit("done", "pipeline",
          f"{report.cost_usd:.4f} USD Claude, {report.stt_cost_usd:.4f} USD speech recognition")
     return report
+
+
+def _blocks_or_none(transcript: Transcript, sentence_units: bool = False) -> list:
+    """
+    The blocks the step will send (as correct.py and translate.py make them), for
+    the block events' segment ids and source text; an empty list if that fails,
+    so a display problem never stops the step.
+    """
+    try:
+        return blocks.make_blocks(units.make_units(transcript) if sentence_units else transcript)
+    except Exception:
+        logger.exception("blocks for the progress display not prepared; the run goes on")
+        return []
 
 
 def _classified_glossary(settings: RunSettings, work: Path, lang: str, glossary: Glossary, glossary_hash: str,

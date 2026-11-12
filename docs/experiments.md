@@ -1127,6 +1127,13 @@ in the environment): every model step skipped as up to date, the subtitles
 re-rendered, and all 22 files of `work/T2-v3-cache/` have the same SHA-256
 before and after; 0 USD.
 
+Exception (2026-11-12), tag `pipeline-v3.1`: progress events for the web page,
+"observability only" (`core/structured_call.py`: a result observer;
+`pipeline.py`: events with numbers and block text). Golden request tests,
+committed before the change, pass unchanged; T2 from cache gives the same
+SHA-256 for all 22 files with the new and the old code; the prompt files are
+unchanged. v1.0's numbers carry over; details in `docs/decisions.md`.
+
 Settings: models `claude-haiku-5-5` (auto-glossary) and `claude-sonnet-5-5`
 (correction, translation) as the code's defaults, `.env` settings that select
 a model or a version empty; AssemblyAI `universal-3-5-pro`, two passes;

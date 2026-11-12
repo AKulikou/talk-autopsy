@@ -456,7 +456,8 @@ decision, [Gate 2 -> 3](docs/experiments.md#gate-2---3-2026-11-11)): the
 hold-out passed on term accuracy (not demonstrated), the absolute translation
 score on T6 is 4.42, and
 independent LLM review #1 is done ([findings and responses](docs/review-2026-11-11.md)).
-`pipeline-v3` stays frozen.
+`pipeline-v3` stays frozen; `pipeline-v3.1` (2026-11-12) adds progress events for the web page only,
+with model requests and outputs byte-identical ([decision log](docs/decisions.md)).
 
 Independent LLM review #2 was done on 2026-11-12
 ([findings and responses](docs/review-2026-11-12.md)); its fixes are in.

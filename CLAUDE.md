@@ -70,6 +70,9 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   `metrics.py`, `evaluation.py`, `ref_bounds.py`, the three prompts in use,
   `uv.lock`. A change needs a new tag and a new hold-out; check with
   `git diff --stat pipeline-v3 -- <paths>`. New ideas go to the Backlog.
+  `pipeline-v3.1` (2026-11-12) is the one observability exception: progress
+  events in `pipeline.py` and `core/structured_call.py`, requests and outputs
+  byte-identical (`tests/test_golden_requests.py`, `docs/decisions.md`).
 - **Keys:** never printed, logged or committed; importing a module reads
   neither `.env` nor a secret. A new pipeline key goes into
   `config.SECRET_ENV_VARS`, an evaluation key into `secret_registry`, both

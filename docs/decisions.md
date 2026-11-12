@@ -6,6 +6,58 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-12 — Observability exception: `pipeline-v3.1` adds progress events only
+
+Decision (owner, approved before the change): the web page's waiting screen
+may get block-level progress events from frozen modules, "observability only":
+model requests and pipeline outputs stay byte-identical. The change is tagged
+`pipeline-v3.1`. What changed:
+
+- `core/structured_call.py`: `result_observer`, a context variable; when set,
+  it is told about every accepted result (label and parsed answer) just before
+  `request_structured` returns it. An observer that raises is logged and
+  ignored. Nothing else in the call changes.
+- `pipeline.py`: `PipelineEvent`, a `ProgressEvent` with a `data` field. The
+  `estimate`, `step-done` / `step-skipped` and `block-done` events keep their
+  text (the CLI prints the same lines) and carry numbers (estimate in USD and
+  tokens; cost, seconds and tokens of a finished step) and, for a finished
+  correction or translation block, its segment ids and text: corrected
+  segments with the model's edits (before, after), or translated sentence
+  units with their English source and segment ids. The pipeline sets the
+  observer around `correct.correct` and `translate.translate` only. A
+  progress callback that raises is logged; the run goes on (before, the
+  exception ended the run).
+- `correct.py` and `translate.py` are **not** changed, although the
+  exception allowed it: `pipeline.code_hash` hashes them into every stamp, so
+  any byte changed there would invalidate every cached correction and
+  translation and re-run (and re-bill) them. The observer in `core/`, which
+  no stamp hashes, gives the same block text without touching them.
+
+Proof:
+
+- Golden tests (`tests/test_golden_requests.py`, committed before the change):
+  every request sent to the fake model (system prompt, messages, model id,
+  parameters, output schema, block boundaries) and every file the fix,
+  translate and srt steps write, on an invented 12-minute talk, through
+  `pipeline.run` and through direct calls. They pass unchanged after it.
+- T2 from cache (`talk-autopsy run data/test-set/T2.wav --lang ru --name
+  T2-v3-cache`, invalid keys in the environment): every model step skipped as
+  up to date, 0 USD, all 22 files of `work/T2-v3-cache/` have the same SHA-256
+  before and after, once with the new code and once with the `pipeline-v3`
+  code (the change stashed). The first of these runs rewrote one file,
+  `audio.wav.stamp.json`, because the source path in it was the hard link the
+  v1.1 session 1 smoke run had used; the audio itself hashed the same and no
+  later step re-ran.
+- `git diff pipeline-v3 -- talk_autopsy/prompts/` is empty.
+
+Why: the waiting screen's text (recognised, corrected, translated) should
+appear block by block, not only when a whole step ends, and the numbers should
+not be parsed from text.
+
+What it rules out: any other change to frozen paths under this exception.
+v1.0's measured numbers (T2 repeats, T6, translation rating) carry over to
+`pipeline-v3.1` without re-runs, because the model requests are byte-identical.
+
 ## 2026-11-12 — Release 1.0.0 private; cleanup and publication with v1.1
 
 Decision (owner): version **1.0.0** is tagged `v1.0` as an explicit, recorded

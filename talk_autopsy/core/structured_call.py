@@ -13,10 +13,17 @@ Calls that share the prefix (the blocks of one video with its glossary) then rea
 it from the cache at a fraction of the input price instead of paying for it each
 time. Cached tokens are not counted in usage.input_tokens; they are reported
 separately and priced by core/token_summary.py.
+
+Observability (pipeline-v3.1): `result_observer`, when set in the calling
+context, is told about every accepted result (label and parsed answer) just
+before it is returned, so a display can show a block's text as soon as it is
+ready. It never changes a request or a result; an observer that raises is
+logged and ignored.
 """
 
 import logging
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from anthropic import Anthropic
@@ -31,6 +38,20 @@ EPHEMERAL = {"type": "ephemeral"}
 # Server-side refusal fallback, "default" form: the API re-runs a declined request on the
 # model Anthropic recommends for the refusal category (Claude API only; not for Haiku).
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+# pipeline-v3.1, observability only: (label, accepted result) -> None, set by the pipeline around a step.
+result_observer: ContextVar[Callable[[str, BaseModel], None] | None] = ContextVar("result_observer",
+                                                                                  default=None)
+
+
+def _tell_observer(label: str, result: BaseModel) -> None:
+    """Pass an accepted result to the observer, if any; its failure never reaches the call."""
+    observer = result_observer.get()
+    if observer is None:
+        return
+    try:
+        observer(label, result)
+    except Exception:
+        logger.exception(f"{label}: the result observer failed; the call goes on")
 
 
 class InvalidResultError(RuntimeError):
@@ -209,6 +230,7 @@ def request_structured[ResultT: BaseModel](
                     "probably shorter than the model's minimum cacheable length"
                 )
             served_by = str(getattr(response, "model", "") or model)
+            _tell_observer(label, response.parsed_output)
             return StructuredResponse(response.parsed_output, usage, served_by)
         logger.warning(
             f"{label}: invalid result on attempt {attempt}/{MAX_ATTEMPTS} "
