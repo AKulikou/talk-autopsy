@@ -3,7 +3,8 @@ De-identification check over every tracked file (`git ls-files`). Two parts:
 
 (a) Local names: the git-ignored list `work/names.local.txt` (one name or phrase
     per line, drawn from the owner's notes; never committed). An entry matches
-    case-insensitively and **across line breaks**: the words of an entry may be
+    as whole words ("Ann" does not match "annotate"), case-insensitively and
+    **across line breaks**: the words of an entry may be
     separated by any whitespace, including a newline and the indentation of a
     wrapped Markdown line. A hit prints the file, the line and the entry's
     number, never the entry.
@@ -46,11 +47,12 @@ class Hit:
 
 
 def name_regex(entry: str) -> re.Pattern:
-    """An entry's words in order, separated by any whitespace (line breaks included)."""
+    """An entry's words in order, as whole words, separated by any whitespace (line breaks included)."""
     words = entry.split()
     if not words:
         raise ValueError("empty entry")
-    return re.compile(r"\s+".join(re.escape(w) for w in words), re.IGNORECASE)
+    body = r"\s+".join(re.escape(w) for w in words)
+    return re.compile(rf"(?<!\w){body}(?!\w)", re.IGNORECASE)
 
 
 def read_names(path: Path) -> list[str]:

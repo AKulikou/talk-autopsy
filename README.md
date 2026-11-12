@@ -113,8 +113,8 @@ video URL or local file
   the following pause
       |
       v
-  later: dubbed audio (edge-tts +      <name>.<lang>.dub.m4a
-  ffmpeg)
+  later (stage 4): a dubbed audio
+  track
 ```
 
 Every stage reads and writes the same JSON format: timed segments. Recognition
@@ -138,7 +138,7 @@ Russian, for a YouTube link or a video file, shows the estimate and writes a TV 
 subtitles.
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/AKulikou/talk-autopsy.git
 cd talk-autopsy
 uv sync
 
@@ -212,23 +212,27 @@ talk_autopsy/
   metrics.py               WER, term accuracy (v2, in place), false-edit rate, Wilson interval, reading speed
   evaluation.py            scoring a transcript file against the test set, benchmark rows
   adjudicate.py            reference transcripts by three-engine consensus
-  proofread.py             draft export and import (superseded by adjudicate; kept, unused)
   align.py                 forced alignment: measured word times for any transcript
   blocks.py                five-minute blocks, video context, cost estimates
   glossary_auto.py         auto-glossary (Haiku), prompts/glossary-auto-v2.md (v1 kept)
   correct.py               Claude correction (stage 2), prompts/correction-v2.md (v1 kept)
   translate.py             Claude translation (stage 2), prompts/translation-v2.1.md (v1, v2, v3 kept)
   translation_check.py     the pre-registered T6 translation check (evaluation tooling)
+  translation_rating.py    the baselines' translation rating and its scorer (evaluation tooling)
+  judge.py, ref_bounds.py  blind audio judge and the two T6 references with bounds (evaluation tooling)
+  youtube.py, outputs.py   YouTube input (yt-dlp) and output formats (.srt, .ass, MP4)
   baselines/               Whisper + Google Translate baseline (evaluation tooling)
   secret_registry.py       the pipeline's secret names + the evaluation tooling's
   subtitles.py             .srt and .ass output, up to 3 lines, reading speed report
   pipeline.py              run: stt, glossary, stt2, align, fix, translate, srt; fallbacks; skip-if-unchanged
-  tts/                     dubbing (stage 4; a stub)
   core/                    shared Claude request code from the Autopsy template
 tests/                     unit tests with a fake Claude client
 data/test-set/             test set description and glossaries (media stay local)
 docs/decisions.md          decision log
-docs/experiments.md        experiment log and backlog
+docs/experiments.md        experiment log, metrics, criteria and backlog
+docs/review-*.md           independent LLM reviews and the responses
+docs/prior-art.md          survey of similar open projects
+scripts/                   check scripts (incl. the de-identification check), evaluation scripts, Windows launcher
 results/benchmark.csv      one row per measured run
 ```
 

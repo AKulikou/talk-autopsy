@@ -29,6 +29,11 @@ def test_names_match_case_insensitively_and_report_the_entry_number_only(tmp_pat
     assert [(h.file, h.line, h.source) for h in hits] == [("doc.md", 2, "list entry 2")]
 
 
+def test_names_match_whole_words_only(tmp_path):
+    hits = _hits("pyjaneexample and Jane's talk\n", names=["Jane"], tmp_path=tmp_path)
+    assert [(h.line, h.source) for h in hits] == [(1, "list entry 1")]  # "Jane's", not "pyjane..."
+
+
 @pytest.mark.parametrize("text", [
     # [removed]
     "the speaker's Italian-accented English",

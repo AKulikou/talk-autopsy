@@ -1,7 +1,8 @@
 """
 Command line: `cut`, `transcribe` (faster-whisper or a cloud engine), `align`,
-`fix`, `translate`, `srt`, `draft`, `ref-from-draft`, `adjudicate`, `resolve`,
-`judge`, `judge-compare`, `eval` and `run` (the pipeline, pipeline.py).
+`glossary-auto`, `fix`, `translate`, `srt`, `adjudicate`, `resolve`, `judge`,
+`judge-refs`, `judge-compare`, `glossary-ref`, `eval`, `doctor` and `run` (the
+pipeline, pipeline.py).
 
 Only argument parsing and printing live here; the stages are plain functions in
 the package, so a web UI can call them the same way later.
@@ -30,7 +31,6 @@ from talk_autopsy import (
     metrics,
     outputs,
     pipeline,
-    proofread,
     subtitles,
     translate,
     youtube,
@@ -66,7 +66,7 @@ STEPS: dict[str, str] = {
     "fix": "Claude correction ({correction}) -> fixed.json",
     "translate": "Claude translation ({translation}) -> {lang}.json",
     "srt": "subtitles -> .{lang}.srt/.ass and .en.srt/.ass",
-    "dub": "dubbed audio (edge-tts + ffmpeg) -> .{lang}.dub.m4a",
+    "dub": "dubbed audio (stage 4, not implemented)",
 }
 CLAUDE_STEPS = {"glossary", "fix", "translate"}
 DEFAULT_STEPS = "stt,glossary,stt2,align,fix,translate,srt"
@@ -423,38 +423,6 @@ def _write_new(out: Path, text: str, force: bool) -> None:
         _fail(f"{out} exists; it may hold hand edits. Pass --force to overwrite it.")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8", newline="\n")
-
-
-@app.command()
-def draft(
-    transcript: Annotated[Path, typer.Argument(help="Transcript JSON, e.g. work/T2/raw.<engine>.json.")],
-    out: Annotated[Path, typer.Option("--out", "-o", help="Draft .txt to write.")],
-    force: ForceOption = False,
-) -> None:
-    """Draft for proofreading: one segment per line as [mm:ss] text, a blank line every minute."""
-    try:
-        source = load_transcript(transcript)
-    except (FileNotFoundError, ValueError) as e:
-        _fail(str(e))
-    _write_new(out, proofread.draft_text(source), force)
-    typer.echo(f"Wrote {out}: {len(source.segments)} lines")
-
-
-@app.command(name="ref-from-draft")
-def ref_from_draft(
-    draft_file: Annotated[Path, typer.Argument(metavar="DRAFT", help="Proofread draft .txt.")],
-    out: Annotated[Path, typer.Option("--out", "-o", help="Reference .txt to write.")],
-    force: ForceOption = False,
-) -> None:
-    """Reference transcript from a proofread draft: prefixes removed, one paragraph per minute block."""
-    if not draft_file.is_file():
-        _fail(f"No such file: {draft_file}")
-    reference = proofread.reference_from_draft(draft_file.read_text(encoding="utf-8-sig"))
-    if not reference:
-        _fail(f"{draft_file} has no text")
-    _write_new(out, reference, force)
-    paragraphs = len(reference.strip().split("\n\n"))
-    typer.echo(f"Wrote {out}: {len(reference.split())} words, {paragraphs} paragraphs")
 
 
 def _user_glossary_paths(glossary: Path | None, domain: str | None) -> list[Path]:

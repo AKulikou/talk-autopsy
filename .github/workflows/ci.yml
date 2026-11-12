@@ -25,6 +25,22 @@ jobs:
       # local name list (work/names.local.txt) is not in the repository and is checked by check.ps1.
       - run: uv run python scripts/check_names.py --patterns-only
 
+  test-windows:
+    # The same offline tests on Windows, the owner's platform (the launcher, paths, CRLF).
+    # The de-identification patterns and gitleaks run on Linux only.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The audio tests need ffmpeg and ffprobe on PATH.
+      - run: choco install ffmpeg -y --no-progress
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run pytest
+
   secret-scan:
     # gitleaks over the full git history. Chosen 2026-11-10: the gitleaks CLI is MIT and
     # needs no licence key for any repository; gitleaks-action (v3.0.0) is free for personal

@@ -79,7 +79,10 @@ def test_no_prompt_example_occurs_in_a_local_reference(version):
         for path in sorted(config.TEST_SET_DIR.glob(f"{fragment}.ref*.txt")):
             references[path.name] = path.read_text(encoding="utf-8")
     if not references:
-        pytest.skip("no reference transcripts here (they are local only)")
+        # Always the case in CI: the reference transcripts are not in the repository (the
+        # talks belong to their authors; decisions, 2026-11-08 and 2026-11-12), so this half
+        # runs only on the owner's machine, where data/test-set/T<n>.ref*.txt exist.
+        pytest.skip("no reference transcripts here (they are local only, never in CI)")
     conflicts = [f"{example!r} ({name})" for name, text in references.items()
                  for example in prompt_examples(version)
                  if example not in DISCOURSE_MARKERS and _occurs(example, text)]
