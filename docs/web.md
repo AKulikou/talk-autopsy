@@ -3,8 +3,7 @@
 A local web page that replaces the console launcher: paste a YouTube link or
 pick a file, see the estimate, start, watch the text appear step by step, watch
 the result in the browser, open the result folder. One user, one machine, one
-job at a time. Sessions 1 and 2 of 3 (2026-11-12) built it; this note describes
-the code as built.
+job at a time. This note describes the code as built (v1.1).
 
 ## Starting it
 
@@ -214,10 +213,38 @@ Committed recordings (an invented talk, no real text):
 `synthetic-talk-failed.jsonl` (fails in translation); regenerate with
 `uv run python -m tests.make_replay_fixture`.
 
+## Screenshots
+
+`docs/img/web-*.png` (README) are made from synthetic data only:
+
+```
+uv run python scripts/web_screenshots.py                    # English -> docs/img/
+uv run python scripts/web_screenshots.py --ui lt --out work/screenshots-lt
+```
+
+The script needs Edge or Chrome (driven headless over the DevTools protocol,
+with the `websockets` package already in the environment) and ffmpeg. It runs
+the replay server in-process on the committed recordings, in a temporary
+folder of its own (so the recent-results list holds only the replayed demo),
+uses link mode on the form (no local folder on screen), plays a title card it
+makes with ffmpeg, and pauses the playback right after chosen events to catch
+the waiting screen: during the second recognition pass (a spinner) and after
+the first translation block (a real bar, corrections in place). Each picture
+is cut at the bottom of its card; the Done picture ends at the cost line, and
+the script checks that the result folder (a local path) is below it. About
+four minutes per language (the replay runs at natural speed so the elapsed
+time matches the step times).
+
+Without a browser the same screens can be taken by hand: `uv run talk-autopsy
+web --replay tests/fixtures/replay/synthetic-talk.jsonl --speed 1`, open the
+page with `?ui=en`, use a link (one containing `long` shows the over-limit
+confirmation), and for the failed screen replay
+`synthetic-talk-failed.jsonl`. The Done screen then plays a test pattern and
+shows the demo folder's path below the player: keep it out of the picture.
+
 ## Not in v1.1
 
 No cancel / stop button (the core has no cooperative cancellation); no
-playlists in the page. Session 3: dead code out of
-frozen modules, `cli.py` split (the glossary helpers the web runner borrows
-from it move to a shared module), screenshots, README, history rewrite, tag
-`v1.1`.
+playlists in the page (use the console launcher or `talk-autopsy run`); target
+languages other than Russian work but their quality is not measured; the
+Lithuanian interface strings are not yet checked by a native speaker.
