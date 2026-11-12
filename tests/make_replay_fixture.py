@@ -3,6 +3,9 @@ Writes the committed replay fixtures (tests/fixtures/replay/):
 
     synthetic-talk.jsonl         a finished link-mode job, profile tv, Russian
     synthetic-talk-failed.jsonl  the same job, failing during translation
+    synthetic-talk-untranslated.jsonl  the same job, finished, its first translation block
+                                 left in English (the model answers in English twice);
+                                 `english_block` is the first unit id of that block
 
 The talk is invented (about six minutes, a made-up scheduler "Quorvex"; no
 sentence comes from a real video), and so are its Russian translations. The
@@ -167,7 +170,7 @@ def transcript() -> Transcript:
                             "audio_seconds": len(TALK) * SEGMENT_SECONDS})
 
 
-def model(fail_translation_block: int | None):
+def model(fail_translation_block: int | None, english_block: int | None = None):
     translation_blocks = [0]
 
     def handle(kwargs):
@@ -188,6 +191,11 @@ def model(fail_translation_block: int | None):
         if translation_blocks[0] == fail_translation_block:
             raise ConnectionError("the connection to the model service was lost")
         body = user.split("Segments to translate:")[1]
+        found = re.findall(r"^\[(\d+)\] (.*)$", body, re.M)
+        if english_block is not None and found and int(found[0][0]) == english_block:  # left in English
+            units = [UnitText(id=int(i), text=text) for i, text in found]
+            return response(TranslationAnswer(segments=units), input_tokens=1000 + len(user) // 4,
+                            output_tokens=900 + len(user) // 4, cache_write=2200)
         units = []
         for i, text in re.findall(r"^\[(\d+)\] (.*)$", body, re.M):
             parts = sorted((text.find(en), ru) for en, ru in RUSSIAN.items() if en in text)
@@ -312,10 +320,11 @@ class GenCore(Core):
         pass
 
 
-def generate(name: str, fail_translation_block: int | None, expected: str) -> Path:
+def generate(name: str, fail_translation_block: int | None, expected: str, english_block: int | None = None
+             ) -> Path:
     root = Path(tempfile.mkdtemp(prefix="replay-fixture-"))
     try:
-        fake = FakeClaude(model(fail_translation_block), simulate_cache=True)
+        fake = FakeClaude(model(fail_translation_block, english_block), simulate_cache=True)
         claude_client.get_client = lambda: fake
         clock = Clock()
         runner = JobRunner(core=GenCore(root, clock), history_file=root / "history.json", clock=clock,
@@ -350,6 +359,7 @@ def main() -> int:
         os.environ.pop(variable, None)
     generate("synthetic-talk", None, "finished")
     generate("synthetic-talk-failed", 2, "failed")
+    generate("synthetic-talk-untranslated", None, "finished", english_block=1)
     return 0
 
 

@@ -128,7 +128,17 @@ def describe(folder: Path) -> dict:
                 RESULT_MARKER, youtube.DONE_MARKER, "meta.json")],
             "media": media, "kind": kind, "burned": burned, "tracks": tracks,
             "cost_usd": marker.get("cost_usd"), "stt_cost_usd": marker.get("stt_cost_usd"),
+            "untranslated": _ranges(marker.get("untranslated")),
+            "uncorrected": _ranges(marker.get("uncorrected")),
             "replay": bool(marker.get("replay"))}
+
+
+def _ranges(value) -> list[list[float]]:
+    """[[start, end], ...] from a marker (written by the job), anything else -> []."""
+    try:
+        return [[float(a), float(b)] for a, b in value or []][:50]
+    except (TypeError, ValueError):
+        return []
 
 
 def _mtime_text(folder: Path) -> str:

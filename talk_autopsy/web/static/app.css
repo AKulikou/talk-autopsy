@@ -189,8 +189,20 @@ button.jump {
   display: block; margin: 0.5rem 0 0 auto; background: var(--accent); color: var(--accent-text);
   font-weight: 600; padding: 0.4rem 0.9rem;
 }
-.notices { list-style: none; padding: 0; margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--warn); }
+.notices { list-style: none; padding: 0; margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--muted); }
 .notices li { overflow-wrap: anywhere; }
+/* The one real warning: part of the video left as it was. Yellow is kept for this. */
+.warning {
+  border: 2px solid var(--warn); border-left-width: 0.4rem; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface)); padding: 0.6rem 0.8rem; margin: 0.5rem 0 0.75rem;
+  font-weight: 600;
+}
+.warning::before { content: "⚠ "; color: var(--warn); }
+/* Technical details: the core's own English lines, collapsed. */
+.tech { margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--muted); }
+.tech summary { cursor: pointer; }
+.tech ul { padding-left: 1.1rem; margin: 0.25rem 0 0; }
+.tech li, .tech p { overflow-wrap: anywhere; font-family: ui-monospace, Consolas, monospace; }
 @media (max-width: 40rem) {
   .cols { display: none; }
   .row { grid-template-columns: 1fr; gap: 0.15rem; }

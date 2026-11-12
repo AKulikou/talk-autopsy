@@ -113,6 +113,7 @@
   <section id="view-run" class="view" hidden aria-labelledby="run-heading">
     <h2 id="run-heading" data-i18n="run_heading"></h2>
     <p id="run-title" class="run-title"></p>
+    <p id="run-warning" class="warning" role="alert" hidden></p>
     <dl class="facts compact">
       <dt data-i18n="run_elapsed"></dt><dd id="run-elapsed">0:00</dd>
       <dt data-i18n="run_left"></dt><dd id="run-left"></dd>
@@ -135,6 +136,10 @@
       <button type="button" id="live-later" class="link" data-i18n="live_later" hidden></button>
       <button type="button" id="live-jump" class="jump" data-i18n="live_jump" hidden></button>
       <ul id="live-notices" class="notices" aria-live="off"></ul>
+      <details id="live-tech" class="tech" hidden>
+        <summary data-i18n="tech_details"></summary>
+        <ul id="live-tech-list"></ul>
+      </details>
     </section>
   </section>
 
@@ -142,6 +147,7 @@
   <section id="view-done" class="view" hidden aria-labelledby="done-heading">
     <h2 id="done-heading" data-i18n="done_heading"></h2>
     <p id="done-title" class="run-title"></p>
+    <p id="done-warning" class="warning" role="alert" hidden></p>
     <div id="player-box" class="player" hidden>
       <div id="player-media" class="player-media"></div>
       <ol id="player-text" class="cues" aria-label="" hidden></ol>
@@ -163,6 +169,10 @@
     <h2 id="failed-heading" data-i18n="failed_heading"></h2>
     <p><strong data-i18n="failed_reason"></strong>: <span id="failed-reason"></span></p>
     <p id="failed-hint"></p>
+    <details id="failed-tech" class="tech" hidden>
+      <summary data-i18n="tech_details"></summary>
+      <p id="failed-tech-text"></p>
+    </details>
     <div id="doctor" hidden>
       <h3 data-i18n="doctor_heading"></h3>
       <ul id="doctor-list" class="doctor"></ul>

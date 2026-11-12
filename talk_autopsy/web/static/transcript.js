@@ -3,11 +3,12 @@
 // the rows (web/transcript.py); this module only fetches a bounded window of them and renders it.
 // It follows the newest text until the reader scrolls up; "Jump to latest" follows again.
 import { api } from "./api.js";
-import { clock, t } from "./i18n.js";
+import { clock, gapsWarning, t } from "./i18n.js";
 
 const WINDOW = 120; // segments per window: the DOM never holds an hour of text
 const STEP = 100; // how far "show earlier / later" moves the window
 const REFRESH_MS = 400; // at most this often while text keeps arriving
+const MAX_TECH_LINES = 60; // technical details kept on the page
 
 let els = null;
 let jobId = null;
@@ -42,6 +43,9 @@ export function reset(elements, id, targetName) {
   els.target.textContent = t("col_target", { lang: targetName });
   els.status.textContent = t("live_wait_stt");
   els.notices.replaceChildren();
+  els.techList.replaceChildren();
+  els.tech.hidden = true;
+  showWarning("");
   els.jump.hidden = true;
   els.earlier.hidden = true;
   els.later.hidden = true;
@@ -57,11 +61,37 @@ export function changed() {
   }, REFRESH_MS);
 }
 
+// A core message: a short sentence in the interface language when its kind is known
+// (web/notices.py); the core's own line only under "Technical details".
 export function notice(event) {
   if (!els) return;
-  const li = node("li", null, event.text || "");
-  els.notices.append(li);
-  while (els.notices.childElementCount > 6) els.notices.firstElementChild.remove();
+  if (event.message) {
+    els.notices.append(node("li", null, noticeText(event)));
+    while (els.notices.childElementCount > 6) els.notices.firstElementChild.remove();
+  }
+  if (event.text) tech(event.text);
+}
+
+function noticeText(event) {
+  const p = event.params || {};
+  if (event.message.startsWith("notice_subtitles")) {
+    const which = t(p.lang === "en" ? "subs_which_en" : "subs_which_target");
+    return t(event.message, { which, cues: p.cues, fast: p.fast });
+  }
+  return t(event.message, p);
+}
+
+// One line of technical detail (a core message, a step's own description), collapsed by default.
+export function tech(text) {
+  if (!els || !text) return;
+  els.techList.append(node("li", null, text));
+  while (els.techList.childElementCount > MAX_TECH_LINES) els.techList.firstElementChild.remove();
+  els.tech.hidden = false;
+}
+
+function showWarning(text) {
+  els.warning.textContent = text;
+  els.warning.hidden = !text;
 }
 
 export function stop() {
@@ -135,7 +165,6 @@ function statusText(summary) {
   if (summary.source === "stt") parts.push(t("live_first_pass"));
   if (summary.correction_blocks) parts.push(t("live_corrections", { n: summary.edits }));
   if (summary.translation_blocks) parts.push(t("live_translated", { n: summary.units }));
-  if (summary.failed_blocks) parts.push(t("live_failed_blocks", { n: summary.failed_blocks }));
   if (summary.truncated) parts.push(t("live_truncated"));
   return parts.join(" · ");
 }
@@ -155,6 +184,7 @@ function render(data) {
   }
   box.replaceChildren(...data.rows.map(rowOf));
   els.status.textContent = statusText(data.summary);
+  showWarning(gapsWarning(data.summary.untranslated, data.summary.uncorrected));
   els.earlier.hidden = !data.more_before;
   els.later.hidden = !data.more_after;
   windowStart = data.start;

@@ -22,11 +22,18 @@ start+count-1` (whole rows), so the page keeps a bounded number of rows in the
 DOM; indexes are segment positions, which stay stable when later translation
 blocks merge segments into rows. Everything here is folded from events, so a
 replayed event list gives the same view.
+
+The summary names the time ranges of failed blocks (`untranslated`,
+`uncorrected`), so the page can say in plain words which minutes were left as
+they were. A segment's end comes with the recognized text (older recordings
+have none: the next segment's start, else the segment's own start).
 """
 
 import difflib
 import threading
 from dataclasses import dataclass, field
+
+from talk_autopsy.web.notices import merge_ranges
 
 TYPES = ("transcript", "corrected", "translated")
 MAX_SEGMENTS = 6000  # about two hours of talk; more is dropped with a flag
@@ -39,6 +46,7 @@ class _Segment:
     start: float | None
     text: str
     corrected: str | None = None
+    end: float | None = None
     failed: bool = False  # its correction block failed validation: the text stays as recognized
 
 
@@ -108,14 +116,15 @@ class TranscriptView:
             self.version += 1
             return True
 
-    def _add_segment(self, segment_id: int, start: float | None, text: str) -> int | None:
+    def _add_segment(self, segment_id: int, start: float | None, text: str,
+                     end: float | None = None) -> int | None:
         if segment_id in self._index:
             return self._index[segment_id]
         if len(self._segments) >= MAX_SEGMENTS:
             self.truncated = True
             return None
         self._index[segment_id] = len(self._segments)
-        self._segments.append(_Segment(segment_id, start, text))
+        self._segments.append(_Segment(segment_id, start, text, end=end))
         return self._index[segment_id]
 
     def _transcript(self, event: dict) -> None:
@@ -125,7 +134,8 @@ class TranscriptView:
         self.source = str(event.get("source") or self.source)
         last = None
         for row in event.get("rows") or []:
-            last = self._add_segment(int(row["id"]), row.get("start"), str(row.get("text") or ""))
+            last = self._add_segment(int(row["id"]), row.get("start"), str(row.get("text") or ""),
+                                     row.get("end"))
         if last is not None:
             self.focus = last
 
@@ -200,13 +210,31 @@ class TranscriptView:
         with self._lock:
             return self._summary()
 
+    def _span(self, index: int) -> tuple[float, float] | None:
+        segment = self._segments[index]
+        if segment.start is None:
+            return None
+        end = segment.end
+        if end is None:
+            following = self._segments[index + 1].start if index + 1 < len(self._segments) else None
+            end = following if following is not None else segment.start
+        return segment.start, end
+
+    def _ranges(self, indexes) -> list[list[float]]:
+        return merge_ranges([span for i in indexes if (span := self._span(i)) is not None])
+
     def _summary(self) -> dict:
         translated = sum(1 for u in self._units.values() if u.text is not None)
+        untranslated = {self._index[i] for u in self._units.values() if u.failed
+                        for i in u.source_ids if i in self._index}
+        uncorrected = {k for k, s in enumerate(self._segments) if s.failed}
         return {"version": self.version, "segments": len(self._segments), "focus": self.focus,
                 "edits": self.edits, "corrected": sum(1 for s in self._segments if s.corrected is not None),
                 "units": translated, "correction_blocks": self.correction_blocks,
                 "translation_blocks": self.translation_blocks, "failed_blocks": self.failed_blocks,
-                "source": self.source, "truncated": self.truncated}
+                "source": self.source, "truncated": self.truncated,
+                "untranslated": self._ranges(sorted(untranslated)),
+                "uncorrected": self._ranges(sorted(uncorrected))}
 
     def window(self, start: int | None = None, count: int = 120, follow: bool = False) -> dict:
         """

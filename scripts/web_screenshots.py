@@ -3,6 +3,7 @@ Screenshots of the web UI from synthetic data only, for the README (docs/img/).
 
     uv run python scripts/web_screenshots.py                 # English -> docs/img/
     uv run python scripts/web_screenshots.py --ui lt --out work/screenshots-lt
+    uv run python scripts/web_screenshots.py --ui ru --set all --zoom 1.5 --out work/screenshots-ru-150
 
 Needs Microsoft Edge or Google Chrome (driven headless over the DevTools
 protocol, with the `websockets` package already in the environment) and
@@ -18,6 +19,10 @@ Screens: form (with the synthetic recent result), estimate with the
 over-limit confirmation, running (translation block 1 of 2: a real progress
 bar, corrections highlighted, half the translation), running during a step
 without a position (a spinner), done with the player and subtitles, failed.
+`--set untranslated` (or `all`) adds the run whose first translation block was
+left in English: the waiting screen right after that block, and the Done screen
+with the warning. `--zoom 1.5` renders as the browser does at 150% (fewer CSS
+pixels across, each drawn bigger).
 Each PNG is reduced to a palette with ffmpeg when that keeps it smaller.
 """
 
@@ -40,6 +45,7 @@ sys.path.insert(0, str(ROOT))
 FIXTURES = ROOT / "tests" / "fixtures" / "replay"
 FINISHED = FIXTURES / "synthetic-talk.jsonl"
 FAILED = FIXTURES / "synthetic-talk-failed.jsonl"
+UNTRANSLATED = FIXTURES / "synthetic-talk-untranslated.jsonl"
 LINK = "https://www.youtube.com/watch?v=Synthetic01"
 LONG_LINK = "https://www.youtube.com/watch?v=longSynth01"  # "long" in a replay link: four hours
 WIDTH, HEIGHT = 1280, 860
@@ -66,7 +72,7 @@ def find_browser() -> str:
 
 
 class Browser:
-    def __init__(self, profile: Path, port: int = 9339):
+    def __init__(self, profile: Path, port: int = 9339, zoom: float = 1.0):
         from websockets.sync.client import connect
 
         self.proc = subprocess.Popen(
@@ -88,10 +94,15 @@ class Browser:
             raise SystemExit("the browser did not start")
         self.ws = connect(page["webSocketDebuggerUrl"], max_size=50_000_000)  # closed in close()
         self.ids = itertools.count(1)
+        self.zoom = zoom  # browser zoom: fewer CSS pixels, each drawn `zoom` times bigger
+        self.width, self.height = round(WIDTH / zoom), round(HEIGHT / zoom)
         for method in ("Page.enable", "Runtime.enable"):
             self.call(method)
-        self.call("Emulation.setDeviceMetricsOverride", width=WIDTH, height=HEIGHT, deviceScaleFactor=1,
-                  mobile=False)
+        self.metrics(self.height)
+
+    def metrics(self, height: int) -> None:
+        self.call("Emulation.setDeviceMetricsOverride", width=self.width, height=height,
+                  deviceScaleFactor=self.zoom, mobile=False)
 
     def call(self, method: str, **params):
         msg_id = next(self.ids)
@@ -127,17 +138,15 @@ class Browser:
         first and given time to settle: capturing beyond the viewport resizes the page during
         the capture, and the video player's captions are caught mid-layout.
         """
-        tall = max(HEIGHT, height)
-        if tall != HEIGHT:
-            self.call("Emulation.setDeviceMetricsOverride", width=WIDTH, height=tall, deviceScaleFactor=1,
-                      mobile=False)
+        tall = max(self.height, height)
+        if tall != self.height:
+            self.metrics(tall)
             time.sleep(1.5)
-        clip = {"x": 0, "y": 0, "width": WIDTH, "height": height, "scale": 1}
+        clip = {"x": 0, "y": 0, "width": self.width, "height": height, "scale": 1}
         data = self.call("Page.captureScreenshot", format="png", clip=clip)["data"]
         path.write_bytes(base64.b64decode(data))
-        if tall != HEIGHT:
-            self.call("Emulation.setDeviceMetricsOverride", width=WIDTH, height=HEIGHT, deviceScaleFactor=1,
-                      mobile=False)
+        if tall != self.height:
+            self.metrics(self.height)
         return path
 
     def close(self) -> None:
@@ -331,12 +340,33 @@ def failed_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) 
     take(b, out, "web-failed", shots, "view-failed")
 
 
+def untranslated_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) -> None:
+    """The run whose first translation block stayed English: the warning while running and when done."""
+    start_estimate(b, srv.url, ui, LINK)
+    srv.pause_when = lambda e: e["type"] == "translated" and e.get("position") == 1
+    b.js("document.getElementById('start').click()")
+    b.wait("!document.getElementById('view-run').hidden")
+    srv.paused.wait(120)
+    srv.paused.clear()
+    b.wait("!document.getElementById('run-warning').hidden", 30)
+    time.sleep(1.0)
+    take(b, out, "web-running-untranslated", shots, "view-run")
+    srv.resume.set()
+    b.wait("!document.getElementById('view-done').hidden", 120)
+    b.wait("!document.getElementById('done-warning').hidden", 10)
+    time.sleep(2.0)
+    take(b, out, "web-done-untranslated", shots, "view-done")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--ui", default="en", help="Interface language: en, ru or lt.")
     parser.add_argument("--out", type=Path, default=ROOT / "docs" / "img")
     parser.add_argument("--speed", type=float, default=1.0,
                         help="Replay speed; 1 (natural) keeps the elapsed time in line with the step times.")
+    parser.add_argument("--set", choices=("readme", "untranslated", "all"), default="readme",
+                        help="readme: the README pictures; untranslated: the warning screens; all: both.")
+    parser.add_argument("--zoom", type=float, default=1.0, help="Browser zoom, e.g. 1.5 for 150%%.")
     args = parser.parse_args()
     if shutil.which("ffmpeg") is None:
         raise SystemExit("ffmpeg is needed (title card, palette PNGs)")
@@ -344,9 +374,14 @@ def main() -> None:
     shots: list[Path] = []
     with tempfile.TemporaryDirectory(prefix="ta-shots-") as tmp:
         tmp = Path(tmp)
-        browser = Browser(tmp / "profile")
+        browser = Browser(tmp / "profile", zoom=args.zoom)
+        flows = []
+        if args.set in ("readme", "all"):
+            flows += [(FINISHED, finished_flow), (FAILED, failed_flow)]
+        if args.set in ("untranslated", "all"):
+            flows += [(UNTRANSLATED, untranslated_flow)]
         try:
-            for recording, flow in ((FINISHED, finished_flow), (FAILED, failed_flow)):
+            for recording, flow in flows:
                 srv = Server(recording, tmp / recording.stem, args.speed)
                 try:
                     flow(browser, srv, args.ui, args.out, shots)

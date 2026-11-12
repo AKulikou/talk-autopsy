@@ -52,6 +52,7 @@ from talk_autopsy.glossary import GlossaryError
 from talk_autopsy.segments import Transcript, load_transcript
 from talk_autopsy.stt.chunked import ProgressEvent
 from talk_autopsy.time_estimate import NO_ESTIMATE, MachineKey, TimeEstimate, TimeEstimator
+from talk_autopsy.web import notices
 from talk_autopsy.web import settings as web_settings
 from talk_autopsy.web.sources import (
     PLAYLIST_MESSAGE,
@@ -342,6 +343,9 @@ class Job:
             return self._append(event["type"], payload)
 
     def _append(self, type_: str, payload: dict) -> dict:
+        if type_ == "notice" and "message" not in payload:  # what the page may say (web/notices.py)
+            payload = {**payload, **notices.describe(str(payload.get("code") or ""),
+                                                     str(payload.get("text") or ""))}
         event = {**scrub(payload, self._secrets), "id": self._next_id, "type": type_,
                  "t": round(self.clock() - self._start, 1)}
         self._next_id += 1
@@ -595,7 +599,8 @@ class _Progress:
                 part, number = segments[k:k + ROWS_PER_EVENT], k // ROWS_PER_EVENT + 1
                 ids = [s.id for s in part]
                 if step in ("stt", "stt2"):
-                    rows = [{"id": s.id, "start": round(s.start, 2), "text": short(s.text)} for s in part]
+                    rows = [{"id": s.id, "start": round(s.start, 2), "end": round(s.end, 2),
+                             "text": short(s.text)} for s in part]
                     job.add("transcript", source=step, replace=k == 0, part=number, parts=total, rows=rows)
                 elif step == "fix":
                     rows = _text_rows([{"id": s.id, "text": s.text} for s in part])
@@ -838,6 +843,22 @@ class JobRunner:
             except Exception:
                 logger.exception("job %s: time update failed", job.id)
 
+    def _failed_parts(self, settings: pipeline.RunSettings) -> dict:
+        """
+        The time ranges left untranslated or uncorrected (failed blocks), from the
+        step outputs: {"untranslated": [[start, end], ...], "uncorrected": [...]}.
+        A re-run sends exactly those blocks again (pipeline-v3.3).
+        """
+        try:
+            work = settings.work_dir
+            return {"untranslated": notices.failed_ranges(
+                        self.core.read_transcript(work / f"{settings.target_lang}.json"), "translation"),
+                    "uncorrected": notices.failed_ranges(
+                        self.core.read_transcript(work / "fixed.json"), "correction")}
+        except Exception:
+            logger.exception("failed parts of %s not read", settings.work_dir)
+            return {"untranslated": [], "uncorrected": []}
+
     def _execute(self, job: Job, max_cost: float) -> None:
         request, preview, core = job.request, job.preview, self.core
         estimator = self._estimator(request.mode, preview.formats, preview.duration_s)
@@ -903,13 +924,14 @@ class JobRunner:
                     written.append(outputs.Written("audio", copied))
             # the report's totals are the pipeline's own numbers; they win over the parsed ones
             job.cost_usd, job.stt_cost_usd = report.cost_usd, report.stt_cost_usd
+            gaps = self._failed_parts(settings)
             files = [w.path.name for w in written]
             if request.mode == "url":
                 core.mark_done(dest, files, {"claude_usd": report.cost_usd, "stt_usd": report.stt_cost_usd})
             write_result_marker(dest, {"title": preview.title, "target_lang": request.target_lang,
                                        "finished": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": request.mode,
                                        "files": files, "cost_usd": round(report.cost_usd, 4),
-                                       "stt_cost_usd": round(report.stt_cost_usd, 4)})
+                                       "stt_cost_usd": round(report.stt_cost_usd, 4), **gaps})
             if not report.fallbacks:  # a fallback engine's times would mislead this machine's history
                 estimator.record()
             final = ("finished", {
@@ -917,7 +939,7 @@ class JobRunner:
                 "files": [{"name": w.path.name, "format": w.format, "purpose": FILE_PURPOSE.get(w.format, "")}
                           for w in written],
                 "cost_usd": round(report.cost_usd, 4), "stt_cost_usd": round(report.stt_cost_usd, 4),
-                "fallbacks": [short(f, 200) for f in report.fallbacks]})
+                "fallbacks": [short(f, 200) for f in report.fallbacks], **gaps})
             logger.info("job %s finished: %.4f USD Claude, %.4f USD speech recognition", job.id,
                         report.cost_usd, report.stt_cost_usd)
         except BaseException as e:

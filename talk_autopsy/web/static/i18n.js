@@ -46,6 +46,21 @@ export function clock(seconds) {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+// [[0, 299.1], [600, 640]] -> "0:00–4:59, 10:00–10:40"
+export function ranges(list) {
+  return (list || []).map(([a, b]) => `${clock(a)}–${clock(b)}`).join(", ");
+}
+
+// The plain-language warning about parts of the video left as they were (failed blocks), or "".
+export function gapsWarning(untranslated, uncorrected) {
+  const parts = [];
+  if (untranslated?.length) parts.push(t("warn_untranslated", { ranges: ranges(untranslated) }));
+  if (uncorrected?.length) parts.push(t("warn_uncorrected", { ranges: ranges(uncorrected) }));
+  if (!parts.length) return "";
+  parts.push(t(uncorrected?.length ? "warn_rerun" : "warn_rerun_part"));
+  return parts.join(" ");
+}
+
 export function usd(value, digits = 2) {
   return `${(Number(value) || 0).toFixed(digits)} USD`;
 }

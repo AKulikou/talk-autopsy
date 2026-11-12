@@ -198,7 +198,9 @@ class ReplayRunner(JobRunner):
         (folder / f"{stem}.en.srt").write_text(english, encoding="utf-8")
         if self.make_video:
             make_test_video(folder / f"{stem}.mp4", self.recording.duration_s or 60.0)
-        marker = {"title": self.recording.title, "target_lang": lang, "replay": True}
+        marker = {"title": self.recording.title, "target_lang": lang, "replay": True,
+                  "untranslated": payload.get("untranslated") or [],
+                  "uncorrected": payload.get("uncorrected") or []}
         (folder / jobs.RESULT_MARKER).write_text(json.dumps(marker, ensure_ascii=False), encoding="utf-8")
         return folder
 

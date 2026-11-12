@@ -1,7 +1,7 @@
 // Talk Autopsy page: four states on one page (form, estimate, running, done / failed).
 // The server enforces every rule (cost gate, one job at a time, paths); the page only asks.
 import { api } from "./api.js";
-import { applyStrings, clock, duration, errorText, setStrings, t, usd } from "./i18n.js";
+import { applyStrings, clock, duration, errorText, gapsWarning, setStrings, t, usd } from "./i18n.js";
 import { followJob } from "./events.js";
 import * as steps from "./steps.js";
 import * as transcript from "./transcript.js";
@@ -37,6 +37,11 @@ function show(id) {
     heading.tabIndex = -1;
     heading.focus({ preventScroll: false });
   }
+}
+
+function setWarning(id, text) {
+  $(id).textContent = text || "";
+  $(id).hidden = !text;
 }
 
 function setError(id, text) {
@@ -278,6 +283,7 @@ function onEvent(event) {
     case "step_progress":
     case "step_finished":
       steps.apply(event);
+      if (event.type === "step_started" && event.detail) transcript.tech(`${t(`step_${event.step}`)}: ${event.detail}`);
       if (event.type === "step_finished") {
         $("run-cost").textContent = usd((event.total_cost_usd || 0) + (event.total_stt_cost_usd || 0));
       }
@@ -300,7 +306,8 @@ function onEvent(event) {
 
 function liveElements() {
   return { rows: $("live-rows"), status: $("live-status"), target: $("col-target"), notices: $("live-notices"),
-    jump: $("live-jump"), earlier: $("live-earlier"), later: $("live-later") };
+    jump: $("live-jump"), earlier: $("live-earlier"), later: $("live-later"), warning: $("run-warning"),
+    tech: $("live-tech"), techList: $("live-tech-list") };
 }
 
 function onEnd(event) {
@@ -340,6 +347,7 @@ async function showDone(event) {
     return li;
   }));
   $("done-folder").textContent = event.folder;
+  setWarning("done-warning", gapsWarning(event.untranslated, event.uncorrected));
   setError("done-error", "");
   show("view-done");
   if (event.result) player.show(playerElements(), await player.fetchResult(event.result));
@@ -364,6 +372,7 @@ async function watch(id) {
     return li;
   }));
   $("done-folder").textContent = info.folder;
+  setWarning("done-warning", gapsWarning(info.untranslated, info.uncorrected));
   setError("done-error", "");
   show("view-done");
   player.show(playerElements(), info);
@@ -403,10 +412,13 @@ async function loadRecent() {
 
 async function showFailed(event) {
   if (state.job && event.step) steps.fail(event.step);
-  // an unexpected error is named by its type in the interface language; known errors keep the server's line
-  $("failed-reason").textContent = event.error_type ? t("err_unexpected", { type: event.error_type })
-    : event.reason || t("err_network");
+  // a sentence in the interface language for the kind of failure; the core's own line (English, for
+  // developers) only under "Technical details"
   const hint = event.hint || "log";
+  $("failed-reason").textContent = event.error_type ? t("err_unexpected", { type: event.error_type })
+    : t(`fail_${hint}`);
+  $("failed-tech-text").textContent = event.reason || "";
+  $("failed-tech").hidden = !event.reason;
   $("failed-hint").textContent = hint === "network" ? "" : t(`hint_${hint}`);
   $("doctor").hidden = true;
   show("view-failed");

@@ -71,12 +71,12 @@ Every event: `{"id": int, "type": str, "t": seconds since the job started, ...}`
 | `step_started` | `step`, `detail` (the core's own line; `audio: ...` while the audio is extracted) | pipeline `step-start`; the job itself for `download` and `outputs` |
 | `step_progress` | `step`, `position`, `total` (null when unknown), `unit` (`block`, `chunk`, `byte`, `second`) | correction and translation blocks; Gemini chunks (fallback engine); download bytes; burn-in seconds. Bytes and seconds at most every 0.5 s |
 | `step_finished` | `step`, `skipped`, `seconds`, `cost_usd`, `stt_cost_usd`, `tokens` (`input`, `output`, `cache_write`, `cache_read`, when known), running `total_cost_usd` / `total_stt_cost_usd` | pipeline `step-done` / `step-skipped` (numbers from the event's data) |
-| `transcript` | `source` (`stt` / `stt2`), `replace`, `rows` (`id`, `start`, `text`), `part`, `parts` | the recognised text, read from `raw.json` / `raw2.json` when the step ends (AssemblyAI returns it at once); the second pass replaces the first |
+| `transcript` | `source` (`stt` / `stt2`), `replace`, `rows` (`id`, `start`, `end`, `text`), `part`, `parts` | the recognised text, read from `raw.json` / `raw2.json` when the step ends (AssemblyAI returns it at once); the second pass replaces the first |
 | `corrected` | `position`, `total`, `failed`, `ids`, `segments` (`id`, `text`), `edits` (`id`, `before`, `after`); `from_file` for a cached step | one per correction block, live; from `fixed.json` when the step was cached |
 | `translated` | `position`, `total`, `failed`, `ids`, `units` (`id`, `text`, `source`, `source_ids`), `source_ids`; `from_file` for a cached step | one per translation block, live; from `<lang>.json` when cached |
 | `estimate_updated` | `claude_usd` + `claude_parts`, and/or `time` (`seconds`, `source`, `first_run_rough`, `excludes`); at the start also `cost` | pipeline `estimate` events; the time estimator (start, every step end, a 30 s tick when the value moved) |
-| `notice` | `code`, `text` | pipeline `fallback` and `srt` lines, output writer messages, a progress-display error |
-| `finished` | `folder`, `result` (the result id for the player), `files` (`name`, `format`, `purpose`), `cost_usd`, `stt_cost_usd`, `fallbacks` | the job, after the outputs are written (costs: the pipeline's own report) |
+| `notice` | `code`, `text` (the core's own line), `message` + `params` (a known kind, `web/notices.py`; null otherwise), `kind` | pipeline `fallback` and `srt` lines, output writer messages, a progress-display error |
+| `finished` | `folder`, `result` (the result id for the player), `files` (`name`, `format`, `purpose`), `cost_usd`, `stt_cost_usd`, `fallbacks`, `untranslated` and `uncorrected` (time ranges of failed blocks) | the job, after the outputs are written (costs: the pipeline's own report; ranges: the step outputs' `failed_blocks`) |
 | `failed` | `reason`, `hint` (`doctor`, `youtube`, `outputs`, `cost_limit`, `input`, `log`), `step`, `error_type` (for an unexpected error) | any exception, mapped to a plain message; secret values are masked |
 
 The SSE stream sends the three text events as a light `text_changed`
@@ -111,6 +111,16 @@ cost. Right: the text, in two aligned columns.
   (wheel, touch, keys or pointer on the text), it stops moving the text and
   shows "Jump to the latest text"; "Show earlier / later text" moves the
   window by 100 segments. The DOM never holds more than one window.
+- **Plain words only.** Nothing the core says is shown as it is: a known
+  kind of message (subtitles written, burn-in started, a fallback engine)
+  becomes one sentence in the interface language; every core line (and each
+  step's own description) is listed, collapsed, under "Technical details".
+  The failed screen names the kind of failure in words and keeps the core's
+  line there too. Yellow is kept for the one real warning: part of the video
+  left untranslated or uncorrected, with its minutes ("Part of the video was
+  not translated (0:00–4:55). Run this video again: only that part will be
+  translated again"), on the waiting screen as soon as the block fails and on
+  the Done screen (also when opened from the recent results).
 - **Reload.** A reload during a run reattaches: the steps are rebuilt from the
   replayed events and the text from the current window.
 - **Narrow windows** stack the steps above the text (below 56 rem) and the two
@@ -209,8 +219,10 @@ the result is a demo folder in a temporary directory with the subtitles rebuilt
 from the recorded text and, if ffmpeg is installed, a test-pattern video of the
 talk's length. A replay never starts the real page instead (no reuse check).
 Committed recordings (an invented talk, no real text):
-`tests/fixtures/replay/synthetic-talk.jsonl` (finished) and
-`synthetic-talk-failed.jsonl` (fails in translation); regenerate with
+`tests/fixtures/replay/synthetic-talk.jsonl` (finished),
+`synthetic-talk-failed.jsonl` (fails in translation) and
+`synthetic-talk-untranslated.jsonl` (finished, its first translation block
+left in English); regenerate with
 `uv run python -m tests.make_replay_fixture`.
 
 ## Screenshots

@@ -62,7 +62,7 @@ export function apply(event) {
     if (r.started === null) r.started = event.t;
     setState(r, "running");
     if (r.position === null) r.state.textContent = t("state_running");
-    if (event.detail && r.position === null) r.detail.textContent = event.detail;
+    // the core's own description of the step (English, for developers) goes to the technical details
   } else if (event.type === "step_progress") {
     r.position = event.position;
     if (r.li.dataset.state !== "running") setState(r, "running");
