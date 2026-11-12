@@ -671,6 +671,8 @@ class JobRunner:
         threading.Thread(target=self._ticker, args=(job, estimator, stop), name=f"tick-{job.id}",
                          daemon=True).start()
         last_step, progress = None, None
+        final: tuple[str, dict] = ("failed", {"reason": "Interrupted.", "hint": "log", "step": None,
+                                              "cost_usd": 0.0, "stt_cost_usd": 0.0})
         try:
             logger.info("job %s started: %s %s, profile %s, %s", job.id, request.mode, request.source,
                         request.profile, request.target_lang)
@@ -725,27 +727,30 @@ class JobRunner:
                 core.mark_done(dest, files, {"claude_usd": report.cost_usd, "stt_usd": report.stt_cost_usd})
             if not report.fallbacks:  # a fallback engine's times would mislead this machine's history
                 estimator.record()
-            stop.set()
-            job.end("finished", "finished", folder=str(dest),
-                    files=[{"name": w.path.name, "format": w.format,
-                            "purpose": FILE_PURPOSE.get(w.format, "")} for w in written],
-                    cost_usd=round(report.cost_usd, 4), stt_cost_usd=round(report.stt_cost_usd, 4),
-                    fallbacks=[short(f, 200) for f in report.fallbacks])
+            final = ("finished", {
+                "folder": str(dest),
+                "files": [{"name": w.path.name, "format": w.format, "purpose": FILE_PURPOSE.get(w.format, "")}
+                          for w in written],
+                "cost_usd": round(report.cost_usd, 4), "stt_cost_usd": round(report.stt_cost_usd, 4),
+                "fallbacks": [short(f, 200) for f in report.fallbacks]})
             logger.info("job %s finished: %.4f USD Claude, %.4f USD speech recognition", job.id,
                         report.cost_usd, report.stt_cost_usd)
         except BaseException as e:
-            stop.set()
             if isinstance(e, Exception):
                 logger.exception("job %s failed at %s", job.id, last_step)
             reason, hint = failure(e)
             if last_step == "pipeline" and progress is not None:
                 last_step = progress.open_step or progress.last_step
-            job.end("failed", "failed", reason=reason, hint=hint, step=last_step,
-                    cost_usd=round(job.cost_usd, 4), stt_cost_usd=round(job.stt_cost_usd, 4))
+            final = ("failed", {"reason": reason, "hint": hint, "step": last_step,
+                                "cost_usd": round(job.cost_usd, 4),
+                                "stt_cost_usd": round(job.stt_cost_usd, 4)})
             if not isinstance(e, Exception):
                 raise
         finally:
+            # The lock is free before the last event, so the page can start the next video as soon
+            # as it sees this one end.
             stop.set()
             self._time_sent.pop(job.id, None)
             self._active = None
             self._busy.release()
+            job.end(final[0], final[0], **final[1])
