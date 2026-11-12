@@ -115,7 +115,7 @@ for secrets with gitleaks). Use the uv-managed Python 3.13, not the system `pyth
 - `results/benchmark.csv` — one row per measured run (tracked); everything else in `results/`, `logs/`, `work/` is git-ignored
 - `scripts/check.ps1`, `scripts/check.sh` — the CI test job, run locally with the secrets cleared
 - `scripts/windows/` — the owner's launcher: `Talk Autopsy.bat` (double-click or drop a file; ASCII, CRLF) runs `talk-autopsy.ps1` (UTF-8 with BOM for Windows PowerShell 5.1; Russian prompts; doctor, `run --dry-run` estimate, `run --output mp4-burned,srt,ass`, log in `logs/launcher/`, opens the output folder; `-Source -Web3 -Yes -DryRun -NoPause` for tests); `create-shortcut.ps1` makes the desktop shortcut
-- `scripts/check_names.py` — de-identification check of every tracked file against the local, git-ignored `work/names.local.txt`; `scripts/rescore_benchmark_v2.py` — the 2026-11-11 re-scoring
+- `scripts/check_names.py` — de-identification check of every tracked file, case-insensitive and across line breaks: (a) the local, git-ignored `work/names.local.txt` (check.ps1), (b) the committed `scripts/identifying_patterns.txt` (accent/nationality labels, job titles, video-ID file names; also CI); `scripts/rescore_benchmark_v2.py` — the 2026-11-11 re-scoring
 
 ## Data rules
 

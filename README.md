@@ -22,8 +22,8 @@ default recogniser is now Qwen3-ASR).
 ## How it is tested
 
 - **Test set:** two scored fragments of English technical speech, about 10
-  minutes each: T1 (a native speaker, to be confirmed) and T2 (a strong
-  non-native accent). The hold-out T6 (another accent, a workshop) was
+  minutes each: T1 (a native speaker, to be confirmed) and T2 (a
+  non-native speaker). The hold-out T6 (another non-native speaker, a workshop) was
   run once on 2026-11-11 (pass, not demonstrated); T3–T5 are not selected. All three are
   about AI-assisted software development: one topic. See
   [data/test-set/README.md](data/test-set/README.md).

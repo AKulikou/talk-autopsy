@@ -29,6 +29,8 @@ try {
     Write-Host "Cleared from the environment: $($names -join ', ')"
     Invoke-Step uv @('run', 'ruff', 'check', '.')
     Invoke-Step uv @('run', 'pytest')
+    # De-identification: the local, git-ignored name list and the committed patterns (CI runs the patterns only).
+    Invoke-Step uv @('run', 'python', 'scripts/check_names.py')
 }
 finally {
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }

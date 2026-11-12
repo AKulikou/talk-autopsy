@@ -8,28 +8,28 @@ fragments, so results stay comparable from one experiment to the next.
 | ID | Type | Speech | Duration | Topic | Glossary terms |
 |---|---|---|---|---|---|
 | T1 | conference talk with live demo | native speaker (to be confirmed) | 9:27 | AI coding agents | 37 (reviewed against the reference) |
-| T2 | conference talk, slides | strong non-native accent | 10:00 (cut from 27:52) | AI coding agents, terminal tooling | 39 (reviewed against the reference) |
-| T3 | conference talk | other non-native accent | TBD | TBD | TBD |
+| T2 | conference talk, slides | non-native speaker | 10:00 (cut from 27:52) | AI coding agents, terminal tooling | 39 (reviewed against the reference) |
+| T3 | conference talk | another non-native speaker | TBD | TBD | TBD |
 | T4 | screen demo / tutorial | fast speech, code identifiers, shell commands | TBD | TBD | TBD |
 | T5 | university lecture | slow pace, long sentences | TBD | TBD | TBD |
-| T6 | workshop with live demo (sealed hold-out) | non-native English accent | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | AI-assisted software development | 51 (drafted by Gemini from the reference; tracked since the run) |
+| T6 | workshop with live demo (hold-out, run once) | non-native speaker | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | AI-assisted software development | 51 (drafted by Gemini from the reference; tracked since the run) |
 
 ## What each fragment tests
 
 - **T1:** the baseline case: clear speech, technical vocabulary and a live demo
   with names of tools and commands. If the pipeline fails here, it fails
   everywhere.
-- **T2:** a strong accent on technical terms, the case where plain Whisper plus
+- **T2:** a non-native speaker saying technical terms, the case where plain Whisper plus
   machine translation broke down. The stage 1 gate (WER ≤ 15%) is measured on
   this fragment.
-- **T3:** a different non-native accent, so that improvements on T2 are not
-  tuned to one accent only.
+- **T3:** a different non-native speaker, so that improvements on T2 are not
+  tuned to one speaker only.
 - **T4:** fast speech full of code identifiers and shell commands: tests whether
   correction keeps them verbatim and translation leaves them untranslated.
 - **T5:** slow speech with long sentences: tests segment boundaries, block
   overlap in translation and subtitle reading speed.
-- **T6:** hold-out with another accent. The owner chose the source from
-  candidates by type (accented speaker, technical workshop); its topic,
+- **T6:** hold-out with another non-native speaker. The owner chose the source from
+  candidates by type (non-native speaker, technical workshop); its topic,
   AI-assisted software development, is close to T1 and T2 and is known. The
   10-minute window was cut blind (below). Nobody has watched or listened to
   it. After the `pipeline-v2` freeze three engines transcribed it to build the
@@ -65,7 +65,7 @@ leaves out.
 | Plurals of glossary terms | the glossary keeps the base form. *In code:* term matching also accepts the regular English plural (`-s`, `-es`, `y` -> `ies`) of the last word of a term (`diffs`, `pull requests`, `libraries`) |
 | Numbers | digits |
 | Thousands separators | not written: `3000` (added 2026-11-10 after the judge calibration). *In code:* removed by `judge.normalize_for_adjudication` |
-| Immediate repetitions and restarts | written once: "for for" -> "for"; "I wanted to I wanted to" -> "I wanted to" (added 2026-11-10 after the judge calibration). *In code:* `judge.normalize_for_adjudication` collapses an immediately repeated sequence of 1-4 words on both sides of a judge comparison and in a reference built from a judged file; grammatical doubles ("that that", "very, very") are collapsed too, which, applied to both sides, cannot create a disagreement; a repetition split by a span boundary is not seen. The metrics normalizer is unchanged. Rows added after the judge calibration are not passed to the judge's prompt (`audio-judge-v1` stays as calibrated); the code applies them |
+| Immediate repetitions and restarts | written once: "the the" -> "the"; "we can we can" -> "we can" (added 2026-11-10 after the judge calibration). *In code:* `judge.normalize_for_adjudication` collapses an immediately repeated sequence of 1-4 words on both sides of a judge comparison and in a reference built from a judged file; grammatical doubles ("that that", "very, very") are collapsed too, which, applied to both sides, cannot create a disagreement; a repetition split by a span boundary is not seen. The metrics normalizer is unchanged. Rows added after the judge calibration are not passed to the judge's prompt (`audio-judge-v1` stays as calibrated); the code applies them |
 | Key combinations | `Shift+Enter`, `Ctrl+C`, `Cmd+F` (added 2026-11-10 after the judge calibration). *In code:* the same function canonicalises `shift enter`, `Shift-Enter`, `shift+enter` (and Ctrl/Alt/Cmd with Tab/Esc/Enter or a letter joined by + or -) |
 | Hallucinated lines, segments with no word (only `.`) | removed. *In code:* the speech recognition engines drop wordless segments before writing a transcript; ids are assigned after dropping |
 

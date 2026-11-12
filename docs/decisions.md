@@ -68,7 +68,7 @@ operational videos identifiable from tracked files: names, a job title,
 accent labels next to product names, a course code.
 
 Decision: tracked files carry fragment IDs only (T1, T2, T6, real-01,
-stress-01) and generic descriptions ("strong non-native accent"); names and
+stress-01) and generic descriptions ("non-native speaker"); names and
 identifying descriptions were removed on 2026-11-11, and
 `scripts/check_names.py` checks every tracked file against a local,
 git-ignored list drawn from the owner's notes (`work/names.local.txt`). **Before
@@ -355,10 +355,11 @@ the majority pre-mark is wrong and only the owner's listening catches it.
 
 ## 2026-11-09 — T1 and T2 from the files at hand; T3–T6 selected deliberately
 
-T1 (a conference talk with a live demo, 9:27) and T2 (a talk with a strong regional accent, first 10:00 of 27:52) come from videos already on this machine, because
+T1 (a conference talk with a live demo, 9:27) and T2 (a talk by a non-native
+speaker, first 10:00 of 27:52) come from videos already on this machine, because
 they cover the two first cases: clear speech with technical terms, and the
 accented speech where the old Whisper + Google Translate chain failed. T3–T6 are
-chosen on purpose to cover what is still missing: another accent, a fast screen
+chosen on purpose to cover what is still missing: another non-native speaker, a fast screen
 demo with code, a slow lecture, and a hold-out. Picking the rest from whatever is
 at hand would test the files, not the pipeline.
 

@@ -186,7 +186,7 @@ under v2: macro 87.84% (J) / 89.60% (M), without the top term 88.06% / 89.39%, p
 bounds 86.11–94.44%. **Bias:** on both fragments this engine was the backbone of the consensus
 that built the reference (one of three engines), so its WER and term accuracy are biased in its
 favour. Its term accuracy is much higher on T6 than on T2 (87.5% against 61.7%): T6's glossary was
-drafted by Gemini from reference J, and T2 has the strongest accent and more product names.
+drafted by Gemini from reference J, and T2 has more product names, which raw Whisper mishears most.
 
 **Whisper + Google Translate (2026-11-11): run.** `talk_autopsy/baselines/google_translate.py` (evaluation tooling, not frozen): the raw faster-whisper
 transcript above, cut into sentence units by the pipeline's own `units.make_units`, each unit sent to the
@@ -431,7 +431,7 @@ agreement): T2 88.3%, T1 90.7%, T6 92.8% of the backbone words.
 The two references were not decided the same way, and that changes what their
 numbers can carry.
 
-- **T2** (strong accent, `T2.ref.txt`, 2052 words): 114 spans. 19 were decided
+- **T2** (non-native speaker, `T2.ref.txt`, 2052 words): 114 spans. 19 were decided
   by the owner listening to the clip (2 of them marked "not sure" and resolved
   by majority or grammar); 20 by the product-name rule (`Quadcode` /
   `QuadCode` -> `Claude Code`, the product on the slides); about 30 by the
@@ -566,19 +566,19 @@ owner then moved the project to the paid tier (decisions, 2026-11-10).
   7,260 output, 0 thinking tokens), by the run's own counter at list price;
   8.9 s mean latency, 17 min for the run, no retries.
 - **Disagreements on the owner's 19** (6): in 4 the judge kept a repetition
-  or false start the reference leaves out (0005 "For for everyone", 0022 "like
-  what do I," where the owner chose no words, 0028 "you know, it", 0104 "wanted
-  to I wanted to include"); 0020 (owner not sure) adds "in the" and writes
-  "freeform"; 0015 the judge chose "There's" where the owner heard "there are".
+  or false start the reference leaves out (0005, 0022 where the owner chose no
+  words, 0028, 0104); 0020 (owner not sure) adds two words and writes a
+  compound as one word; 0015 the judge chose a contraction where the owner
+  heard the two full words.
 - **Disagreement pattern (all 24).** 14 are words the judge adds to the
   decided text: repetitions, false starts and short words around the span
-  ("For for", "in the in the", "Yeah, and", "I've I shipped"); the judge's
+  (a doubled word, a doubled two-word phrase, a short opener, a restart); the judge's
   writing rules ask for every spoken word including repetitions, while the
   T2 reference mostly follows the engines, which drop them. 5 are spelling
   conventions the reference applies and the judge does not (`Shift+Enter`,
   `at-mention`, `Command+F`, `stand-up`, `3,000`). 5 are one-word
-  substitutions (`there are` / `There's`, `as` / `is`, `you're` / `you were`,
-  `an` / `a`, `the` / `this`). Which side is right in the first group is not
+  substitutions (a contraction, a verb, a tense, an article, a determiner).
+  Which side is right in the first group is not
   known: the reference was never checked for dropped repetitions.
 - **Decision (rule fixed before the run).** Agreement 79.0% is below 90%
   (WER 1.90% is within 2%), so **the judge is not accepted for T6** and T6 is
@@ -596,7 +596,7 @@ threshold was not changed and no new judge requests were made.**
   owner's 19 by ear 13 (68.4%), WER between the two T2 references 1.90%:
   failed the rule (agreement >= 90% and WER <= 2%).
 - **Why a rescoring.** 14 of the 24 disagreements were repetitions and false
-  starts ("For for", "I wanted to I wanted to") that the judge writes, as its
+  starts (a doubled word, a repeated three-word phrase) that the judge writes, as its
   prompt asks, and the T2 reference mostly omits; 5 more were formatting
   (`Shift+Enter`, `3,000`). The reference convention on repetitions was never
   written down, and the comparison did not normalise formatting.
@@ -640,28 +640,28 @@ threshold was not changed and no new judge requests were made.**
 belongs to a T2 glossary term; `formatting`: spelling only; `word`: other
 words): term 2, word 18, formatting 0.
 
-| Span | Class | Decided | Judge's decision | Pattern |
-|---|---|---|---|---|
-| 0032 | term | at-mention | @-mention | spelling of a glossary term |
-| 0082 | term | stand-up | standup | spelling of a glossary term |
-| 0020 | word | these kind of free form coding assistants | ... freeform coding assistants in the | repetition across the span edge ("in the in the past") |
-| 0022 | word | (no words) | like what do I, | repetition across the span edge ("what do I what do I") |
-| 0028 | word | new lines. This is, you know, | ... you know, it | repetition across the span edge ("it it") |
-| 0033 | word | (no words) | in | repetition across the span edge ("in in") |
-| 0073 | word | (no words) | in all these | restart across the span edge ("in all these in all this") |
-| 0093 | word | (no words) | it | repetition across the span edge ("it it's") |
-| 0104 | word | wanted to include | wanted to I wanted to include | restart across the span edge ("I" is a context word) |
-| 0046 | word | So just asking | So just asking a question, asking | restart with other words |
-| 0084 | word | readout of everything I shipped. And | ... everything I've I shipped, and | restart with another word |
-| 0007 | word | Claude Code | Claude Code basically | word the reference omits |
-| 0043 | word | Claude Code | Claude Code and | word the reference omits |
-| 0062 | word | And Claude Code, | And in Claude Code, | word the reference omits |
-| 0081 | word | And | Yeah, and | word the reference omits |
-| 0015 | word | there are | There's | substitution |
-| 0038 | word | as | is | substitution |
-| 0048 | word | you're | you were | substitution |
-| 0092 | word | ... using an LLM | ... using a LLM | substitution |
-| 0106 | word | the | this | substitution |
+| Span | Class | How the judge's text differs (no transcript text quoted) | Pattern |
+|---|---|---|---|
+| 0032 | term | another spelling of `at-mention` | spelling of a glossary term |
+| 0082 | term | `stand-up` written as one word | spelling of a glossary term |
+| 0020 | word | two words repeated across the span edge; a compound written as one word | repetition across the span edge |
+| 0022 | word | four words where the reference has none (a three-word phrase repeated) | repetition across the span edge |
+| 0028 | word | one word, doubled across the edge | repetition across the span edge |
+| 0033 | word | one word where the reference has none, doubled across the edge | repetition across the span edge |
+| 0073 | word | three words where the reference has none (a restart) | restart across the span edge |
+| 0093 | word | one word where the reference has none, doubled across the edge | repetition across the span edge |
+| 0104 | word | a three-word restart (one of its words is a context word) | restart across the span edge |
+| 0046 | word | four more words of a restart with other words | restart with other words |
+| 0084 | word | a restart with a contraction | restart with another word |
+| 0007 | word | one word after the product name | word the reference omits |
+| 0043 | word | one word after the product name | word the reference omits |
+| 0062 | word | one word before the product name | word the reference omits |
+| 0081 | word | one opening word | word the reference omits |
+| 0015 | word | a contraction for two words | substitution |
+| 0038 | word | another verb | substitution |
+| 0048 | word | another tense | substitution |
+| 0092 | word | another article before an acronym | substitution |
+| 0106 | word | another determiner | substitution |
 
 Pattern: 7 are repetitions or restarts that the span-level rule cannot see,
 because one copy sits in the context words outside the span; 2 more are
@@ -683,7 +683,7 @@ recorded here: counts, durations and costs only.
 
 **What T6 is, truthfully.** A 10-minute fragment cut blind (by speech density,
 `data/test-set/README.md`) from a 41-minute workshop with a live demo. The
-owner chose the source from candidates by type (accented speaker, technical
+owner chose the source from candidates by type (non-native speaker, technical
 workshop); its topic, AI-assisted software development, is close to T1 and
 T2 and is known. The owner has not watched it. Three engines transcribed it
 to build the reference; the blind Gemini audio judge decided the disputed
@@ -797,7 +797,7 @@ owner and scored on 2026-11-11: [T6 translation check result](#t6-translation-ch
 The first protocol (2026-11-09) and its changes, as written then:
 
 T6 is the sealed hold-out of stage 2 (a workshop with a live demo, a
-non-native English accent). Its 10-minute window was cut blind on
+non-native speaker). Its 10-minute window was cut blind on
 2026-11-09 by speech density only (`data/test-set/README.md`): 25:46–35:46 of
 41:24, 93.8% non-silent. Nothing else about it is known to the project.
 
@@ -1131,10 +1131,10 @@ fallback on), `.srt` + `.ass` in Russian and English. No `--context` and no
 user glossary in either run. Laptop as in the stage 1 runs; network times
 include upload.
 
-| | T2.source (talk, strong accent) | real-01 (interview, native speakers) |
+| | T2.source (talk, non-native speaker) | real-01 (interview, native speakers) |
 |---|---|---|
 | duration | 27:52 (1673 s) | 38:30 (2310 s) |
-| command | `run data/test-set/T2.source.mp4 --lang ru` | `run data/test-set/source-video-1.mp4 --name real-01 --lang ru` |
+| command | `run data/test-set/T2.source.mp4 --lang ru` | `run <local file> --name real-01 --lang ru` |
 | stt (extract audio, FLAC, AssemblyAI) | 34.5 s | 59.1 s |
 | glossary (Haiku) | 17.4 s, 35 terms, 4 with corrected mis-recognitions | 19.3 s, 29 terms, 2 with corrected mis-recognitions |
 | stt2 (AssemblyAI + key terms) | 35.6 s | 44.7 s |
@@ -1178,7 +1178,7 @@ include upload.
   the variable `name`. Fixed and tested; the folder was renamed to
   `work/real-01/` and the subtitles rewritten with `--steps srt` (no API call).
 - **Reading speed.** Nothing is cut (owner decision), so the shares are high
-  on the fast, accented talk and lower on the interview. Many fast cues are
+  on the fast talk by a non-native speaker and lower on the interview. Many fast cues are
   short sentences (AssemblyAI segments by sentence) that cannot linger
   because the next cue starts at once; cues never cross a segment boundary.
 - **Since 2026-11-10** the Russian files of both videos are the sentence-unit
@@ -1219,11 +1219,10 @@ include upload.
   translation (`finding`, `block`, `coverage`) can make a block fail
   validation; translation-v3 does not enforce them.
 
-### stress-01: the frozen pipeline on an accented interview (2026-11-10, not scored)
+### stress-01: the frozen pipeline on an interview with non-native speakers (2026-11-10, not scored)
 
-An interview, 29:50 (`data/test-set/source-video-2.mp4`): two speakers
-with two different non-native accents, one of them fast.
-`talk-autopsy run data/test-set/source-video-2.mp4 --name stress-01 --lang ru`
+An interview, 29:50 (a local file): two non-native speakers, one of them fast.
+`talk-autopsy run <local file> --name stress-01 --lang ru`
 from the tagged code (`pipeline-v2`), no `--context`, no user glossary.
 Outputs `work/stress-01/stress-01.ru.srt` / `.ass`, `stress-01.en.srt` / `.ass`.
 
@@ -1231,7 +1230,7 @@ Outputs `work/stress-01/stress-01.ru.srt` / `.ass`, `stress-01.en.srt` / `.ass`.
 |---|---|
 | duration | 29:50 (1790 s) |
 | stt (extract audio, FLAC, AssemblyAI) | 42.8 s, 335 segments |
-| glossary (Haiku) | 22.2 s, **32 terms**, 5 with corrected mis-recognitions (`Claude Code` <- "Cloth Code", `OpenClaw` <- "OpenCLaw", `MenuGen` <- "menu gen", `vibe coding` <- "vibecoding" and two more forms, `agentic engineering` <- "agentic engineer") |
+| glossary (Haiku) | 22.2 s, **32 terms**, 5 with corrected mis-recognitions (`Claude Code` and four product-specific terms) |
 | stt2 (AssemblyAI + 32 key terms) | 36.3 s, 346 segments |
 | align | pass-through |
 | fix (correction-v2, 6 blocks) | 71.8 s, 1 segment changed, 0 failed blocks |
@@ -1256,9 +1255,9 @@ Outputs `work/stress-01/stress-01.ru.srt` / `.ass`, `stress-01.en.srt` / `.ass`.
   by word share onto a single short English word. Word timing gives such a
   cue no more time than that word (Backlog, cue timing inside a unit). The
   rest of the top are one-sentence units that AssemblyAI times at 6–10 words
-  per second ("Thank you.", "And so on.").
+  per second (two- or three-word sentences).
 
-Speech recognition on T1 (native speaker, 9:27) and T2 (strong accent, 10:00),
+Speech recognition on T1 (native speaker, 9:27) and T2 (non-native speaker, 10:00),
 scored 2026-11-09 against the resolved references with the reviewed glossaries
 (`results/benchmark.csv`, rows without a `superseded` note). Ten of ten
 test-set runs used.
@@ -1388,7 +1387,7 @@ Owner direction recorded 2026-11-09 in decisions: Gemini as the main engine, Whi
   | compute | вычислительные мощности 12, compute (Latin) 3 | вычислительные мощности (compute) 1 (the first), вычислительные мощности 14 |
   | inference | inference (Latin) 4 | запуск моделей (inference) 1 (the first), запуск моделей 3 |
   | alignment | alignment (Latin) 1 | согласование ИИ с интересами людей (alignment) 1 |
-  | prompt (real-01) | промпт / промптнуть 3 | запрос 2, вопрос 1 ("let me try to prompt you" -> «подтолкнуть вас к этому вопросу») |
+  | prompt (real-01) | промпт / промптнуть 3 | запрос 2, вопрос 1 (prompt as a verb, rendered by a free paraphrase) |
   | prompt (T2) | промпт 9, other 3 | промпт 8, вопрос 1, other 3 |
   | emergent | эмерджентное / эмерджентными 2, other 1 | свойства, которые появляются при большом масштабе 2, other 1 |
   | Dictation (T2) | «Диктовка» 1, диктовка 1 | Dictation (диктовка) 1 (as a UI name), диктовка 1 (the key) |
@@ -1460,7 +1459,7 @@ by hand.
     REPL expanded into a full phrase, 16), where it replaced jargon the viewer
     reads fluently (thinking tokens and prompt as a verb, 5; computer science
     -> «информатика» read as a lower register, 4), and on idioms
-    ("two-shotted", 15; "I bet", 14).
+    (15, 14).
   - Caveat: the rater sees the English sentence above both translations,
     which may favour keeping English words; while watching, the viewer only
     hears the English.
@@ -1530,11 +1529,10 @@ linger; cues never cross a segment boundary. Writing both files takes about
 - **The C1 fragments, re-translated on the C1 input** (Gemini + alignment,
   correction-v1 English, reference glossary; `work/T2/T2.ru.v2u.json`, 0
   failed blocks, 0.062 USD): items 3 and 5 are now whole sentences. Segments
-  12 + 13 ("...but if you don't have it yet, / yeah, this is your chance to
-  install it...") form one unit, and the Russian no longer starts with "то
-  это ваш шанс"; segments 21 + 22 (the IDE list and the people who use Vim)
-  form one unit. In that unit the idiom "pry Vim from their cold, dead hands"
-  came out as a calque, which the per-segment run had rendered by meaning
+  12 + 13 (a condition and its consequence, cut at the segment boundary) form
+  one unit, and the Russian no longer starts in the middle of the sentence;
+  segments 21 + 22 (the IDE list and the people who use Vim) form one unit. In
+  that unit an idiom about editor loyalty came out as a calque, which the per-segment run had rendered by meaning
   (Backlog).
 - **T2 fragment, realistic input** (AssemblyAI + auto key terms,
   correction-v2, auto-glossary; `translate` on units ->
@@ -1643,9 +1641,9 @@ linger; cues never cross a segment boundary. Writing both files takes about
 - **Facts before the rating:** on run 1, v2's Russian is 17% longer than v1's
   (9,637 against 8,229 characters; the English corrected text has 10,707);
   11 of 109 segments are identical. The three segments rated 2 now keep the
-  clauses v1 dropped (segment 18 keeps "at the same time" as "за один раз").
-  The job title in segment 2 is still the calque "[removed]" in
-  both versions, despite the new rule (Backlog).
+  clauses v1 dropped (segment 18 keeps the phrase about doing it all at once).
+  A job title in segment 2 is still a word-for-word calque in both versions,
+  despite the new rule (Backlog).
 - **Blind file:** `work/T2/C1-blind.md`, the same 20 segments as
   `C1-rating.md`; for each the English and two Russian translations X and Y,
   v1 and v2 assigned at random per segment (seed and assignment only in
@@ -1829,8 +1827,8 @@ linger; cues never cross a segment boundary. Writing both files takes about
   the gate asks for.
 - **Numbers:** mean **3.85**; scores 5 x 8, 4 x 4, 3 x 5, 2 x 3.
 - **Owner's comments (in the file):** all three segments rated 2 (4, 7, 10)
-  lose or distort meaning — segment 4 drops "at the same time" (whole features
-  in one go). The cause in all three is the compression rule of translation-v1.
+  lose or distort meaning — segment 4 drops the phrase about building whole
+  features in one go. The cause in all three is the compression rule of translation-v1.
   English technical terms left untranslated (onboarding, indexing, codebase)
   were rated 5.
 - **Conclusion:** under the target, and the low scores have one cause that the
@@ -1906,9 +1904,8 @@ linger; cues never cross a segment boundary. Writing both files takes about
   `T2.source.en.srt` (531 cues). Without the cache, Gemini for the whole talk
   would have added about 27 min (A5 (setup) smoke test).
 - **A defect found in the full run:** in the faster-whisper chunk an audience
-  question came out garbled ("How much have you used files?"); correction
-  rebuilt it by pulling words from the next segment ("... used Claude Code for
-  machine learning modeling and a..."), with a reason, so the validator let it
+  question came out garbled; correction rebuilt it by pulling words from the
+  next segment, with a reason, so the validator let it
   pass. The segment's 1.3 s then carries a whole sentence: the two fastest
   cues of both SRTs (77 and 85 cps). This breaks the prompt's rule never to
   move words between segments; Backlog (validator: a segment that grows by
@@ -2124,7 +2121,7 @@ of them above 17 characters per second (verbatim English of a fast speaker),
 - **Conclusion:** the hypothesis holds on T1 (+41.5 points) and fails on T2
   (-10.3 points), the accented fragment the stage is about. On T1 the speaker
   says "Claude" clearly, and the prompt only settles the spelling (`CloudCode`
-  -> `Claude Code` 42 times). On T2 the accent makes the audio sound like
+  -> `Claude Code` 42 times). On T2 the product name sounds like
   "Quad Code", and the prompt does not move Whisper off it (0/28 either way);
   it also made Whisper decode whole 30-second windows as single segments,
   write "code base" for `codebase` (0/7) and fall back to temperature
@@ -2379,7 +2376,7 @@ Ideas that come up during a stage and wait for a later one.
 - Speaker labels (stress-01): the interview's fast cues cannot be attributed
   to a speaker without diarization; AssemblyAI's speaker labels are off.
   v1.1 idea, not implemented.
-- Idiom calque in a unit (D1 (setup)): "pry Vim from their cold, dead hands"
+- Idiom calque in a unit (D1 (setup)): an idiom about editor loyalty
   came out word for word in the sentence-unit translation of the C1 input,
   by meaning in the per-segment one. One sample; watch in the T6 run.
 - Translation warnings for kept terms (operational runs): translation-v2
@@ -2413,7 +2410,7 @@ Ideas that come up during a stage and wait for a later one.
   v3's term classes, but glosses of at most about 3 words; no expansion of
   acronyms (REPL, CI, API); established jargon the target viewer already
   uses (prompt, tokens, thinking tokens, alignment, computer science) is
-  `keep`; idioms ("two-shotted", "I bet") by meaning. Needs a new blind
+  `keep`; idioms by meaning. Needs a new blind
   rating against v2 before it can replace it.
 - UI element names in translation (owner, 2026-11-10): names of UI elements
   are translated by meaning, not by their official localized name (Windows

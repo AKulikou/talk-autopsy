@@ -15,3 +15,5 @@ for name in $secrets; do
 done
 uv run ruff check .
 uv run pytest
+# De-identification: the local name list if present (git-ignored), otherwise the committed patterns only.
+if [ -f work/names.local.txt ]; then uv run python scripts/check_names.py; else uv run python scripts/check_names.py --patterns-only; fi
