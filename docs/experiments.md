@@ -1434,6 +1434,35 @@ Through the web server's HTTP API (`talk-autopsy web`), the frozen
   "correct" / "translate"); cache and output tokens differ. Smoke 3 below
   shows the same (1,866 and 1,866).
 
+### Bug-fix check runs (2026-11-13, v1.1 session 4, `pipeline-v3.3`; not scored)
+
+- **The owner's first real video again, through the web API.** A 13:40
+  programming tutorial whose first translation block (0:00–4:59) had stayed in
+  English on 2026-11-12 (a bare version number, `0.8.26.`, rejected twice by
+  the "left in English" check; `docs/decisions.md`, `pipeline-v3.3`). Its
+  cached translation had been carried over to the new cache key as
+  incomplete. Estimate shown by the page: 0.30 USD (it does not know what is
+  cached); own estimate for one block: 0.029 USD (worst case 0.051). Spent:
+  **0.0295 USD Claude, 0 USD AssemblyAI**. Download, stt, glossary, stt2,
+  align and fix skipped (cached); translation sent block 1 only (blocks 2 and 3
+  reused, `reused_blocks`), 0 rejected answers; srt and the burned-in MP4
+  remade (187.6 s). Checks: no unit left in English with something to
+  translate (the one unit without Cyrillic is `0.8.26.`); Russian subtitles
+  from 0:00; no warning; the cost on the page, in the log, in the finished
+  event and in `ru.json` agree (0.0295 / 0.029486). The old service files of
+  the result folder moved into the hidden `.talk-autopsy/`. File names keep
+  the old mid-word cut (the earlier download is reused).
+- **A second, fresh tutorial.** A 5:30 public video on what changes from one
+  Python version to the next (not in the test set, not T6), profile `tv`,
+  Russian. Estimate: 0.08 USD Claude + 0.04 USD AssemblyAI. Spent:
+  **0.0704 USD Claude, 0.0430 USD AssemblyAI**; 234.8 s from start to
+  `finished`. 0 rejected answers in correction and translation; 12 of its 56
+  units hold spoken version numbers or identifiers ("Python 3.12", "3.13",
+  `docker run`), all translated, none flagged; no unit consists only of a
+  number or an identifier, so the exact case of the bug did not come up on
+  this video. Subtitles from 0:00; folder holds only the video, the burned-in
+  video and two `.srt` files, plus the hidden service folder.
+
 ### Web UI smoke run (2026-11-12, v1.1 session 2; not scored)
 
 - **Smoke 3, link mode, fresh video, through the page.** A 5:43 public
@@ -2495,6 +2524,18 @@ paths, so they wait until those modules are reopened for the web interface.
   aloud in plain words ("pragma solidity"). Possible fix: let the glossary's
   `keep` terms and an all-capitals rule count as verbatim, measured on the
   cached answers first.
+- Found in the session 4 bug hunt (improvements, not bugs):
+  - The page's estimate is that of a full run even when most steps are
+    cached (0.30 USD shown, 0.0295 spent on the owner's re-run); an estimate
+    that skips up-to-date steps would say what a re-run really costs.
+  - The estimate's "not counting: Download from YouTube" puts a step name
+    with its capital letter in mid-sentence (all three languages).
+  - A failed correction block makes the next run redo the whole correction
+    (and so the translation); per-block reuse as for the translation would
+    need a change to `correct.py`.
+  - A result folder made before 1.1 keeps its mid-word file names on a re-run
+    (the old download is reused); renaming the files there would need care
+    with players that remember positions by file name.
 
 ### Earlier entries
 
