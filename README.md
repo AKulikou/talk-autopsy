@@ -436,9 +436,13 @@ score on T6 is 4.42, and
 independent LLM review #1 is done ([findings and responses](docs/review-2026-11-11.md)).
 `pipeline-v3` stays frozen.
 
+Independent LLM review #2 was done on 2026-11-12
+([findings and responses](docs/review-2026-11-12.md)); its fixes are in.
+
 **Next** (the specification's [v1.0 checklist](docs/experiments.md#v10-checklist)):
-independent LLM review #2, tag `v1.0` (the baselines on T2 and T6 are done;
-VideoLingo is out of v1.0 scope). Then T3 on a new domain.
+the git history rewritten so that old commits carry no identifying details,
+the test-set sources published, tag `v1.0`, the repository made public. Then
+T3 on a new domain.
 
 | Stage | Content | Gate |
 |---|---|---|
@@ -456,6 +460,25 @@ language measured; the code takes any language as a parameter.
 - **Small, single-topic test set:** two scored fragments (T1, T2), one hold-out
   (T6) run once; all about AI-assisted software development. A result on
   them says nothing yet about other domains.
+- **T2 is the development fragment:** the prompts were iterated on it, so its
+  numbers are optimistic; T6 is the only fragment the pipeline never saw.
+- **On terms, a single Gemini call is within noise:** 93.5% on T2 against the
+  pipeline's 94.4–96.3%, a gap the size of the pipeline's own run-to-run
+  spread. The pipeline's measured advantages are speed, word timestamps and
+  no daily quota, not term accuracy.
+- **Fallback paths not run end to end:** the Gemini + alignment and
+  faster-whisper fallbacks of `pipeline-v3` were never run and scored on a
+  test fragment, and the shipped correction-v2 never saw fallback input.
+- **Term accuracy is English-side only:** the term accuracy of the Russian
+  subtitles is not measured; that the translation keeps the terms the English
+  side has is an inference.
+- **No third-party reproduction:** the references and the media are not
+  published (the sources will be named), so nobody outside the project has
+  re-scored a number.
+- **The judge rule was not followed:** the calibration rule said T6 is not
+  judged if the Gemini judge fails on T2; it failed twice (79.0%, 82.5% against
+  90%) and T6 was judged anyway, with two references and bounds (owner's
+  decision 2026-11-10).
 - **References are not independent.** AssemblyAI and Gemini helped build them
   (their WER is biased low); T1's was decided by a Claude model, which then
   scores the Claude stages (T1 is secondary evidence); T6's by a Gemini judge
