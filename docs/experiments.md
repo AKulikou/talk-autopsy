@@ -150,16 +150,22 @@ carries the weight (T1's reference was decided by a Claude model).
 
 ## v1.0 checklist
 
-The specification's list for v1.0 (stage 3), with the state of each item.
+The specification's list for v1.0 (stage 3), with the state of each item and
+its evidence (checked 2026-11-12, at the tag).
 
-| Item | State |
-|---|---|
-| the owner watched two full videos and uses the tool | done (owner) |
-| `benchmark.csv` has numbers for every closed hypothesis; the README compares the system, raw Whisper, Whisper + Google Translate and a plain Gemini translation on one set (amended 2026-11-11, owner: VideoLingo out of v1.0 scope) | [Baselines on one set](#baselines-on-one-set-t2-and-t6): all four measured on T2 and T6; Google Translate run 2026-11-11 and rated by the owner 2026-11-12 (4.42, equal to the pipeline). VideoLingo: not run, out of v1.0 scope (its installer was blocked by the permission filter and not bypassed; its default recogniser is now Qwen3-ASR) |
-| CI green; README in the series structure; honest Known limitations | in progress |
-| re-run from cache within a minute | **met**: 6.7–8.9 s wall time on T2 (three re-runs, below) |
-| independent LLM review #2 | done 2026-11-12 ([findings and responses](review-2026-11-12.md)); fixed except the history rewrite (next) |
-| tag `v1.0` | not done |
+| Item | State | Evidence |
+|---|---|---|
+| the owner watched two full videos and uses the tool | **done** (owner) | the owner's statement; full-video runs T2.source and real-01 ([Operational runs](#operational-runs)); Windows launcher `scripts/windows/` (4f893df) |
+| `benchmark.csv` has numbers for every closed hypothesis | **done** | checked against every [Summary](#summary) entry with a hypothesis: A2, A3, B1, B4, B5, B1 (v2), T6, the T6 translation check and C1 (baselines) had rows; five had none and got one from the numbers in this log: C1 (row 45), B2 (46), C1 (blind) (47), B2 (v2) (48), C1b (49; rows counted as file lines, header = 1, as in the notes). No gap left. B5's coverage numbers (74.4% / 79.5%) are in this log only; its rows are the speech-recognition result with the auto terms (30–31) |
+| the README compares the system, raw Whisper, Whisper + Google Translate and a plain Gemini translation on one set (amended 2026-11-11, owner: VideoLingo out of v1.0 scope) | **done** | [Baselines on one set](#baselines-on-one-set-t2-and-t6): all four measured on T2 and T6 (rows 8 and 39–43); Google Translate rated by the owner 2026-11-12 (4.42, equal to the pipeline; f8299f5). VideoLingo: not run, out of v1.0 scope (its installer was blocked by the permission filter and not bypassed; its default recogniser is now Qwen3-ASR) |
+| CI green | **done** | GitHub Actions on b292428 (run 43241656652: test, test-windows, secret-scan); the tagged commit's run is recorded with the release |
+| README in the series structure; honest Known limitations | **done** | README sections Results, Known limitations, Not done (59c935d, 29ee528, b292428) |
+| re-run from cache within a minute | **met** | 6.7–8.9 s wall time on T2 (three re-runs, below); repeated after the version change, outputs byte-identical ([Freeze pipeline-v3](#freeze-pipeline-v3), exception) |
+| independent LLM review #2 | **done** 2026-11-12 | [findings and responses](review-2026-11-12.md); fixes 60040f9..b292428; the history rewrite moved to v1.1 (owner, 2026-11-12) |
+| test-set sources published | **done** | [data/test-set/README.md › Sources](../data/test-set/README.md#sources) (386cd6e): originals linked for T2, real-01, stress-01; T1 and T6 named without a link |
+| version 1.0.0 | **done** | 8c335b2 (recorded freeze exception) |
+| tag `v1.0` | **done** | annotated tag `v1.0` on the commit that adds this table and `CHANGELOG.md` |
+| repository public; git history rewritten without identifying details | **moved to v1.1** (owner, 2026-11-12) | the repository stays private after `v1.0`; the rewrite happens once, right before publication with the web interface ([Backlog](#backlog), v1.1) |
 
 **Re-run from cache (2026-11-11).** The work folder of the `pipeline-v3` T2 repeat 2 (a fresh run
 from a clean worktree of the tag, Freeze pipeline-v3, Repeats) was copied to `work/T2-v3-cache/` and
@@ -2368,6 +2374,26 @@ Money: 0.07 USD at list price, all from free credit.
 ## Backlog
 
 Ideas that come up during a stage and wait for a later one.
+
+### v1.1 (web interface; the repository becomes public with it)
+
+Decided by the owner on 2026-11-12, with the `v1.0` tag. These touch frozen
+paths, so they wait until those modules are reopened for the web interface.
+
+- Remove the `ingest.download` stub and `metrics.timing_drift` (dead code in
+  frozen modules).
+- Drop the `edge-tts` dependency; re-add it when voice-over is built.
+- Split `cli.py` (about 1,300 lines) by command group (review #1, finding 15).
+- **Git-history rewrite with name replacement**, once, right before the
+  repository is made public: verify with `scripts/check_names.py` and gitleaks
+  over every commit, not only the tip; keep the tags (`pipeline-v2`,
+  `pipeline-v3`, `v1.0`) pointing at the rewritten commits; update the commit
+  hashes cited in the docs from the filter-repo commit map.
+- Diarization for interviews (speaker labels; stress-01, review #1 finding 14).
+- translation-v4 idea (below: short glosses, no acronym expansion, common
+  jargon kept); needs a blind rating against v2.1 before it can replace it.
+
+### Earlier entries
 
 - Burned-in MP4 on a re-run (v1.0 cache check, 2026-11-11): `outputs.write_outputs` re-encodes
   `<stem>.<lang>.mp4` every time (0.27x real time), even when the `.ass` and the video did not

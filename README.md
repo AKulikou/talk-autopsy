@@ -235,6 +235,7 @@ docs/review-*.md           independent LLM reviews and the responses
 docs/prior-art.md          survey of similar open projects
 scripts/                   check scripts (incl. the de-identification check), evaluation scripts, Windows launcher
 results/benchmark.csv      one row per measured run
+CHANGELOG.md               what each release contains
 ```
 
 `results/` (except `benchmark.csv`), `logs/` and `work/` are generated and
@@ -445,10 +446,13 @@ independent LLM review #1 is done ([findings and responses](docs/review-2026-11-
 Independent LLM review #2 was done on 2026-11-12
 ([findings and responses](docs/review-2026-11-12.md)); its fixes are in.
 
-**Next** (the specification's [v1.0 checklist](docs/experiments.md#v10-checklist)):
-the git history rewritten so that old commits carry no identifying details,
-the test-set sources published, tag `v1.0`, the repository made public. Then
-T3 on a new domain.
+**Version 1.0.0** was tagged `v1.0` on 2026-11-12 ([CHANGELOG](CHANGELOG.md);
+[v1.0 checklist](docs/experiments.md#v10-checklist) with evidence). The
+repository stays private until v1.1.
+
+**Next** (v1.1): the web interface; the git history rewritten so that old
+commits carry no identifying details, then the repository made public; T3 on a
+new domain ([Backlog › v1.1](docs/experiments.md#v11-web-interface-the-repository-becomes-public-with-it)).
 
 | Stage | Content | Gate |
 |---|---|---|
@@ -525,9 +529,10 @@ language measured; the code takes any language as a parameter.
 - Timing drift and term accuracy of the translation (metrics not implemented).
 - A human check of the T6 reference (no fluent listener available).
 - Dubbing (stage 4, not started) and the web UI (v1.1).
-- Before v1.0: the git history rewritten without identifying details, the
-  test-set sources published, the version set to 1.0.0 with the tag (the
-  version is recorded in `uv.lock`, a frozen path), the repository made public.
+- Moved to v1.1 (owner, 2026-11-12): the git history rewritten without
+  identifying details and the repository made public; dead code in frozen
+  modules (`ingest.download`, `metrics.timing_drift`) and the unused `edge-tts`
+  dependency removed.
 
 ## Appendix: T1
 

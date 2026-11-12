@@ -6,6 +6,25 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-12 — Release 1.0.0 private; cleanup and publication with v1.1
+
+Decision (owner): version **1.0.0** is tagged `v1.0` as an explicit, recorded
+exception to the `pipeline-v3` freeze: it changes only the package version in
+`pyproject.toml` and `uv.lock`, not pipeline behaviour (T2 cached outputs
+byte-identical; experiments, Freeze pipeline-v3). Removing dead code in frozen
+modules (`ingest.download`, `metrics.timing_drift`) and the `edge-tts`
+dependency is deferred to v1.1, when those modules are reopened for the web
+interface. The repository **stays private** after `v1.0` and becomes public
+with v1.1; the git-history rewrite with name replacement happens once, right
+before that.
+
+Why: the release should not reopen frozen code for cosmetic removals, and a
+history rewrite is done once, when the repository goes public, not twice.
+
+What it rules out: publishing the repository with v1.0; rewriting history or
+force-pushing before v1.1; any other frozen-path change without a new tag and
+hold-out.
+
 ## 2026-11-12 — Test-set sources named; speakers described only as native or non-native
 
 Context: independent LLM review #2 (2026-11-12) found an accent label still in
