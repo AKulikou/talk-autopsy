@@ -6,6 +6,59 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-12 — One per-video cost limit for the CLI and the web page
+
+Decision: `run --max-cost` (default 3 USD per video) is compared with the
+whole estimate, Claude plus speech recognition, as the web page's cost gate
+already was; one function, `youtube.over_video_limit`, serves the CLI (local
+file, link, playlist plan) and the page. Before, the CLI compared the Claude
+part only. A local file is checked right after its estimate is printed, a link
+before the download; an unknown estimate is left to each caller (the page asks
+for a confirmation, the CLI relies on the pipeline's own Claude estimate).
+
+Why: one tool, one limit. The same video passed in the console and needed a
+confirmation in the page for videos of about 2.3 to 3.7 hours, and the limit
+is meant to bound what a video costs, not only its Claude part.
+
+What it rules out: a second, Claude-only per-video limit. The pipeline's own
+check (`max_cost_usd` against its Claude estimate after speech recognition) is
+frozen code and stays as a later, narrower guard.
+
+## 2026-11-12 — Web UI scope (v1.1)
+
+Decision: the web page is a local, single-user front end to the same core,
+with these limits on purpose:
+
+- **Local only:** bound to 127.0.0.1, no option to listen elsewhere; every
+  request is checked for Host, Origin and Sec-Fetch-Site, every POST carries a
+  per-launch token; no CORS (`docs/web.md`, Security model).
+- **One job, one video:** one job at a time in one worker thread; playlists
+  stay with the CLI and the console launcher.
+- **No stop button:** the core has no cooperative cancellation, and adding it
+  would reopen frozen modules; closing the server stops a run, and a re-run
+  continues from the finished steps.
+- **Real progress only:** a bar only where the core reports a position
+  (download bytes, correction and translation blocks, burn-in seconds);
+  spinners and elapsed time elsewhere. Text appears block by block through the
+  `pipeline-v3.1` observability exception (entry below).
+- **Cost first:** cost and time estimate before anything is spent; above the
+  per-video limit the request must carry that exact amount.
+- **Interface languages** English, Russian and Lithuanian; the Lithuanian
+  strings wait for a native speaker's check (Known limitations).
+- **Record and replay:** every job is recorded locally (git-ignored); a hidden
+  `--replay` mode plays a recording with no pipeline, network or cost, used for
+  tests, demos and the README screenshots (committed recordings are of an
+  invented talk).
+- **No build step, no CDN:** plain HTML, CSS and JavaScript modules served by
+  the app.
+
+Why: the owner runs one talk at a time from a laptop; a local page replaces
+the console prompts without a second implementation of the pipeline, and
+without exposing a server that can spend money.
+
+What it rules out (for v1.1): a hosted or multi-user service, playlists in the
+page, cancelling a run, progress percentages for steps that report none.
+
 ## 2026-11-12 — Version 1.1.0 under the cache-key rule
 
 Decision: the package version moves 1.0.0 → 1.1.0 in `pyproject.toml` and
@@ -91,7 +144,7 @@ Proof:
   before and after, once with the new code and once with the `pipeline-v3`
   code (the change stashed). The first of these runs rewrote one file,
   `audio.wav.stamp.json`, because the source path in it was the hard link the
-  v1.1 session 1 smoke run had used; the audio itself hashed the same and no
+  first web UI smoke run had used; the audio itself hashed the same and no
   later step re-ran.
 - `git diff pipeline-v3 -- talk_autopsy/prompts/` is empty.
 

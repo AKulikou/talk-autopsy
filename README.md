@@ -65,8 +65,10 @@ default recogniser is now Qwen3-ASR).
   [spec criteria table](docs/experiments.md#spec-criteria).
 - **Unit tests** cover the code around the models: the data format, audio
   extraction on generated audio, the glossary format, the metrics (including
-  the review's probes as regression tests), the CLI, and the shared Claude
-  request code with a scripted fake client. No network, no API.
+  the review's probes as regression tests), the CLI (with snapshots of its
+  help, dry-run and doctor output), the shared Claude request code with a
+  scripted fake client, and the web layer (fake cores, replayed recordings, the
+  security checks). No network, no API.
 
 Every measured run is a row in [results/benchmark.csv](results/benchmark.csv) and
 an entry in [docs/experiments.md](docs/experiments.md).
@@ -126,6 +128,31 @@ Only text (transcript segments, the glossary, the context you give) goes to the
 Claude API. The audio goes to the speech recognition service as compressed
 FLAC; the video never leaves the machine.
 
+**The web layer** ([docs/web.md](docs/web.md)) sits beside the command line on
+the same core:
+
+```
+browser on this computer
+      |  HTTP + Server-Sent Events; 127.0.0.1 only, a per-launch token
+      v
+  talk-autopsy web: FastAPI app      talk_autopsy/web/
+  -> job runner: one job at a time,
+     one worker thread, cost gate
+      |  the same calls as `run`: YouTube download, pipeline, output writer
+      |  progress callbacks -> events: steps, positions, cost, tokens,
+      |  the text of each finished block
+      v
+  pipeline events (pipeline-v3.1)    numbers, and each correction or
+  + a result observer in             translation block's text as the
+  core/structured_call.py            model returns it
+```
+
+The observer is the one change to the frozen pipeline made for the page
+(`pipeline-v3.1`): `correct.py` and `translate.py` are untouched, and golden
+tests show that the model requests and the outputs are byte-identical, so the
+results below still describe the shipped pipeline
+([decision log](docs/decisions.md)).
+
 ## Quick start
 
 Requirements: [uv](https://docs.astral.sh/uv/) (it installs Python 3.13) and
@@ -138,23 +165,8 @@ On Windows, without the command line: double-click `scripts\windows\Talk Autopsy
 Russian, for a YouTube link or a video file, shows the estimate and writes a TV file and
 subtitles.
 
-**Web UI (preview, v1.1 in progress).** `uv run talk-autopsy web` (on Windows: the
-desktop shortcut "Talk Autopsy", made by `scripts\windows\create-shortcut.ps1`) starts a
-page on this computer only (`http://127.0.0.1:8765`, or the next free port) and opens it
-in the browser; closing its console window stops it, and a second start opens the
-running page. Choose a YouTube link or a file on this computer (the native file dialog),
-what you want to get (for the TV: subtitles burned into the picture plus an `.srt`; for
-the laptop: `.srt`, `.ass`, bilingual `.ass` and an MP4 with subtitle tracks; or
-everything), the Web3 glossary and the target language. The page shows the cost and time
-estimate before anything is spent and asks for an explicit confirmation above 3 USD per
-video. While it runs: the steps with real progress where there is a position (download,
-correction and translation blocks, burn-in; a spinner and the elapsed time elsewhere),
-tokens and the running cost, and the text in two columns, English on the left
-(recognised, then each correction shown in place: struck-through words replaced by
-underlined ones) and the translation on the right, filled block by block. At the end:
-an in-browser player with the subtitles, the files and "Open folder"; the start page
-lists recent results. Playlists stay with the console shortcut "Talk Autopsy (console)"
-and the CLI. Design and security model: [docs/web.md](docs/web.md).
+Or in the browser: `uv run talk-autopsy web` (desktop shortcut "Talk Autopsy" on
+Windows), see [Web UI](#web-ui) below.
 
 ```bash
 git clone https://github.com/AKulikou/talk-autopsy.git
@@ -218,11 +230,64 @@ if `doctor` reports none, install Deno (`winget install DenoLand.Deno`).
 YouTube download is for personal use; you are responsible for complying with
 YouTube's terms of service.
 
+## Web UI
+
+![The waiting screen: steps with real progress, corrections shown in place, the translation filling in block by block](docs/img/web-running.png)
+
+`uv run talk-autopsy web` starts a page on this computer only
+(`http://127.0.0.1:8765`, or the next free port) and opens it in the browser.
+On Windows the desktop shortcut "Talk Autopsy" (made by
+`scripts\windows\create-shortcut.ps1`) does the same; closing its console
+window stops the page, and starting it again while it runs opens the running
+page. The page handles one video at a time; playlists stay with the command
+line and the shortcut "Talk Autopsy (console)". Interface in English, Russian
+and Lithuanian.
+
+Four screens (every picture here is a replayed recording of an invented talk,
+not a real video):
+
+1. **Form and estimate.** A YouTube link or a file on this computer (the native
+   file dialog), what you want to get (for the TV: subtitles burned into the
+   picture plus an `.srt`; for the laptop: `.srt`, `.ass`, bilingual `.ass` and
+   an MP4 with switchable subtitle tracks; or everything), the Web3 glossary and
+   the target language. The estimate shows cost and time before anything is
+   spent; above 3 USD per video (Claude plus speech recognition, the same limit
+   as `run --max-cost`) the page asks you to confirm that exact amount.
+2. **Running.** The steps, the time left, the running cost and the tokens of
+   each finished step; beside them the text in two columns: English (the
+   recognised text, then each correction shown in place: struck-through words
+   replaced by underlined ones) and the translation, filled block by block. It
+   follows the newest text until you scroll up, and a reload rebuilds it.
+3. **Done.** A player in the page with the target-language and English
+   subtitles as tracks, the list of files and "Open folder"; the start page
+   lists recent results.
+4. **Failed.** The reason in one line and where to look next (the log file, or
+   the setup check); no stack trace, no key values.
+
+<img src="docs/img/web-form.png" width="49%" alt="Form: a YouTube link, what to get, the target language, recent results"> <img src="docs/img/web-estimate-confirm.png" width="49%" alt="Estimate above the per-video limit: the page asks to confirm the amount">
+
+<img src="docs/img/web-done.png" width="49%" alt="Done: the player with subtitles"> <img src="docs/img/web-failed.png" width="49%" alt="Failed: the reason and where to look">
+
+**Real progress only.** A bar appears only where the core reports a position:
+bytes of the YouTube download, finished correction and translation blocks
+(above: translation at block 1 of 2), and seconds of video encoded during the
+burn-in. Every other step (audio extraction, the two speech recognition
+passes, the glossary, alignment, subtitles) shows a spinner and its elapsed
+time, never an invented percentage. The time left comes from this machine's own
+history of runs; on a first run it uses built-in values measured on the
+project's runs and says that it is rough.
+
+<img src="docs/img/web-running-spinner.png" width="49%" alt="A step without a position: a spinner and the elapsed time">
+
+Design, events and security model: [docs/web.md](docs/web.md). The pictures
+are regenerated with `uv run python scripts/web_screenshots.py` (Edge or
+Chrome, and ffmpeg).
+
 ## Project structure
 
 ```
 talk_autopsy/
-  cli.py                   command line: cut, transcribe, glossary-auto, fix, translate, srt, eval, run, ...
+  cli/                     command line, one module per command group: run, cut, transcribe, fix, eval, ...
   config.py                API key check, target language, models, prices, paths
   segments.py              Transcript / Segment / Word: the format every stage uses
   ingest.py                audio extraction and cut (ffmpeg), duration (ffprobe)
@@ -244,8 +309,9 @@ talk_autopsy/
   secret_registry.py       the pipeline's secret names + the evaluation tooling's
   subtitles.py             .srt and .ass output, up to 3 lines, reading speed report
   pipeline.py              run: stt, glossary, stt2, align, fix, translate, srt; fallbacks; skip-if-unchanged
+  user_glossary.py         the run's own glossary (--glossary, --domain), shared by the CLI and the web UI
   time_estimate.py         time estimate from this machine's history (built-in values on a first run)
-  web/                     local web UI (preview): FastAPI app, one-job runner, the page (docs/web.md)
+  web/                     local web UI: FastAPI app, one-job runner, events, replay, the page (docs/web.md)
   core/                    shared Claude request code from the Autopsy template
 tests/                     unit tests with a fake Claude client
 data/test-set/             test set description and glossaries (media stay local)
@@ -253,7 +319,9 @@ docs/decisions.md          decision log
 docs/experiments.md        experiment log, metrics, criteria and backlog
 docs/review-*.md           independent LLM reviews and the responses
 docs/prior-art.md          survey of similar open projects
-scripts/                   check scripts (incl. the de-identification check), evaluation scripts, Windows launcher
+docs/web.md, docs/img/     web UI design note and its screenshots
+scripts/                   check scripts (incl. the de-identification check), evaluation scripts, screenshots,
+                           Windows launchers
 results/benchmark.csv      one row per measured run
 CHANGELOG.md               what each release contains
 ```
@@ -456,7 +524,8 @@ and every `.srt` has an `.ass` twin with a smaller font.
 
 ## Status and roadmap
 
-Status: **stage 3, the CLI tool (v1.0).** Stage 2 closed on 2026-11-11 (owner's
+Status: **v1.1, a local web UI over the CLI tool of stage 3** (version 1.1.0;
+[CHANGELOG](CHANGELOG.md)). Stage 2 closed on 2026-11-11 (owner's
 decision, [Gate 2 -> 3](docs/experiments.md#gate-2---3-2026-11-11)): the
 hold-out passed on term accuracy (not demonstrated), the absolute translation
 score on T6 is 4.42, and
@@ -468,12 +537,22 @@ Independent LLM review #2 was done on 2026-11-12
 ([findings and responses](docs/review-2026-11-12.md)); its fixes are in.
 
 **Version 1.0.0** was tagged `v1.0` on 2026-11-12 ([CHANGELOG](CHANGELOG.md);
-[v1.0 checklist](docs/experiments.md#v10-checklist) with evidence). The
-repository stays private until v1.1.
+[v1.0 checklist](docs/experiments.md#v10-checklist) with evidence). Version
+1.1.0 adds the web UI; the pipeline is `pipeline-v3.2`, which differs from
+`pipeline-v3` only by progress events and removed dead code (model requests,
+cache keys and outputs unchanged), so the numbers above carry over.
 
-**Next** (v1.1): the web interface (a preview runs today: `talk-autopsy web`); the git history rewritten so that old
-commits carry no identifying details, then the repository made public; T3 on a
-new domain ([Backlog › v1.1](docs/experiments.md#v11-web-interface-the-repository-becomes-public-with-it)).
+Two requirements of the specification (summarised here; the specification is
+in Russian and not published) concern this version:
+
+| Requirement | Status |
+|---|---|
+| F13: a local web interface over the same core | done in v1.1: one video end to end from the page (link or file, estimate and confirmation, live steps and text, player); playlists through the command line |
+| F14: the target language is a parameter | works end to end (`run --lang`, the page's "Translate into"); only Russian is measured |
+
+**Next:** the git history rewritten so that old commits carry no identifying
+details, then the repository made public with the `v1.1` tag; after that, T3
+on a new domain ([Backlog](docs/experiments.md#v11-web-interface-the-repository-becomes-public-with-it)).
 
 | Stage | Content | Gate |
 |---|---|---|
@@ -483,8 +562,8 @@ new domain ([Backlog › v1.1](docs/experiments.md#v11-web-interface-the-reposit
 | 3 | CLI tool with subtitles (v1.0) | independent review before release (done by an LLM) |
 | 4 | Dubbed audio track | — |
 
-After that: a local web UI (v1.1) over the same core. Russian is the only target
-language measured; the code takes any language as a parameter.
+Russian is the only target language measured; the code and the page take any
+language as a parameter.
 
 ## Known limitations
 
@@ -539,6 +618,20 @@ language measured; the code takes any language as a parameter.
 - **Next-video failure modes** not handled: several speakers (no
   diarization), music, videos much longer than 40 minutes (untested).
 - **Costs** are list prices; AssemblyAI ran on its free credit.
+- **Web UI: single videos only** (playlists through the command line), and
+  **no stop button**: a run started from the page goes to the end (the core has
+  no cooperative cancellation; closing the server's window stops it, and a
+  re-run continues from the finished steps).
+- **Languages other than Russian are not measured:** the page and the command
+  line take any target language, but every quality number here is for Russian.
+- **The Lithuanian interface strings** have not been checked by a native
+  speaker.
+- **The time estimate for the burn-in is rough on a new machine:** it starts
+  from a constant measured on one laptop (a later run on the same laptop burned
+  at 0.54x real time against the constant's 0.27x) until this machine has its
+  own history.
+- **A local, single-user tool:** the web server binds to 127.0.0.1 only and
+  runs one job at a time; it is not meant to be exposed on a network.
 - **Dead code kept:** `metrics.timing_drift` (a stub) stays, because removing
   it would invalidate cached runs: `metrics.py` is part of three steps' cache
   keys.
@@ -552,9 +645,9 @@ language measured; the code takes any language as a parameter.
   its VideoLingo part is out of v1.0 scope.
 - Timing drift and term accuracy of the translation (metrics not implemented).
 - A human check of the T6 reference (no fluent listener available).
-- Dubbing (stage 4, not started) and the web UI (v1.1).
-- Moved to v1.1 (owner, 2026-11-12): the git history rewritten without
-  identifying details and the repository made public.
+- Dubbing (stage 4, not started).
+- Publication, the last step of v1.1: the git history rewritten without
+  identifying details, then the repository made public.
 
 ## Appendix: T1
 

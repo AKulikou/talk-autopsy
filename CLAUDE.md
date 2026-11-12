@@ -62,7 +62,8 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   `docs/decisions.md`, `docs/review-*.md`, `docs/prior-art.md`;
   `results/benchmark.csv` (one row per measured run).
 - `scripts/` — `check.ps1` / `check.sh`, `check_names.py` +
-  `identifying_patterns.txt`, evaluation scripts, `windows/` (the owner's launcher).
+  `identifying_patterns.txt`, evaluation scripts, `web_screenshots.py` (README
+  pictures from replay, `docs/web.md`), `windows/` (the owner's launchers).
 
 ## Rules
 
