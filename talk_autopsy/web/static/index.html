@@ -117,7 +117,7 @@
     <dl class="facts compact">
       <dt data-i18n="run_elapsed"></dt><dd id="run-elapsed">0:00</dd>
       <dt data-i18n="run_left"></dt><dd id="run-left"></dd>
-      <dt data-i18n="run_cost"></dt><dd id="run-cost">0.00 USD</dd>
+      <dt data-i18n="run_cost"></dt><dd id="run-cost"></dd>
     </dl>
     <ol id="steps" class="steps"></ol>
     <p class="muted" data-i18n="run_note"></p>
@@ -163,7 +163,8 @@
     </div>
     <p id="player-note" class="muted" hidden></p>
     <p id="player-none" class="muted" data-i18n="player_none" hidden></p>
-    <p id="done-cost-row"><span data-i18n="done_cost"></span>: <span id="done-cost"></span></p>
+    <p id="done-cost"></p>
+    <p id="done-total" hidden></p>
     <h3 data-i18n="done_files"></h3>
     <ul id="done-files" class="files"></ul>
     <p class="muted"><code id="done-folder"></code></p>
@@ -178,6 +179,7 @@
     <h2 id="failed-heading" data-i18n="failed_heading"></h2>
     <p><strong data-i18n="failed_reason"></strong>: <span id="failed-reason"></span></p>
     <p id="failed-hint"></p>
+    <p id="failed-cost" hidden></p>
     <details id="failed-tech" class="tech" hidden>
       <summary data-i18n="tech_details"></summary>
       <p id="failed-tech-text"></p>
@@ -186,7 +188,9 @@
       <h3 data-i18n="doctor_heading"></h3>
       <ul id="doctor-list" class="doctor"></ul>
     </div>
+    <p id="failed-error" class="error" role="alert" hidden></p>
     <div class="actions">
+      <button type="button" id="failed-again" class="primary" data-i18n="run_again" hidden></button>
       <button type="button" id="failed-back" class="primary" data-i18n="back_button"></button>
     </div>
   </section>

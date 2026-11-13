@@ -2,7 +2,10 @@
 Writes the committed replay fixtures (tests/fixtures/replay/):
 
     synthetic-talk.jsonl         a finished link-mode job, profile tv, Russian
-    synthetic-talk-failed.jsonl  the same job, failing during translation
+    synthetic-talk-failed.jsonl  the same job, failing during translation (an unexpected error)
+    synthetic-talk-unavailable.jsonl  the same job, stopped during translation: the Claude API
+                                 answers HTTP 503 to every try of block 2 (pipeline-v3.5 retries,
+                                 waits skipped), so the Failed screen names the service
     synthetic-talk-untranslated.jsonl  the same job, finished, its first translation block
                                  left in English (the model answers in English twice);
                                  `english_block` is the first unit id of that block
@@ -32,8 +35,11 @@ import threading
 import time
 from pathlib import Path
 
+import anthropic
+import httpx2
+
 from talk_autopsy import pipeline, youtube
-from talk_autopsy.core import claude_client
+from talk_autopsy.core import claude_client, transient
 from talk_autopsy.correct import CorrectionAnswer, Edit
 from talk_autopsy.correct import SegmentText as FixSegment
 from talk_autopsy.segments import Segment, Transcript, Word, save_transcript
@@ -175,8 +181,14 @@ def transcript() -> Transcript:
                             "audio_seconds": len(TALK) * SEGMENT_SECONDS})
 
 
+def unavailable() -> anthropic.ServiceUnavailableError:
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    return anthropic.ServiceUnavailableError("Error code: 503", body=None,
+                                             response=httpx2.Response(503, request=request))
+
+
 def model(fail_translation_block: int | None, english_block: int | None = None,
-          revert: tuple[int, int] | None = None):
+          revert: tuple[int, int] | None = None, failure=None):
     """`revert`: (segment id whose correction comes back empty, unit id whose translation stays English)."""
     translation_blocks = [0]
 
@@ -194,9 +206,14 @@ def model(fail_translation_block: int | None, english_block: int | None = None,
             answer = CorrectionAnswer(segments=segments, edits=edits)
             return response(answer, input_tokens=1100 + len(user) // 4, output_tokens=900 + len(user) // 4,
                             cache_write=2600)
-        translation_blocks[0] += 1
+        body = user.split("Segments to translate:")[1]
+        first = re.search(r"^\[(\d+)\]", body, re.M)
+        if first and int(first.group(1)) == 1:
+            translation_blocks[0] = 1
+        elif first:
+            translation_blocks[0] = 2
         if translation_blocks[0] == fail_translation_block:
-            raise ConnectionError("the connection to the model service was lost")
+            raise failure() if failure else RuntimeError("the answer could not be read")
         body = user.split("Segments to translate:")[1]
         found = re.findall(r"^\[(\d+)\] (.*)$", body, re.M)
         if english_block is not None and found and int(found[0][0]) == english_block:  # left in English
@@ -330,10 +347,10 @@ class GenCore(Core):
 
 
 def generate(name: str, fail_translation_block: int | None, expected: str, english_block: int | None = None,
-             revert: tuple[int, int] | None = None) -> Path:
+             revert: tuple[int, int] | None = None, failure=None) -> Path:
     root = Path(tempfile.mkdtemp(prefix="replay-fixture-"))
     try:
-        fake = FakeClaude(model(fail_translation_block, english_block, revert), simulate_cache=True)
+        fake = FakeClaude(model(fail_translation_block, english_block, revert, failure), simulate_cache=True)
         claude_client.get_client = lambda: fake
         clock = Clock()
         runner = JobRunner(core=GenCore(root, clock), history_file=root / "history.json", clock=clock,
@@ -367,7 +384,9 @@ def main() -> int:
     for variable in ("CORRECTION_MODEL", "TRANSLATION_MODEL", "HELPER_MODEL", "TRANSLATION_VERSION"):
         os.environ.pop(variable, None)
     generate("synthetic-talk", None, "finished")
+    transient.sleep = lambda seconds: None  # the retries are real, their waits are not
     generate("synthetic-talk-failed", 2, "failed")
+    generate("synthetic-talk-unavailable", 2, "failed", failure=unavailable)
     generate("synthetic-talk-untranslated", None, "finished", english_block=1)
     generate("synthetic-talk-reverted", None, "finished", revert=(12, 6))
     return 0

@@ -48,6 +48,7 @@ sys.path.insert(0, str(ROOT))
 FIXTURES = ROOT / "tests" / "fixtures" / "replay"
 FINISHED = FIXTURES / "synthetic-talk.jsonl"
 FAILED = FIXTURES / "synthetic-talk-failed.jsonl"
+UNAVAILABLE = FIXTURES / "synthetic-talk-unavailable.jsonl"  # the README picture: a service outage
 UNTRANSLATED = FIXTURES / "synthetic-talk-untranslated.jsonl"
 LINK = "https://www.youtube.com/watch?v=Synthetic01"
 LONG_LINK = "https://www.youtube.com/watch?v=longSynth01"  # "long" in a replay link: four hours
@@ -333,8 +334,8 @@ def finished_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]
         v.addEventListener('seeked', done, {{once: true}}); v.currentTime = {cue_at}; }})""")
     time.sleep(4.0)  # the cue settles above the controls once they have faded in
     # down to the cost line: the files and the result folder (a local path) below it stay out
-    assert top(b, "done-folder") > bottom(b, "done-cost-row") + 16, "the result folder would be in the shot"
-    take(b, out, "web-done", shots, "done-cost-row", margin=16)
+    assert top(b, "done-folder") > bottom(b, "done-cost") + 16, "the result folder would be in the shot"
+    take(b, out, "web-done", shots, "done-cost", margin=16)
 
     b.js("document.getElementById('another').click()")
     b.wait("!document.getElementById('view-form').hidden && document.querySelectorAll('#recent-list li, "
@@ -351,6 +352,9 @@ def failed_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) 
     b.wait("!document.getElementById('view-failed').hidden", 120)
     time.sleep(0.6)
     take(b, out, "web-failed", shots, "view-failed")
+    if not b.js("document.getElementById('failed-again').hidden"):  # "Run again": the estimate first
+        b.js("document.getElementById('failed-again').click()")
+        b.wait("!document.getElementById('view-estimate').hidden", 30)
 
 
 def untranslated_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) -> None:
@@ -409,7 +413,7 @@ def main() -> None:
         browser = Browser(tmp / "profile", zoom=args.zoom)
         flows = []
         if args.set in ("readme", "all"):
-            flows += [(FINISHED, finished_flow), (FAILED, failed_flow)]
+            flows += [(FINISHED, finished_flow), (UNAVAILABLE, failed_flow)]
         if args.set in ("untranslated", "all"):
             flows += [(UNTRANSLATED, untranslated_flow)]
         if args.set in ("collapsed", "all"):

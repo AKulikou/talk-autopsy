@@ -3,6 +3,7 @@
 // chunks, burn-in seconds); any other running step shows a spinner and its elapsed time.
 // Nothing is estimated here.
 import { t, clock } from "./i18n.js";
+import { money, stepService } from "./money.js";
 
 const ICONS = { waiting: "○", done: "✓", skipped: "✓", failed: "✕" };
 let rows = new Map();
@@ -83,8 +84,11 @@ export function apply(event) {
     setState(r, event.skipped ? "skipped" : "done");
     r.state.textContent = event.skipped ? t("state_skipped") : `${t("state_done")} · ${clock(event.seconds)}`;
     const parts = [];
-    if (event.cost_usd) parts.push(`${event.cost_usd.toFixed(4)} USD`);
-    if (event.stt_cost_usd) parts.push(`${event.stt_cost_usd.toFixed(4)} USD (${t("step_stt")})`);
+    const service = stepService(event.step); // a paid step: its own service's part of the money line
+    if (service) {
+      const value = service === "claude" ? event.cost_usd : event.stt_cost_usd;
+      parts.push(money({ [service]: value || 0 }, { cached: { [service]: event.skipped } }));
+    }
     if (event.tokens) {
       parts.push(t("tokens", { input: event.tokens.input.toLocaleString(), output: event.tokens.output.toLocaleString() }));
     }

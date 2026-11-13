@@ -47,6 +47,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from talk_autopsy import (
+    blocks,
     config,
     ingest,
     outputs,
@@ -57,11 +58,12 @@ from talk_autopsy import (
     youtube,
 )
 from talk_autopsy.config import ConfigurationError
+from talk_autopsy.core import structured_call, transient
 from talk_autopsy.glossary import GlossaryError
 from talk_autopsy.segments import Transcript, load_transcript
 from talk_autopsy.stt.chunked import ProgressEvent
 from talk_autopsy.time_estimate import NO_ESTIMATE, MachineKey, TimeEstimate, TimeEstimator
-from talk_autopsy.web import labels, notices
+from talk_autopsy.web import labels, money, notices
 from talk_autopsy.web import settings as web_settings
 from talk_autopsy.web.sources import (
     PLAYLIST_MESSAGE,
@@ -82,6 +84,7 @@ ROWS_PER_EVENT = 100  # recognized segments (and segments read from a cached ste
 KEEP_RECORDINGS = 20
 RESULT_MARKER = "talk-autopsy-result.json"  # in each result's hidden service folder: the start page lists it
 MAX_REASON_CHARS = 300
+SERVICE_NAMES = {"claude": "Claude API", "assemblyai": "AssemblyAI", "gemini": "Gemini", "network": "network"}
 KEEP_JOBS = 5  # finished jobs kept in memory for a page reload
 PREVIEW_TTL_S = 3600.0
 TICK_S = 30.0  # the remaining time is recalculated at least this often while a job runs
@@ -245,6 +248,8 @@ class Preview:
             "cost": None if not self.cost_known else {
                 "claude_usd": self.cost.claude_usd, "stt_usd": self.cost.stt_usd,
                 "total_usd": self.amount_usd, "upper": bool(self.plan and self.plan.upper),
+                "cached": {"claude": bool(self.plan) and not self.cost.claude_usd,
+                           "stt": bool(self.plan) and not self.cost.stt_usd},
                 "full_usd": round(self.full.total_usd, 2) if self.full else None},
             "cache": self.plan.as_dict() if self.plan else None,
             "limit_usd": limit_usd,
@@ -345,6 +350,7 @@ class Job:
     stt_cost_usd: float = 0.0
     record_to: Path | None = None
     replay: bool = False
+    paid_steps: dict[str, bool] = field(default_factory=dict)  # paid step -> came from the cache
     _events: list[dict] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _next_id: int = 1
@@ -356,6 +362,13 @@ class Job:
         self._start = self.clock()
         self._secrets = secret_values()
         self.view = TranscriptView()
+
+    def cached_parts(self) -> dict:
+        """Per service: every paid step of it that finished came from the cache ("(from cache)")."""
+        def reused(steps) -> bool:
+            done = [self.paid_steps[s] for s in steps if s in self.paid_steps]
+            return bool(done) and all(done)
+        return {"claude": reused(money.CLAUDE_STEPS), "stt": reused(money.STT_STEPS)}
 
     def add(self, type_: str, **payload) -> dict | None:
         """Append an event; returns it, or None if it was dropped by the caps."""
@@ -501,6 +514,11 @@ class _Progress:
         self.claude_estimate: dict[str, float] = {}
         self.display_error_reported = False
         self.live_text: set[str] = set()  # steps whose text came block by block
+        self.open_claude = 0.0  # Claude responses paid in the step not finished yet (spend_observer)
+
+    def spent(self, model: str, usage) -> None:
+        """structured_call.spend_observer: one paid response (pipeline-v3.5)."""
+        self.open_claude += blocks.usage_cost(model, usage)
 
     def __call__(self, event: ProgressEvent) -> None:
         try:
@@ -564,6 +582,9 @@ class _Progress:
             claude, stt = (0.0, 0.0) if skipped else step_costs(detail)
         job.cost_usd += claude
         job.stt_cost_usd += stt
+        self.open_claude = 0.0  # in the step's own cost now
+        if step in money.CLAUDE_STEPS + money.STT_STEPS:
+            job.paid_steps[step] = skipped
         tokens = None if skipped else (data.get("tokens") if "tokens" in data else self._tokens(step))
         if step in self.started_at:
             self.estimator.step_finished(step, None if not skipped else seconds, skipped)
@@ -703,11 +724,18 @@ def failure(exc: BaseException) -> tuple[str, str]:
     """(reason, hint code) in plain words; never a stack trace."""
     known = (pipeline.PipelineError, ConfigurationError, youtube.YouTubeError, outputs.OutputError,
              GlossaryError, FileNotFoundError, InputError)
+    found = transient.classify(exc)
     if isinstance(exc, known):
         reason = short(str(exc).splitlines()[0] if str(exc) else type(exc).__name__, MAX_REASON_CHARS)
+    elif found is not None:  # the page says it in words; this line is for "Technical details"
+        reason = short(f"{type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else found.text()}; "
+                       f"{len(transient.DELAYS_S) + 1} tries over about {sum(transient.DELAYS_S):.0f} s",
+                       MAX_REASON_CHARS)
     else:
         reason = f"Unexpected error ({type(exc).__name__}); the details are in the log file."
-    if isinstance(exc, ConfigurationError):
+    if found is not None and not isinstance(exc, known):
+        hint = "service"
+    elif isinstance(exc, ConfigurationError):
         hint = "doctor"
     elif isinstance(exc, youtube.YouTubeError):
         hint = "youtube"
@@ -929,7 +957,7 @@ class JobRunner:
         stop = threading.Event()
         threading.Thread(target=self._ticker, args=(job, estimator, stop), name=f"tick-{job.id}",
                          daemon=True).start()
-        last_step, progress = None, None
+        last_step, progress, dest = None, None, None
         final: tuple[str, dict] = ("failed", {"reason": "Interrupted.", "hint": "log", "step": None,
                                               "cost_usd": 0.0, "stt_cost_usd": 0.0})
         try:
@@ -961,7 +989,11 @@ class JobRunner:
             settings.glossary = core.user_glossary(request.domain, settings.work_dir)
             progress = _Progress(self, job, settings, estimator)
             last_step = "pipeline"
-            report = core.run_pipeline(settings, progress)
+            spending = structured_call.spend_observer.set(progress.spent)
+            try:
+                report = core.run_pipeline(settings, progress)
+            finally:
+                structured_call.spend_observer.reset(spending)
             last_step = "outputs"
             out_step = output_step(preview.formats)
             t0 = job.clock()
@@ -985,12 +1017,15 @@ class JobRunner:
             job.cost_usd, job.stt_cost_usd = report.cost_usd, report.stt_cost_usd
             gaps = self._failed_parts(settings)
             files = [w.path.name for w in written]
+            cached = job.cached_parts()
+            attempts = money.record_run(dest, "finished", report.cost_usd, report.stt_cost_usd)
             if request.mode == "url":
                 core.mark_done(dest, files, {"claude_usd": report.cost_usd, "stt_usd": report.stt_cost_usd})
             write_result_marker(dest, {"title": preview.title, "target_lang": request.target_lang,
                                        "finished": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": request.mode,
                                        "files": files, "cost_usd": round(report.cost_usd, 4),
-                                       "stt_cost_usd": round(report.stt_cost_usd, 4), **gaps})
+                                       "stt_cost_usd": round(report.stt_cost_usd, 4), "cached": cached,
+                                       "attempts": attempts, **gaps})
             if not report.fallbacks:  # a fallback engine's times would mislead this machine's history
                 estimator.record()
             final = ("finished", {
@@ -999,25 +1034,41 @@ class JobRunner:
                            "kind": labels.file_kind(w.path.name, stem, request.target_lang)}
                           for w in written],
                 "cost_usd": round(report.cost_usd, 4), "stt_cost_usd": round(report.stt_cost_usd, 4),
+                "cached": cached, "attempts": attempts,
                 "fallbacks": [short(f, 200) for f in report.fallbacks], **gaps})
             logger.info("job %s finished: %.4f USD Claude, %.4f USD speech recognition", job.id,
                         report.cost_usd, report.stt_cost_usd)
-            spent = report.cost_usd + report.stt_cost_usd
+            line = money.money_text(report.cost_usd, report.stt_cost_usd, cached)
+            if attempts:
+                line += (f"; with {attempts['failed']} failed attempt(s): "
+                         + money.money_text(attempts["claude_usd"], attempts["stt_usd"], prefix=""))
             if gaps.get("untranslated") or gaps.get("uncorrected") or report.fallbacks:
-                console.info("Finished with problems (%.2f USD): see the log", spent)
+                console.info("Finished with problems, see the log. %s", line)
             else:
-                console.info("Finished: ok (%.2f USD)", spent)
+                console.info("Finished: ok. %s", line)
         except BaseException as e:
             if isinstance(e, Exception):  # the traceback to the log; the console gets the run line below
                 logger.exception("job %s failed at %s", job.id, last_step, extra={"console": False})
-            console.info("Failed at %s: see the log", last_step or "the start")
             reason, hint = failure(e)
             if last_step == "pipeline" and progress is not None:
                 last_step = progress.open_step or progress.last_step
+            # what was spent: finished steps, plus the paid answers of the step that stopped
+            claude = job.cost_usd + (progress.open_claude if progress is not None else 0.0)
+            found = transient.classify(e) if hint == "service" else None
+            what = (f"{SERVICE_NAMES.get(found.service, found.service)} {found.kind.replace('_', ' ')}"
+                    + (f" (HTTP {found.status})" if found.status else "")
+                    + ", on the service's side; finished steps are kept" if found else "see the log")
+            console.info("Failed at %s: %s. %s", last_step or "the start", what,
+                         money.money_text(claude, job.stt_cost_usd, job.cached_parts()))
+            if dest is not None:
+                money.record_run(dest, "failed", claude, job.stt_cost_usd)
             final = ("failed", {"reason": reason, "hint": hint, "step": last_step,
-                                "error_type": type(e).__name__ if hint == "log" else None,
-                                "cost_usd": round(job.cost_usd, 4),
-                                "stt_cost_usd": round(job.stt_cost_usd, 4)})
+                                "error_type": type(e).__name__,
+                                "service": found.service if found else None,
+                                "kind": found.kind if found else None,
+                                "status": found.status if found else None,
+                                "cost_usd": round(claude, 4), "stt_cost_usd": round(job.stt_cost_usd, 4),
+                                "cached": job.cached_parts()})
             if not isinstance(e, Exception):
                 raise
         finally:

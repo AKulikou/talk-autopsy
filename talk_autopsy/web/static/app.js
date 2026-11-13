@@ -1,7 +1,8 @@
 // Talk Autopsy page: four states on one page (form, estimate, running, done / failed).
 // The server enforces every rule (cost gate, one job at a time, paths); the page only asks.
 import { api } from "./api.js";
-import { applyStrings, clock, duration, errorText, gapsWarning, setStrings, t, usd } from "./i18n.js";
+import { applyStrings, clock, duration, errorText, gapsWarning, setStrings, t } from "./i18n.js";
+import { amount, cachedParts, money, stepService, usdAmount } from "./money.js";
 import { followJob } from "./events.js";
 import * as steps from "./steps.js";
 import * as transcript from "./transcript.js";
@@ -191,9 +192,9 @@ function timeText(time) {
 function renderEstimate(p) {
   $("est-title").textContent = p.title;
   $("est-duration").textContent = p.duration_s ? clock(p.duration_s) : "—";
-  const amount = p.cost && (p.cost.upper ? t("est_cost_upper", { amount: usd(p.cost.total_usd) }) : usd(p.cost.total_usd));
   $("est-cost").textContent = p.cost
-    ? `${amount} (${t("est_cost_detail", { claude: p.cost.claude_usd.toFixed(2), stt: p.cost.stt_usd.toFixed(2) })})`
+    ? money({ claude: p.cost.claude_usd, stt: p.cost.stt_usd },
+      { cached: p.cost.cached || {}, prefix: p.cost.upper ? "upper" : "" })
     : t("est_cost_none");
   $("est-time").textContent = timeText(p.time);
   $("est-formats").replaceChildren(...p.formats.map((f) => {
@@ -206,7 +207,7 @@ function renderEstimate(p) {
   if (p.cache?.cached?.length) {
     const names = [...new Set(p.cache.cached.map((s) => t(`step_${s}`)))];
     notes.push(t("est_cached", { steps: names.join(", ") }));
-    if (p.cost?.full_usd) notes.push(t("est_full", { amount: usd(p.cost.full_usd) }));
+    if (p.cost?.full_usd) notes.push(t("est_full", { amount: usdAmount(p.cost.full_usd) }));
   }
   if (p.cache?.reasons?.includes("translation_after_correction")) notes.push(t("est_upper_translation"));
   if (p.notes.includes("audio_only")) notes.push(t("est_audio_only"));
@@ -217,13 +218,13 @@ function renderEstimate(p) {
     li.textContent = n;
     return li;
   }));
-  const limit = p.limit_usd.toFixed(2);
+  const limit = amount(p.limit_usd);
   $("confirm").checked = false;
   $("confirm-box").hidden = !p.needs_confirmation;
   if (p.needs_confirmation) {
     $("confirm-text").textContent = p.cost ? t("est_over_limit", { limit }) : t("est_cost_none");
     $("confirm-label").textContent = p.cost
-      ? t("est_confirm", { amount: p.cost.total_usd.toFixed(2) })
+      ? t("est_confirm", { amount: amount(p.cost.total_usd) })
       : t("est_confirm_none", { limit });
   }
   setError("est-error", "");
@@ -260,7 +261,8 @@ function attach(job) {
   state.job = job;
   state.startedAt = new Date(job.started);
   $("run-title").textContent = job.preview?.title || job.request.source;
-  $("run-cost").textContent = usd(job.cost_usd + job.stt_cost_usd);
+  state.paid = {};
+  $("run-cost").textContent = money({ claude: job.cost_usd, stt: job.stt_cost_usd }, { prefix: "" });
   $("run-left").textContent = timeText(job.preview?.time);
   steps.build($("steps"), job.steps);
   const lang = state.config?.languages.target.find((l) => l.code === job.request.target_lang);
@@ -293,7 +295,9 @@ function onEvent(event) {
       steps.apply(event);
       if (event.type === "step_started" && event.detail) transcript.tech(`${t(`step_${event.step}`)}: ${event.detail}`);
       if (event.type === "step_finished") {
-        $("run-cost").textContent = usd((event.total_cost_usd || 0) + (event.total_stt_cost_usd || 0));
+        if (stepService(event.step)) state.paid = { ...state.paid, [event.step]: event.skipped };
+        $("run-cost").textContent = money({ claude: event.total_cost_usd, stt: event.total_stt_cost_usd },
+          { cached: cachedParts(state.paid || {}), prefix: "" });
       }
       break;
     case "estimate_updated":
@@ -352,15 +356,26 @@ function fileItem(name, kind, lang, purpose) {
   return li;
 }
 
-function costText(claude, stt) {
-  return `${usd(claude, 4)} Claude + ${usd(stt, 4)} (${t("step_stt")})`;
+// The Done screen's money: this run, and the video's total when failed attempts came before it.
+function showCost(info) {
+  const known = info.cost_usd !== null && info.cost_usd !== undefined;
+  $("done-cost").hidden = !known;
+  if (known) {
+    $("done-cost").textContent = money({ claude: info.cost_usd, stt: info.stt_cost_usd || 0 },
+      { cached: info.cached || {} });
+  }
+  const all = info.attempts;
+  $("done-total").hidden = !all;
+  if (all) {
+    $("done-total").textContent = t("done_total", {
+      count: all.failed, text: money({ claude: all.claude_usd, stt: all.stt_usd }, { prefix: "" }) });
+  }
 }
 
 async function showDone(event) {
   state.doneFolder = event.folder;
   $("done-title").textContent = state.job?.preview?.title || "";
-  $("done-cost-row").hidden = false;
-  $("done-cost").textContent = costText(event.cost_usd, event.stt_cost_usd);
+  showCost(event);
   player.clear(playerElements());
   const lang = state.job?.request.target_lang || "";
   $("done-files").replaceChildren(...event.files.map((f) => fileItem(f.name, f.kind, lang, f.purpose)));
@@ -381,9 +396,7 @@ async function watch(id) {
   }
   state.doneFolder = info.folder;
   $("done-title").textContent = info.title;
-  const known = info.cost_usd !== null && info.cost_usd !== undefined;
-  $("done-cost-row").hidden = !known;
-  if (known) $("done-cost").textContent = costText(info.cost_usd, info.stt_cost_usd || 0);
+  showCost(info);
   $("done-files").replaceChildren(...info.files.map((f) => fileItem(f.name, f.kind, info.target_lang)));
   $("done-folder").textContent = info.folder;
   setWarning("done-warning", gapsWarning(info.untranslated, info.uncorrected));
@@ -428,12 +441,26 @@ async function showFailed(event) {
   if (state.job && event.step) steps.fail(event.step);
   // a sentence in the interface language for the kind of failure; the core's own line (English, for
   // developers) only under "Technical details"
+  // no exception class in the main text (owner, 2026-11-13): it is in the technical details
   const hint = event.hint || "log";
-  $("failed-reason").textContent = event.error_type ? t("err_unexpected", { type: event.error_type })
+  const service = hint === "service";
+  $("failed-reason").textContent = service
+    ? t(`fail_service_${event.kind || "unavailable"}`, { service: t(`service_${event.service || "network"}`),
+      status: event.status ?? "" })
     : t(`fail_${hint}`);
   $("failed-tech-text").textContent = event.reason || "";
   $("failed-tech").hidden = !event.reason;
   $("failed-hint").textContent = hint === "network" ? "" : t(`hint_${hint}`);
+  const spent = event.cost_usd !== undefined && hint !== "network";
+  $("failed-cost").hidden = !spent;
+  if (spent) {
+    $("failed-cost").textContent = money({ claude: event.cost_usd, stt: event.stt_cost_usd || 0 },
+      { cached: event.cached || {} });
+  }
+  // a failure on the service's side: the same job again (the estimate first, as usual)
+  $("failed-again").hidden = !(service && state.job?.request);
+  $("failed-back").className = service ? "secondary" : "primary";
+  setError("failed-error", "");
   $("doctor").hidden = true;
   show("view-failed");
   if (DOCTOR_HINTS.has(hint)) await showDoctor();
@@ -463,6 +490,27 @@ async function showDoctor() {
 async function openFolder() {
   const { ok, data } = await api("POST", "/api/open-folder", { path: state.doneFolder });
   setError("done-error", ok ? "" : errorText(data));
+}
+
+// "Run again" on the Failed screen: the failed job's request, estimated again, then Start as usual.
+async function runAgain() {
+  const r = state.job?.request;
+  if (!r) return backToForm();
+  const request = { mode: r.mode, profile: r.profile, domain: r.domain, target_lang: r.target_lang };
+  if (r.mode === "url") request.url = r.source;
+  else request.path = r.source;
+  const button = $("failed-again");
+  button.disabled = true;
+  const { ok, data } = await api("POST", "/api/estimate", request);
+  button.disabled = false;
+  if (!ok) {
+    setError("failed-error", errorText(data));
+    return;
+  }
+  state.request = request;
+  state.preview = data;
+  renderEstimate(data);
+  show("view-estimate");
 }
 
 function backToForm() {
@@ -501,6 +549,7 @@ function wire() {
   $("back").addEventListener("click", () => show("view-form"));
   $("another").addEventListener("click", backToForm);
   $("failed-back").addEventListener("click", backToForm);
+  $("failed-again").addEventListener("click", runAgain);
   $("open-folder").addEventListener("click", openFolder);
 }
 

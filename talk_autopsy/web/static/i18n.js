@@ -63,7 +63,3 @@ export function gapsWarning(untranslated, uncorrected) {
   parts.push(t("warn_checked"));
   return parts.join(" ");
 }
-
-export function usd(value, digits = 2) {
-  return `${(Number(value) || 0).toFixed(digits)} USD`;
-}

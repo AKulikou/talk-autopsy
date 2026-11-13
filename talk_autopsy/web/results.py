@@ -128,6 +128,8 @@ def describe(folder: Path) -> dict:
                       if f not in (RESULT_MARKER, youtube.DONE_MARKER, "meta.json")],
             "media": media, "kind": kind, "burned": burned, "burned_lang": burned_lang, "tracks": tracks,
             "cost_usd": marker.get("cost_usd"), "stt_cost_usd": marker.get("stt_cost_usd"),
+            "cached": marker.get("cached") if isinstance(marker.get("cached"), dict) else {},
+            "attempts": marker.get("attempts") if isinstance(marker.get("attempts"), dict) else None,
             "untranslated": _ranges(marker.get("untranslated")),
             "uncorrected": _ranges(marker.get("uncorrected")),
             "replay": bool(marker.get("replay"))}
