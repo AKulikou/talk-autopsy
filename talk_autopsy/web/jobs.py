@@ -921,8 +921,9 @@ class JobRunner:
                                                                  text=short(message, 300)),
                                          position=Positions(job, estimator, "outputs", "second", out_step),
                                          duration=preview.duration_s)
-            estimator.step_finished(out_step)
-            job.add("step_finished", step="outputs", skipped=False, seconds=round(job.clock() - t0, 1),
+            reused = bool(written) and all(w.reused for w in written)  # nothing made again (2026-11-13)
+            estimator.step_finished(out_step, skipped=reused)
+            job.add("step_finished", step="outputs", skipped=reused, seconds=round(job.clock() - t0, 1),
                     cost_usd=0.0, stt_cost_usd=0.0, tokens=None, detail="",
                     total_cost_usd=round(job.cost_usd, 4), total_stt_cost_usd=round(job.stt_cost_usd, 4))
             if request.mode == "file" and is_audio_only(settings.source):

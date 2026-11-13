@@ -22,6 +22,20 @@ so that no Windows path needs filter escaping. Measured on the owner's laptop
 (2026-11-10, 1080p H.264): 10.7 s for a 60 s clip (0.18x real time), 457 s for a
 27:52 talk together with the subtitle-track MP4 (0.27x; the estimate uses 0.27).
 
+Reuse (bug, 2026-11-13: a re-run with every step cached still re-encoded
+the TV video for minutes): an MP4 is made only when something it is made
+from changed. Each MP4 gets a stamp in the result folder's hidden service
+folder (`.talk-autopsy/<file>.stamp.json`) with its recipe: the source video
+(path, size, modification time), the SHA-256 of the subtitle files it uses
+(the `.ass` holds the style), the ffmpeg command without paths (encoder
+settings) and the ffmpeg executable (path, size, time), and the finished
+file's size and time. The file is reused when it exists, the recipe is the
+same and the file's size and time are those recorded (a truncated, replaced
+or deleted file is made again); otherwise it is rebuilt, and the stamp is
+written only after the finished file is in place. Subtitle copies and the
+bilingual `.ass` are left alone when their content is already the same.
+`Written.reused` says which outputs were reused.
+
 Burn-in progress: with `position`, ffmpeg runs with `-progress pipe:1` and
 every `out_time_us` it reports is passed on as (seconds encoded, seconds of
 video), so a display can show the real position. Without it nothing changes.
@@ -29,6 +43,8 @@ video), so a display can show the real position. Without it nothing changes.
 No CLI I/O here; `run_ffmpeg` and `popen` are injectable for tests.
 """
 
+import hashlib
+import json
 import logging
 import shutil
 import subprocess
@@ -37,7 +53,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from talk_autopsy import ingest, subtitles
+from talk_autopsy import ingest, subtitles, youtube
 from talk_autopsy.glossary import Glossary
 from talk_autopsy.segments import Transcript
 
@@ -162,6 +178,66 @@ def burn_command(ffmpeg: str, video: Path, ass_name: str, out: Path) -> list[str
 class Written:
     format: str
     path: Path
+    reused: bool = False  # already there and up to date: nothing was written
+
+
+# --- reuse --------------------------------------------------------------------------------
+
+
+def _file_id(path: Path) -> dict:
+    stat = path.stat()
+    return {"path": str(path.resolve()), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def recipe(fmt: str, ffmpeg: str, video: Path, subtitle_files: list[Path], command: list[str]) -> dict:
+    """What an MP4 output is made from; `command` is its ffmpeg command built with placeholder paths."""
+    return {"format": fmt, "video": _file_id(video),
+            "subtitles": {f.name: _sha256(f) for f in subtitle_files},
+            "command": command[1:], "ffmpeg": _program_id(ffmpeg)}
+
+
+def _program_id(program: str) -> dict:
+    """The ffmpeg executable as a file (another build makes another file), or just its name if not found."""
+    found = Path(shutil.which(program) or program)
+    return _file_id(found) if found.is_file() else {"path": program}
+
+
+def stamp_path(out: Path) -> Path:
+    return out.parent / youtube.SERVICE_DIR / f"{out.name}.stamp.json"
+
+
+def up_to_date(out: Path, wanted: dict) -> bool:
+    """`out` exists, was made from `wanted`, and is the very file that was written (size and time)."""
+    stamp = stamp_path(out)
+    if not (out.is_file() and stamp.is_file()):
+        return False
+    try:
+        saved = json.loads(stamp.read_text(encoding="utf-8"))
+        stat = out.stat()
+        return saved.get("recipe") == wanted and saved.get("output") == {"size": stat.st_size,
+                                                                         "mtime_ns": stat.st_mtime_ns}
+    except (OSError, ValueError):
+        return False
+
+
+def record(out: Path, made_from: dict) -> None:
+    """The stamp of a finished output (written after the file is in place)."""
+    try:
+        youtube.service_dir(out.parent, create=True)
+        stat = out.stat()
+        stamp_path(out).write_text(json.dumps({"recipe": made_from, "output": {
+            "size": stat.st_size, "mtime_ns": stat.st_mtime_ns}}, indent=1), encoding="utf-8")
+    except OSError:
+        logger.exception("stamp of %s not written; it will be made again next time", out.name)
+
+
+def _forget(out: Path) -> None:
+    """Before a rebuild: the old stamp goes, so an interrupted rebuild is never taken for a finished one."""
+    stamp_path(out).unlink(missing_ok=True)
 
 
 def _ffmpeg() -> str:
@@ -239,9 +315,12 @@ def write_outputs(work_dir: Path, video_id: str, lang: str, dest: Path, stem: st
 
     def copy(source: Path, name: str, fmt: str) -> None:
         out = dest / name
-        if source.resolve() != out.resolve():
+        same = source.resolve() == out.resolve() or (
+            out.is_file() and out.stat().st_size == need(source).stat().st_size
+            and out.read_bytes() == source.read_bytes())
+        if not same:
             shutil.copyfile(need(source), out)
-        written.append(Written(fmt, out))
+        written.append(Written(fmt, out, reused=same))
 
     if "srt" in formats:
         copy(target_srt, f"{stem}.srt", "srt")
@@ -255,8 +334,11 @@ def write_outputs(work_dir: Path, video_id: str, lang: str, dest: Path, stem: st
         if translated is None:
             raise OutputError("the bilingual output needs the translated transcript")
         out = dest / f"{stem}.bilingual.ass"
-        out.write_text(bilingual_ass_text(translated, glossary, stem), encoding="utf-8-sig", newline="\n")
-        written.append(Written("bilingual", out))
+        data = bilingual_ass_text(translated, glossary, stem).encode("utf-8-sig")
+        same = out.is_file() and out.read_bytes() == data
+        if not same:
+            out.write_bytes(data)
+        written.append(Written("bilingual", out, reused=same))
     mp4 = [f for f in ("mp4-soft", "mp4-burned") if f in formats]
     if mp4:
         if video is None or not Path(video).is_file():
@@ -264,21 +346,36 @@ def write_outputs(work_dir: Path, video_id: str, lang: str, dest: Path, stem: st
         ffmpeg = _ffmpeg()
     if "mp4-soft" in formats:
         out = dest / f"{stem}.subs.mp4"
-        partial = out.with_name(out.stem + ".partial.mp4")
-        progress(f"mp4-soft: adding subtitle tracks to {Path(video).name} (no re-encoding)")
-        try:
-            _run(soft_command(ffmpeg, Path(video), need(target_srt), need(english_srt), partial, lang),
-                 run_ffmpeg)
-        except OutputError:
-            partial.unlink(missing_ok=True)
-            raise
-        partial.replace(out)
-        written.append(Written("mp4-soft", out))
+        wanted = recipe("mp4-soft", ffmpeg, Path(video), [need(target_srt), need(english_srt)],
+                        soft_command("ffmpeg", Path("<video>"), Path("<target.srt>"), Path("<english.srt>"),
+                                     Path("<out>"), lang))
+        if up_to_date(out, wanted):
+            progress(f"reused: {out.name} is up to date (made from the same video and subtitles)")
+            written.append(Written("mp4-soft", out, reused=True))
+        else:
+            _forget(out)
+            partial = out.with_name(out.stem + ".partial.mp4")
+            progress(f"mp4-soft: adding subtitle tracks to {Path(video).name} (no re-encoding)")
+            try:
+                _run(soft_command(ffmpeg, Path(video), target_srt, english_srt, partial, lang), run_ffmpeg)
+            except OutputError:
+                partial.unlink(missing_ok=True)
+                raise
+            partial.replace(out)
+            record(out, wanted)
+            written.append(Written("mp4-soft", out))
     if "mp4-burned" in formats:
         out = dest / f"{stem}.{lang}.mp4"
+        wanted = recipe("mp4-burned", ffmpeg, Path(video), [need(target_ass)],
+                        burn_command("ffmpeg", Path("<video>"), BURN_FILTER_NAME, Path("<out>")))
+        if up_to_date(out, wanted):
+            progress(f"reused: {out.name} is up to date (made from the same video and subtitles)")
+            written.append(Written("mp4-burned", out, reused=True))
+            return written
+        _forget(out)
         partial = out.with_name(out.stem + ".partial.mp4")
         ass_copy = dest / BURN_FILTER_NAME
-        shutil.copyfile(need(target_ass), ass_copy)
+        shutil.copyfile(target_ass, ass_copy)
         progress(f"mp4-burned: drawing the {lang} subtitles into the picture (H.264 re-encode)")
         command = burn_command(ffmpeg, Path(video).resolve(), BURN_FILTER_NAME, partial.resolve())
         try:
@@ -292,5 +389,6 @@ def write_outputs(work_dir: Path, video_id: str, lang: str, dest: Path, stem: st
         finally:
             ass_copy.unlink(missing_ok=True)
         partial.replace(out)
+        record(out, wanted)
         written.append(Written("mp4-burned", out))
     return written

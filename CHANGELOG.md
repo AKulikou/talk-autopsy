@@ -68,6 +68,10 @@ re-runs).
 
 **Fixed**
 
+- A re-run with every step cached no longer re-encodes the TV video: an MP4
+  is reused when the video, the subtitles, the encoder settings and the file
+  itself are unchanged, and made again otherwise (also when it was deleted
+  or cut short). The "Files" step then says "from cache".
 - One segment that failed a check no longer costs its whole block
   (`pipeline-v3.4`): the block is used and only that segment keeps its
   recognized text (correction) or stays in English (translation); the warning

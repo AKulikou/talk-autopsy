@@ -216,6 +216,15 @@ the output root that hold `talk-autopsy-result.json` (written by every
 finished web job) or `done.json` (CLI YouTube runs); at most 300 folders
 scanned, 12 listed. After a reload the last result is reachable from there.
 
+**Outputs from cache.** A re-run makes the MP4s again only when something
+they are made from changed: the source video, the subtitles (with their
+style), the encoder settings or ffmpeg itself; a deleted, truncated or
+replaced file is made again too (`outputs` stamps,
+`.talk-autopsy/<file>.stamp.json`). Subtitle copies are left alone when
+their content is the same. When every output was reused, the "Files" step
+says "from cache" (bug, 2026-11-13: a fully cached re-run burned the
+subtitles in again for minutes).
+
 **Service files out of sight.** `meta.json` (written by the download),
 `done.json` (CLI YouTube runs and the page) and `talk-autopsy-result.json`
 live in a hidden service folder inside the result folder, `.talk-autopsy/`

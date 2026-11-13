@@ -2576,9 +2576,9 @@ paths, so they wait until those modules are reopened for the web interface.
 
 ### Earlier entries
 
-- Burned-in MP4 on a re-run (v1.0 cache check, 2026-11-11): `outputs.write_outputs` re-encodes
-  `<stem>.<lang>.mp4` every time (0.27x real time), even when the `.ass` and the video did not
-  change. Skip it when the existing file is newer than both (outputs.py, not frozen).
+- Done as a bug fix (2026-11-13, the owner's report): the burned-in and the subtitle-track MP4
+  are reused when the video, the subtitles, the encoder settings and the file itself are
+  unchanged (`outputs` stamps), instead of being re-encoded on every re-run.
 
 - **Correction on the main path** (stage 2 close, 2026-11-11): it stays in
   `pipeline-v3` at about 0.39 USD per hour of video (0.0645 USD per 10

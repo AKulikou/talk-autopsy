@@ -1,5 +1,6 @@
 """Output formats: --output parsing, ffmpeg commands (no real encoding), bilingual .ass, file naming."""
 
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -169,3 +170,104 @@ def test_domain_glossary_wins_over_the_auto_glossary_and_comes_first_in_key_term
     assert [e.term for e in merged.entries] == ["fuzzing", "Foundry", "Anvil"]
     assert merged.find("fuzzing").keep is True
     assert assemblyai.keyterms(merged)[:2] == ["fuzzing", "Foundry"]
+
+
+class _Ffmpeg:
+    """A fake ffmpeg that writes a few bytes to the command's output and counts the runs per format."""
+
+    def __init__(self):
+        self.runs = []
+
+    def __call__(self, command, **kwargs):
+        out = Path(command[-1])
+        out = out if out.is_absolute() else Path(kwargs.get("cwd") or ".") / out
+        out.write_bytes(b"mp4 made by run %d" % len(self.runs))
+        self.runs.append("burned" if any(a.startswith("subtitles=") for a in command) else "soft")
+        return SimpleNamespace(returncode=0, stderr="")
+
+
+def _write(tmp_path, ffmpeg, video=None):
+    video = video or tmp_path / "Talk.mp4"
+    if not video.exists():
+        video.write_bytes(b"the video")
+    return outputs.write_outputs(tmp_path / "work", "vid", "ru", tmp_path / "out", "Talk",
+                                 list(outputs.FORMATS), video=video, translated=_translated(),
+                                 run_ffmpeg=ffmpeg)
+
+
+def test_a_cached_rerun_reuses_every_output(tmp_path):
+    """Bug 2026-11-13: every step from cache, yet the TV video was burned in again for minutes."""
+    _work(tmp_path)
+    ffmpeg = _Ffmpeg()
+    first = _write(tmp_path, ffmpeg)
+    assert ffmpeg.runs == ["soft", "burned"] and not any(w.reused for w in first)
+    stamps = sorted(p.name for p in (tmp_path / "out" / ".talk-autopsy").glob("*.stamp.json"))
+    assert stamps == ["Talk.ru.mp4.stamp.json", "Talk.subs.mp4.stamp.json"]
+    before = {w.path.name: w.path.stat().st_mtime_ns for w in first}
+    again = _write(tmp_path, ffmpeg)
+    assert ffmpeg.runs == ["soft", "burned"]  # nothing run again
+    assert all(w.reused for w in again) and {w.path.name: w.path.stat().st_mtime_ns for w in again} == before
+
+
+def test_changed_subtitles_rebuild_only_what_uses_them(tmp_path):
+    work = _work(tmp_path)
+    ffmpeg = _Ffmpeg()
+    _write(tmp_path, ffmpeg)
+    (work / "vid.ru.ass").write_text("[Script Info]\nTitle: restyled\n", encoding="utf-8")  # .ass only
+    written = {w.format: w.reused for w in _write(tmp_path, ffmpeg) if w.format.startswith("mp4")}
+    assert ffmpeg.runs == ["soft", "burned", "burned"] and written == {"mp4-soft": True, "mp4-burned": False}
+    (work / "vid.en.srt").write_text("1\n00:00:00,000 --> 00:00:02,000\ny\n", encoding="utf-8")  # .srt
+    _write(tmp_path, ffmpeg)
+    assert ffmpeg.runs == ["soft", "burned", "burned", "soft"]
+
+
+@pytest.mark.parametrize("damage", ["deleted", "truncated", "replaced", "stamp lost"])
+def test_a_missing_or_damaged_output_is_rebuilt(tmp_path, damage):
+    _work(tmp_path)
+    ffmpeg = _Ffmpeg()
+    _write(tmp_path, ffmpeg)
+    burned = tmp_path / "out" / "Talk.ru.mp4"
+    if damage == "deleted":
+        burned.unlink()
+    elif damage == "truncated":
+        burned.write_bytes(burned.read_bytes()[:3])
+    elif damage == "replaced":  # same size, written later
+        time.sleep(0.01)
+        burned.write_bytes(b"x" * burned.stat().st_size)
+    else:
+        outputs.stamp_path(burned).unlink()
+    written = {w.format: w.reused for w in _write(tmp_path, ffmpeg) if w.format.startswith("mp4")}
+    assert ffmpeg.runs == ["soft", "burned", "burned"] and written == {"mp4-soft": True, "mp4-burned": False}
+
+
+def test_another_source_video_or_encoder_setting_rebuilds(tmp_path, monkeypatch):
+    _work(tmp_path)
+    ffmpeg = _Ffmpeg()
+    video = tmp_path / "Talk.mp4"
+    _write(tmp_path, ffmpeg, video)
+    time.sleep(0.01)
+    video.write_bytes(b"a re-downloaded video")
+    _write(tmp_path, ffmpeg, video)
+    assert ffmpeg.runs == ["soft", "burned", "soft", "burned"]
+    real = outputs.burn_command
+    monkeypatch.setattr(outputs, "burn_command", lambda *a: [*real(*a)[:-1], "-tune", "film", real(*a)[-1]])
+    _write(tmp_path, ffmpeg, video)
+    assert ffmpeg.runs == ["soft", "burned", "soft", "burned", "burned"]
+
+
+def test_a_failed_rebuild_never_leaves_a_stamp_for_the_old_file(tmp_path):
+    work = _work(tmp_path)
+    _write(tmp_path, _Ffmpeg())
+    (work / "vid.ru.ass").write_text("[Script Info]\nTitle: new\n", encoding="utf-8")
+
+    def failing(command, **kwargs):
+        if any(a.startswith("subtitles=") for a in command):
+            return SimpleNamespace(returncode=1, stderr="Invalid data")
+        return _Ffmpeg()(command, **kwargs)
+
+    with pytest.raises(outputs.OutputError):
+        _write(tmp_path, failing)
+    assert not outputs.stamp_path(tmp_path / "out" / "Talk.ru.mp4").exists()
+    ffmpeg = _Ffmpeg()
+    _write(tmp_path, ffmpeg)
+    assert "burned" in ffmpeg.runs  # made again next time
