@@ -163,12 +163,20 @@ The Done screen has a player: an HTML5 `<video>` with two subtitle tracks
 (the target language on, English off), served as WebVTT converted from the
 result's `.srt` on request (no extra pipeline output). Under the video, the
 page's own buttons choose the subtitles (target language / English / off;
-the choice is stated in words beside them): the built-in controls of
-Firefox-family browsers offer no track menu. Tried in Firefox 159 and Edge
-(Chromium), headless, on the replay demo. It plays the video
-without burned-in subtitles when there is one (the downloaded original
-`<stem>.mp4`, then the subtitle-track `<stem>.subs.mp4`); with only the
-burned-in `<stem>.<lang>.mp4` the tracks start off and a note says why. A file
+the choice is stated in words beside them). The browser's own subtitle menu
+(Firefox-family browsers have one too: Off / Русский / English; an earlier
+note here said they had none, which was wrong) changes the same tracks, and
+the buttons follow it: they listen to the tracks' `change` event, so the page
+and the menu always agree (bug, 2026-11-13: the buttons said "off" while the
+menu had English on). It plays the video without burned-in subtitles when
+there is one (the downloaded original `<stem>.mp4`, then the subtitle-track
+`<stem>.subs.mp4`). With only the burned-in `<stem>.<lang>.mp4` the
+target-language track is not offered at all, in the buttons or in the
+browser's menu (showing it drew a second copy over the picture): English and
+Off only, starting off, with one line saying the translation is already in
+the picture. Tried in Firefox 159 and Edge (Chromium), headless, on the
+owner's burned-in result and on the replay demo, choosing from the buttons and
+from the menu (a script sets a track's mode, as the menu does). A file
 input's original video lives outside the output folder and is not served, so a
 file-mode result plays one of the produced MP4s. An audio-only input is linked
 (or copied) into its result folder and gets an `<audio>` player with its text

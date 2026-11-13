@@ -2,8 +2,10 @@
 // (a video without burned-in subtitles when there is one) and serves only files inside the output
 // folder; subtitles come as WebVTT converted from the result's .srt. An audio result shows its
 // text beside the player, following the audio. A video gets its own subtitle buttons under the
-// player (target language / English / off): some browsers' built-in controls (the Firefox family)
-// offer no way to choose a track.
+// player (target language / English / off), kept in step with the browser's own subtitle menu in
+// both directions: a choice in either shows in the other (the tracks' "change" event). A video with
+// the translation burned in gets no target-language track (the server leaves it out): English or
+// off only, with one line saying the translation is already in the picture.
 import { api } from "./api.js";
 import { t } from "./i18n.js";
 
@@ -68,15 +70,18 @@ export function show(els, info) {
   els.media.append(media);
   els.box.hidden = false;
   if (info.burned) {
-    els.note.textContent = t("player_burned");
+    const lang = info.burned_lang || info.target_lang;
+    const name = lang ? t(`langname_${lang}`) : "";
+    els.note.textContent = t("player_burned", { lang: name.startsWith("langname_") ? lang : name });
     els.note.hidden = false;
   }
   if (info.kind === "audio" && trackElements.length) followText(els, media, trackElements[0]);
   else if (trackElements.length) subtitleButtons(els, media, info, trackElements);
 }
 
-// Subtitle choice under a video: one button per track and "off"; the choice is applied to the
-// tracks' modes (not left to the browser's menu) and stated in words next to the buttons.
+// Subtitle choice under a video: one button per track and "off". A button sets the tracks' modes;
+// the browser's own menu sets them too, so the buttons and the words next to them follow the modes
+// whoever changed them (bug: the page said "off" while the browser's menu showed English).
 function subtitleButtons(els, media, info, trackElements) {
   const names = info.tracks.map((tr) => (tr.srclang === "en" ? t("subs_english") : tr.label || tr.srclang));
   const choices = [...names.map((name, index) => ({ name, index })), { name: t("subs_off"), index: -1 }];
@@ -90,10 +95,13 @@ function subtitleButtons(els, media, info, trackElements) {
     });
     return b;
   });
-  const apply = () => {
-    trackElements.forEach((el, k) => { el.track.mode = k === chosen ? "showing" : "disabled"; });
+  const showState = () => {
     buttons.forEach((b, k) => b.setAttribute("aria-pressed", String(choices[k].index === chosen)));
     els.subsState.textContent = chosen < 0 ? t("subs_state_off") : t("subs_state_on", { name: names[chosen] });
+  };
+  const apply = () => {
+    trackElements.forEach((el, k) => { el.track.mode = k === chosen ? "showing" : "disabled"; });
+    showState();
   };
   els.subsButtons.replaceChildren(...buttons);
   els.subs.hidden = false;
@@ -101,6 +109,14 @@ function subtitleButtons(els, media, info, trackElements) {
   // some browsers reset the modes once the media or a track has loaded: apply the choice again
   media.addEventListener("loadedmetadata", apply);
   for (const el of trackElements) el.addEventListener("load", apply);
+  // the browser's own menu (or anything else) changed a mode: the buttons follow, nothing is reset
+  media.textTracks.addEventListener("change", () => {
+    const showing = trackElements.findIndex((el) => el.track.mode === "showing");
+    if (showing !== chosen) {
+      chosen = showing;
+      showState();
+    }
+  });
 }
 
 // Audio: the subtitle cues as a list beside the player; the current one is marked and kept in view.

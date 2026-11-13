@@ -39,11 +39,22 @@ def test_the_original_video_wins_over_the_burned_one(tmp_path):
         ("Talk.srt", "subs_target"), ("Talk.subs.mp4", "video_tracks")]  # the marker is not listed
 
 
-def test_only_a_burned_video_plays_with_tracks_off(tmp_path):
+def test_only_a_burned_video_offers_english_only_and_starts_off(tmp_path):
+    """The translation is in the picture: its track again drew two copies (owner's report, 2026-11-13)."""
     folder = result(tmp_path, files=("Talk.srt", "Talk.en.srt", "Talk.lt.mp4"), marker={})
     info = results.describe(folder)
-    assert (info["media"], info["burned"], info["target_lang"]) == ("Talk.lt.mp4", True, "lt")
-    assert not any(t["default"] for t in info["tracks"]) and info["title"] == folder.name
+    assert (info["media"], info["burned"], info["burned_lang"], info["target_lang"]) == (
+        "Talk.lt.mp4", True, "lt", "lt")
+    assert [(t["file"], t["srclang"], t["default"]) for t in info["tracks"]] == [("Talk.en.srt", "en", False)]
+    assert info["title"] == folder.name
+    marked = result(tmp_path, "m", files=("Talk.srt", "Talk.en.srt", "Talk.ru.mp4"),
+                    marker={"target_lang": "ru"})
+    assert [t["srclang"] for t in results.describe(marked)["tracks"]] == ["en"]
+    with_original = result(tmp_path, "o", files=("Talk.mp4", "Talk.srt", "Talk.en.srt", "Talk.ru.mp4"),
+                           marker={"target_lang": "ru"})
+    info = results.describe(with_original)  # a video without burn-in is preferred, with both tracks
+    assert (info["media"], info["burned"], info["burned_lang"]) == ("Talk.mp4", False, "")
+    assert [t["srclang"] for t in info["tracks"]] == ["ru", "en"]
 
 
 def test_audio_and_nothing_to_play(tmp_path):

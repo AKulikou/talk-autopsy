@@ -10,9 +10,12 @@ in-browser player (docs/web.md).
   checked to sit directly inside the output root (or the result folder); the
   client never gives a path that is used as it is.
 - The player prefers a video without burned-in subtitles (the downloaded
-  original `<stem>.mp4`, then the subtitle-track `<stem>.subs.mp4`); with only
-  the burned-in `<stem>.<lang>.mp4` its subtitle tracks start off. An audio
-  result gets an audio player. Subtitles go to the browser as WebVTT, converted
+  original `<stem>.mp4`, then the subtitle-track `<stem>.subs.mp4`). With only
+  the burned-in `<stem>.<lang>.mp4`, the target-language track is not offered
+  at all (that text is already in the picture; showing it again drew two
+  copies), only English, starting off (`burned_lang` names the language in the
+  picture; the owner's report, 2026-11-13). An audio result gets an audio
+  player. Subtitles go to the browser as WebVTT, converted
   from the result's `.srt` on request (no extra pipeline output).
 """
 
@@ -100,10 +103,11 @@ def describe(folder: Path) -> dict:
     stem = labels.stem_of(files)
     lang = str(marker.get("target_lang") or "")
     media, burned = choose_media(files, stem) if stem else (None, False)
-    if media and burned and not lang:  # <stem>.<lang>.mp4
-        lang = media[len(stem) + 1:-4]
+    burned_lang = media[len(stem) + 1:-4] if media and burned else ""  # <stem>.<lang>.mp4
+    if burned and not lang:
+        lang = burned_lang
     tracks = []
-    if stem and f"{stem}.srt" in files:
+    if stem and f"{stem}.srt" in files and not (burned and burned_lang in ("", lang)):
         name = web_settings.language_name(lang) if lang else ""
         tracks.append({"file": f"{stem}.srt", "srclang": lang or "und", "label": name or lang or "subtitles",
                        "default": not burned})
@@ -122,7 +126,7 @@ def describe(folder: Path) -> dict:
             "finished": finished, "target_lang": lang,
             "files": [{"name": f, "kind": labels.file_kind(f, stem, lang)} for f in files
                       if f not in (RESULT_MARKER, youtube.DONE_MARKER, "meta.json")],
-            "media": media, "kind": kind, "burned": burned, "tracks": tracks,
+            "media": media, "kind": kind, "burned": burned, "burned_lang": burned_lang, "tracks": tracks,
             "cost_usd": marker.get("cost_usd"), "stt_cost_usd": marker.get("stt_cost_usd"),
             "untranslated": _ranges(marker.get("untranslated")),
             "uncorrected": _ranges(marker.get("uncorrected")),

@@ -142,7 +142,7 @@
   "recent_watch": "Žiūrėti",
   "recent_lang": "subtitrai: {lang}",
   "player_none": "Rezultatų aplanke nėra vaizdo ar garso įrašo, kurį būtų galima paleisti čia; subtitrų failai yra aplanke.",
-  "player_burned": "Aplanke yra tik vaizdo įrašas su įrašytais subtitrais, todėl subtitrų takeliai iš pradžių išjungti.",
+  "player_burned": "Vertimas ({lang}) jau įrašytas į patį vaizdą, todėl čia galima įjungti tik angliškus subtitrus.",
   "err_no_result": "Šio rezultato rezultatų aplanke nebėra.",
   "purpose_audio": "garso įrašo kopija grotuvui šiame puslapyje",
   "err_unexpected": "Netikėta klaida ({type}).",

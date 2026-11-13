@@ -86,7 +86,9 @@ re-runs).
   core's English lines are no longer shown on a Russian page (known messages
   become a sentence in the interface language, the rest goes under "Technical
   details"); buttons under the player choose the subtitles (target language,
-  English, off), since Firefox's own controls offer no track menu; the file
+  English, off), kept in step with the browser's own subtitle menu in both
+  directions; a video with the translation burned in offers only English and
+  off (its translation track drew a second copy over the picture); the file
   list says what each file is for ("Subtitles (Russian) — for the TV and
   VLC"); new file and folder names are cut at a word, not mid-word (older
   folders keep their names); `meta.json`, `done.json` and the page's marker
