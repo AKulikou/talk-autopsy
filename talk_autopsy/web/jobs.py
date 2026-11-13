@@ -65,6 +65,7 @@ from talk_autopsy.web.transcript import TYPES as TEXT_TYPES
 from talk_autopsy.web.transcript import TranscriptView
 
 logger = logging.getLogger(__name__)
+console = logging.getLogger("talk_autopsy.console")  # web/server.py CONSOLE_LOGGER: the console window
 
 MAX_EVENTS = 20_000  # one job; an hour of video gives a few thousand
 MAX_TEXT_CHARS = 400
@@ -875,6 +876,7 @@ class JobRunner:
         try:
             logger.info("job %s started: %s %s, profile %s, %s", job.id, request.mode, request.source,
                         request.profile, request.target_lang)
+            console.info("Started: %s", short(preview.title or request.source, 120))
             job.add("estimate_updated", time=estimator.initial().as_dict(),
                     cost=preview.as_dict(self.limit_usd)["cost"])
             output_root = core.output_root()
@@ -948,9 +950,15 @@ class JobRunner:
                 "fallbacks": [short(f, 200) for f in report.fallbacks], **gaps})
             logger.info("job %s finished: %.4f USD Claude, %.4f USD speech recognition", job.id,
                         report.cost_usd, report.stt_cost_usd)
+            spent = report.cost_usd + report.stt_cost_usd
+            if gaps.get("untranslated") or gaps.get("uncorrected") or report.fallbacks:
+                console.info("Finished with problems (%.2f USD): see the log", spent)
+            else:
+                console.info("Finished: ok (%.2f USD)", spent)
         except BaseException as e:
-            if isinstance(e, Exception):
-                logger.exception("job %s failed at %s", job.id, last_step)
+            if isinstance(e, Exception):  # the traceback to the log; the console gets the run line below
+                logger.exception("job %s failed at %s", job.id, last_step, extra={"console": False})
+            console.info("Failed at %s: see the log", last_step or "the start")
             reason, hint = failure(e)
             if last_step == "pipeline" and progress is not None:
                 last_step = progress.open_step or progress.last_step

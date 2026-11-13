@@ -112,7 +112,50 @@ def test_logging_goes_to_a_file(tmp_path, monkeypatch):
         file_handler.handle(logging.makeLogRecord({"msg": "hello", "levelno": logging.INFO, "name": "x"}))
         file_handler.flush()
         assert log_file.parent == tmp_path / "logs" and "hello" in log_file.read_text(encoding="utf-8")
-        assert console.level == logging.WARNING and seen["level"] == logging.INFO
+        assert seen["level"] == logging.INFO
+    finally:
+        file_handler.close()
+
+
+def test_the_console_shows_run_lines_and_errors_only(tmp_path, monkeypatch):
+    """The owner's console window: no warnings, no tracebacks; everything stays in the log file."""
+    import io
+    import logging
+    seen = {}
+    monkeypatch.setattr(logging, "basicConfig", lambda **kw: seen.update(kw))
+    server.setup_logging(tmp_path / "logs")
+    file_handler, console = seen["handlers"]
+    stream = io.StringIO()
+    console.setStream(stream)
+
+    def record(name, level, msg, **extra):
+        made = logging.makeLogRecord({"name": name, "levelno": level, "msg": msg, **extra,
+                                      "levelname": logging.getLevelName(level)})
+        if level >= logging.ERROR:
+            try:
+                raise RuntimeError("inner detail")
+            except RuntimeError:
+                import sys
+                made.exc_info = sys.exc_info()
+        return made
+
+    try:
+        for r in (record("talk_autopsy.core.structured_call", logging.WARNING, "block 3/6: invalid result"),
+                  record("uvicorn.error", logging.INFO, "Started server process"),
+                  record(server.CONSOLE_LOGGER, logging.INFO, "Started: A talk"),
+                  record(server.CONSOLE_LOGGER, logging.INFO, "Finished: ok (0.11 USD)"),
+                  record("talk_autopsy.web.app", logging.ERROR, "settings not saved\nsecond line"),
+                  record("talk_autopsy.web.jobs", logging.ERROR, "job x failed at fix", console=False)):
+            console.handle(r)
+            file_handler.handle(r)
+        lines = stream.getvalue().splitlines()
+        assert [line[6:] for line in lines] == [
+            "Started: A talk", "Finished: ok (0.11 USD)",
+            "Error: settings not saved (details in the log file)"]
+        file_handler.flush()
+        logged = file_handler.baseFilename
+        text = open(logged, encoding="utf-8").read()
+        assert "invalid result" in text and "inner detail" in text and "job x failed" in text
     finally:
         file_handler.close()
 

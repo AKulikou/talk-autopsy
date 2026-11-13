@@ -38,8 +38,13 @@ talk-autopsy web (web/server.py)  ->  uvicorn on 127.0.0.1:8765 (or the next fre
 
 `web/jobs.py` does not import FastAPI; the core is reached through a small
 `Core` object (download, pipeline, outputs) that tests replace with a fake.
-Logs: `logs/web/web-<date>.log` (git-ignored); the console shows the address
-and warnings only (a browser dropping a connection is not logged as an error).
+Logs: `logs/web/web-<date>.log` (git-ignored) has everything, as before. The
+console window (the owner keeps it open) shows only the address and the log's
+path, one line when a run starts and one when it ends ("11:39 Finished: ok
+(0.00 USD)", "Finished with problems (...): see the log", "Failed at fix: see
+the log"), and real errors as one line each without the traceback; warnings
+go to the log file only (owner, 2026-11-13; `server.ConsoleOnly`). A browser
+dropping a connection is not logged as an error.
 
 **Where the progress comes from.** `pipeline-v3.1` (an observability-only
 exception to the freeze, `docs/decisions.md`) gives the pipeline's events

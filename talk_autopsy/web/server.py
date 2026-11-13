@@ -76,15 +76,47 @@ class ClientGone(logging.Filter):
         return not isinstance(error, ConnectionResetError)
 
 
+CONSOLE_LOGGER = "talk_autopsy.console"  # one line per run start and finish, for the console window
+
+
+class ConsoleOnly(logging.Filter):
+    """
+    What the console window shows (the owner keeps it open; 2026-11-13): the run
+    lines of CONSOLE_LOGGER and real errors. Warnings, and an error already told by
+    a run line (`extra={"console": False}`), go to the log file only.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name == CONSOLE_LOGGER:
+            return True
+        return record.levelno >= logging.ERROR and getattr(record, "console", True)
+
+
+class ConsoleFormat(logging.Formatter):
+    """One short line with the time; an error's traceback stays in the log file."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        when = self.formatTime(record, "%H:%M")
+        text = (record.getMessage().splitlines() or [""])[0][:240]
+        if record.name == CONSOLE_LOGGER:
+            return f"{when} {text}"
+        return f"{when} Error: {text} (details in the log file)"
+
+
 def setup_logging(log_dir: Path | None = None) -> Path:
+    """
+    Everything (INFO and up) to the day's log file; to the console only what
+    ConsoleOnly lets through, one line each.
+    """
     log_dir = log_dir or config.LOGS_DIR / "web"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / f"web-{dt.date.today():%Y%m%d}.log"
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     console = logging.StreamHandler()
-    console.setLevel(logging.WARNING)
-    console.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    console.setLevel(logging.INFO)
+    console.addFilter(ConsoleOnly())
+    console.setFormatter(ConsoleFormat())
     logging.basicConfig(level=logging.INFO, handlers=[file_handler, console], force=True)
     logging.getLogger("asyncio").addFilter(ClientGone())
     for noisy in ("httpx", "uvicorn.access"):

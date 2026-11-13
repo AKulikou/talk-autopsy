@@ -59,6 +59,9 @@ re-runs).
 - One way to the newest text on the waiting screen: "Jump to the latest text"
   stays, "Show later text" is gone; reading earlier text and reaching the
   end of the rows loads the next ones by itself.
+- The page's console window shows only the address, one line per run start
+  and finish (ok, or with problems: see the log) and real errors; warnings
+  and tracebacks go to the log file only.
 
 **Fixed**
 
