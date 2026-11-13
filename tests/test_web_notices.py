@@ -111,3 +111,37 @@ def test_the_untranslated_recording_finishes_with_the_range_and_the_marker_keeps
     info = results.describe(Path(end["folder"]))
     assert info["untranslated"] == [[0.0, 305.6]]
     assert not any(re.search(r"\.srt \+ \.ass", e.get("message") or "") for e in events)
+
+
+REVERTED = Path(__file__).parent / "fixtures" / "replay" / "synthetic-talk-reverted.jsonl"
+
+
+def test_a_reverted_segment_is_named_by_its_own_minutes_not_its_block(tmp_path):
+    """pipeline-v3.4: a block accepted with one segment kept as it was; the warning names that segment."""
+    recording = replay.load(REVERTED)
+    runner = replay.ReplayRunner(recording, speed=0, root=tmp_path, make_video=False)
+    job = runner.start(request())
+    events = wait(job)
+    end = events[-1]
+    assert end["type"] == "finished"
+    assert end["uncorrected"] == [[93.5, 101.6]] and end["untranslated"] == [[51.0, 59.1]]  # one each
+    corrected = [e for e in events if e["type"] == "corrected"]
+    assert [e.get("reverted") for e in corrected] == [[12], None] and not any(e["failed"] for e in corrected)
+    window = job.view.window(0, 100)
+    segments = {s["id"]: s for row in window["rows"] for s in row["segments"]}
+    assert segments[12]["failed"] and not any(s["failed"] for i, s in segments.items() if i != 12)
+    assert any(s["changed"] for s in segments.values())  # the block's other corrections are shown
+    units = {u["id"]: u for row in window["rows"] for u in row["units"]}
+    assert units[6]["failed"] and units[6]["text"] is None
+    assert all(u["text"] for i, u in units.items() if i != 6)
+    assert job.view.summary()["uncorrected"] == [[93.5, 101.6]]
+    from talk_autopsy.web import results
+    assert results.describe(Path(end["folder"]))["untranslated"] == [[51.0, 59.1]]
+
+
+def test_left_ids_cover_failed_blocks_and_reverted_segments():
+    segs = [Segment(id=k, start=10.0 * k, end=10.0 * k + 9, text="x") for k in range(1, 7)]
+    t = Transcript(segments=segs, language="ru", source="x", meta={"translation": {
+        "failed_blocks": [{"block": 1, "ids": [1, 2]}], "reverted_segments": [{"block": 2, "ids": [5]}]}})
+    assert notices.left_ids(t, "translation") == {1, 2, 5}
+    assert notices.failed_ranges(t, "translation") == [[10.0, 29.0], [50.0, 59.0]]

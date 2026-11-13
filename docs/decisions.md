@@ -6,6 +6,68 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-13 — One bad segment no longer costs a block; `pipeline-v3.4` (per-segment revert)
+
+Decision (owner, after the third real video): when a correction or translation
+answer fails a check that belongs to one segment, only that segment is kept as
+it was; the block's other corrections or translations are used. Structural
+failures (other segment ids, an edit for a segment outside the block,
+unparseable output) still fail the whole block. Same proof conditions as
+`pipeline-v3.3` (entry below).
+
+The bug: correction block 3 of a 25:56 talk (10:03-15:03, 59 segments) was
+rejected twice for "glossary terms removed: MCP" and all of it kept the
+recognized text. The speaker says "run MCP", meaning the `/mcp` command (heard
+the same in the first recognition pass without a glossary and by a local
+faster-whisper check of the audio), so the
+likely answer, "run /mcp", was right and the check was wrong: the term
+counter reads "/mcp" as another word. The rejected answers are not stored (only
+their request ids are logged), so this is the most likely reading, not a proven
+one. The owner's first video lost five minutes of translation to one segment the
+same way (`pipeline-v3.3`). The v1.1 session-4 audit had listed the
+whole-block fallback of correction but filed "one failed segment rather than
+the block" as an improvement; it is a bug.
+
+Fixes (`pipeline-v3.4`):
+
+- The retry is unchanged (same requests, same two attempts). After both are
+  rejected, `revert_segments` takes the rejected answers (now carried by
+  `InvalidResultError.rejected`): when every problem belongs to single segments
+  and they are not all of the block, those segments get their input back
+  (correction: the recognized text, translation: the English source) and lose
+  their edits; a correction answer must then pass every check, including the
+  block's length. Of the two answers the one that reverts fewer segments is
+  used (the second on a tie). Listed in `meta.<stage>.reverted_segments` with
+  their problems; the page names their minutes, not the block's.
+- Correction: a glossary term written as a command or code name (`/mcp`,
+  `@mcp`, in backticks or not) is not a removal.
+- A result with a reverted segment is not finished: its stamp is `incomplete`.
+  The next run sends only blocks whose request would differ or that failed or
+  had a segment reverted, for correction as well now; the translation also
+  reuses every block whose request is unchanged after the correction changed
+  other blocks (`pipeline.reusable_answers`: same stamp apart from the input
+  hash, the earlier input known, the same user text).
+
+Rules out: accepting a segment that failed its check; reverting segments of
+a block whose answer is structurally wrong; asking the model again for one
+segment (a new kind of request).
+
+Proofs:
+
+| | result |
+|---|---|
+| (a) | `Tests: one bad segment must not cost a whole block` (5 of 6 failing on the old code; the sixth pins the validation messages word for word and passed on both) |
+| (b) | `pipeline_requests`, `direct_requests`, `direct_outputs` unchanged; `pipeline_outputs` differs in the hashes of `fixed.json.stamp.json` and `ru.json.stamp.json` (the code keys); with the old code hashes substituted the whole snapshot is identical |
+| (c) | offline over every cached result in `work/` (T2 cache, repeats, experiments, T6, operational and web videos): 74 correction and 86 translation block answers, all with the same verdict and the same problem list from the old and the new validators; 214 controls (first segment emptied, glossary terms cut, the English source as a translation) identical too; two translation-v3 outputs skipped (input stored elsewhere) |
+| (d) | no paid test-set run; the T2 re-run from cache with invalid keys: every model step skipped, 0 USD, the 22 files of `work/T2-v3-cache/` byte-identical |
+
+Cache keys: `code_hash("fix", "correction-v2")` `d935215dabcd307f` ->
+`41fbd4778c04a067`, `code_hash("translate", "translation-v2.1")`
+`9455a8051df5d39c` -> `269ac7905a3cdd7c` (every prompt version moves). A one-off
+local script moved the 24 stamps holding the `pipeline-v3.3` hash to the new one,
+keeping `incomplete` markers (10 older experiment stamps were already stale);
+the old stamps were backed up. No prompt file changed.
+
 ## 2026-11-13 — The waiting screen's text panel is collapsed by default
 
 Decision (owner, after the second check of v1.1): the two-column text panel is

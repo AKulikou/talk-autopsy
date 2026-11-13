@@ -31,10 +31,13 @@ gate and in B5, 2026-11-09):
   or post-process its output (`code_hash`, `STEP_CODE`). A step whose output
   exists with a matching stamp is skipped; anything else reruns it, so a
   prompt or validator fix invalidates the old results. A correction or
-  translation with failed blocks is never up to date (its stamp names them,
-  `write_result_stamp`): the next run does the step again; for the
-  translation only the failed blocks are sent, the accepted ones are reused
-  (`accepted_texts`, since pipeline-v3.3).
+  translation with failed blocks or reverted segments is never up to date (its
+  stamp names them, `write_result_stamp`): the next run does the step again.
+  Only blocks whose request would differ, or that failed or had a segment
+  reverted, are sent; every other block's accepted answer is reused, also
+  when this run's correction changed other blocks of the translation's input
+  (`reusable_answers`; pipeline-v3.3 for failed translation blocks, v3.4 for
+  the rest).
 - **Fail fast.** Keys a selected step needs are checked before any work.
 - **Cost.** Before the first Claude step the estimate of all Claude steps is
   emitted; above `max_cost_usd` the run stops before spending. `RunReport` has
@@ -108,14 +111,17 @@ class _BlockAnswers:
 
     def __init__(self) -> None:
         self.pending: list = []
+        self.reverted: list[int] = []  # segments of the pending answer put back to their input
 
-    def __call__(self, label: str, result) -> None:
+    def __call__(self, label: str, result, reverted: list[int] | None = None) -> None:
         self.pending.append(result)
+        self.reverted = list(reverted or [])
 
     def take(self):
         """The answer of the block just finished, or None if it failed validation."""
         answer = self.pending[-1] if self.pending else None
         self.pending.clear()
+        self.reverted = []
         return answer
 
 
@@ -243,40 +249,77 @@ def write_stamp(output: Path, inputs: dict[str, str]) -> None:
 INCOMPLETE = "incomplete"  # stamp key of a correction or translation with failed blocks (pipeline-v3.3)
 
 
-def write_result_stamp(output: Path, inputs: dict[str, str], failed_blocks: list[dict]) -> None:
+def write_result_stamp(output: Path, inputs: dict[str, str], failed_blocks: list[dict],
+                       reverted: list[dict] | None = None) -> None:
     """
-    The stamp of a correction or translation result. With failed blocks it also
-    names them, so it never equals the inputs' stamp: the step is not up to date
-    and runs again next time (a block that fell back is not a finished result).
+    The stamp of a correction or translation result. With failed blocks or
+    reverted segments it also names them, so it never equals the inputs' stamp:
+    the step is not up to date and runs again next time (a block that fell back,
+    or a segment put back to its input, is not a finished result).
     """
-    if not failed_blocks:
+    if not failed_blocks and not reverted:
         write_stamp(output, inputs)
         return
-    numbers = ", ".join(str(b["block"]) for b in failed_blocks)
-    write_stamp(output, {**inputs, INCOMPLETE: f"failed blocks {numbers}"})
+    parts = []
+    if failed_blocks:
+        parts.append("failed blocks " + ", ".join(str(b["block"]) for b in failed_blocks))
+    if reverted:
+        parts.append("reverted segments in blocks " + ", ".join(str(b["block"]) for b in reverted))
+    write_stamp(output, {**inputs, INCOMPLETE: "; ".join(parts)})
 
 
-def accepted_texts(output: Path, inputs: dict[str, str], stage: str) -> dict[int, str] | None:
+def reusable_answers(output: Path, inputs: dict[str, str], stage: str, current: Transcript,
+                     earlier_inputs: dict[str, Transcript], plan: Callable[[Transcript], list]
+                     ) -> tuple[dict[int, str], Transcript] | None:
     """
-    Segment id -> text of the blocks an earlier, incomplete run of the same
-    inputs accepted (its stamp equals `inputs` plus INCOMPLETE); None otherwise.
+    What an earlier result can give this run without a request: segment (or unit)
+    id -> text of every block whose request would be the same now and that the
+    earlier run accepted whole (no failed block, no reverted segment), and the
+    earlier result. None when nothing can be reused.
+
+    The earlier result counts when its stamp equals `inputs` apart from the
+    INCOMPLETE marker and the input file's hash, and that hash is one of
+    `earlier_inputs` (sha256 -> the transcript it was made from: the current input,
+    and for the translation the correction this run just replaced). `plan(input)`
+    gives the step's blocks with the user text each would send; the rest of a
+    request (prompt, glossary, context, model) is fixed by the stamp's other keys.
     """
     stamp = _stamp_path(output)
     if not (output.is_file() and stamp.is_file()):
         return None
     try:
         earlier = json.loads(stamp.read_text(encoding="utf-8"))
-        if not isinstance(earlier, dict) or INCOMPLETE not in earlier:
+        if not isinstance(earlier, dict):
             return None
-        earlier.pop(INCOMPLETE)
-        if earlier != inputs:
+        earlier.pop(INCOMPLETE, None)
+        source = earlier_inputs.get(earlier.pop("input", None))
+        if source is None or earlier != {k: v for k, v in inputs.items() if k != "input"}:
             return None
         result = load_transcript(output)
-        failed = {i for b in result.meta[stage]["failed_blocks"] for i in b["ids"]}
-        return {s.id: s.text for s in result.segments if s.id not in failed}
-    except Exception:  # an unreadable earlier result: translate everything again
+        meta = result.meta[stage]
+        bad = {int(i) for b in meta.get("failed_blocks") or [] for i in b["ids"]}
+        bad |= {int(i) for b in meta.get("reverted_segments") or [] for i in b["ids"]}
+        texts = {seg.id: seg.text for seg in result.segments}
+        accepted = {user: block for block, user in plan(source)
+                    if not any(seg.id in bad for seg in block.segments)}
+        done: dict[int, str] = {}
+        for block, user in plan(current):
+            old = accepted.get(user)
+            if old is not None:
+                pairs = zip(old.segments, block.segments, strict=True)
+                done.update({new.id: texts[seg.id] for seg, new in pairs})
+        return (done, result) if done else None
+    except Exception:  # an unreadable earlier result: the step runs in full
         logger.exception("the earlier result %s cannot be reused; the step runs in full", output.name)
         return None
+
+
+def _correction_plan(transcript: Transcript) -> list:
+    return [(block, correct._user(block)) for block in blocks.make_blocks(transcript)]
+
+
+def _translation_plan(transcript: Transcript) -> list:
+    return [(block, translate._user(block)) for block in blocks.make_blocks(units.make_units(transcript))]
 
 
 # --- engines ----------------------------------------------------------------------
@@ -366,6 +409,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         """The block-done event of `fix` or `translate`, with the block's text when it was accepted."""
         data = None
         try:
+            reverted = answers.reverted
             answer = answers.take()
             block = parts[n - 1] if 0 < n <= len(parts) else None
             data = {"position": n, "total": total, "failed": answer is None,
@@ -378,6 +422,8 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
                                   "source": (sources or {}).get(seg.id, "")} for seg in answer.segments]
             if block is not None and step == "translate":
                 data["source_ids"] = {str(seg.id): seg.source_ids or [] for seg in block.segments}
+            if answer is not None and reverted:  # kept as they were (pipeline-v3.4)
+                data["reverted"] = reverted
         except Exception:
             logger.exception("block text of %s block %s not prepared; the run goes on", step, n)
             data = None
@@ -572,6 +618,7 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         step_done("align", aligned, skipped, 0.0, t0)
 
     english = aligned if "align" in steps or (aligned.is_file() and not recognized.is_file()) else recognized
+    previous_fixed: dict[str, Transcript] = {}  # sha256 -> the correction this run replaced
 
     if "fix" in steps:
         t0 = time.perf_counter()
@@ -582,20 +629,41 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         skipped = up_to_date(fixed, inputs)
         cost, tokens = 0.0, None
         if not skipped:
-            emit("step-start", "fix", f"{correct.PROMPT_VERSION}, {settings.correction_model}")
             english_transcript = load_transcript(english)
+            if fixed.is_file():  # the correction this run replaces: its translation may still be reused
+                try:
+                    previous_fixed = {file_sha256(fixed): load_transcript(fixed)}
+                except Exception:
+                    logger.exception("the earlier correction cannot be read; the translation runs in full")
+            earlier = reusable_answers(fixed, inputs, "correction", english_transcript,
+                                       {inputs["input"]: english_transcript}, _correction_plan)
+            done, done_edits = (earlier[0], earlier[1].meta["correction"]["edits"]) if earlier else ({}, [])
+            emit("step-start", "fix", f"{correct.PROMPT_VERSION}, {settings.correction_model}"
+                 + (", only the blocks that changed or failed before" if done else ""))
             answers, parts = _BlockAnswers(), _blocks_or_none(english_transcript)
+
+            def corrected_block(n: int, total: int) -> None:
+                block = parts[n - 1] if 0 < n <= len(parts) else None
+                if done and block and not answers.pending and all(seg.id in done for seg in block.segments):
+                    ids = {seg.id for seg in block.segments}
+                    answers("reused", correct.CorrectionAnswer(  # its text, as if just accepted
+                        segments=[correct.SegmentText(id=seg.id, text=done[seg.id])
+                                  for seg in block.segments],
+                        edits=[correct.Edit(**e) for e in done_edits if e.get("id") in ids]))
+                block_done("fix", answers, parts, None, n, total)
+
             observing = structured_call.result_observer.set(answers)
             try:
                 result = correct.correct(english_transcript, glossary_now, context,
                                          model=settings.correction_model,
                                          refusal_fallback=settings.refusal_fallback,
-                                         progress=lambda n, total: block_done("fix", answers, parts, None, n,
-                                                                              total))
+                                         progress=corrected_block,
+                                         **({"done": done, "done_edits": done_edits} if done else {}))
             finally:
                 structured_call.result_observer.reset(observing)
             save_transcript(result, fixed)
-            write_result_stamp(fixed, inputs, result.meta["correction"]["failed_blocks"])
+            write_result_stamp(fixed, inputs, result.meta["correction"]["failed_blocks"],
+                               result.meta["correction"].get("reverted_segments"))
             cost = result.meta["correction"]["cost_usd"]
             tokens = _usage_numbers(result.meta["correction"].get("usage"))
         step_done("fix", fixed, skipped, cost, t0, tokens=tokens)
@@ -615,11 +683,15 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
         skipped = up_to_date(translated, inputs)
         tokens = None
         if not skipped:
-            # an earlier run with failed blocks: send only those again (never for v3's whole-video markers)
-            done = accepted_texts(translated, inputs, "translation") if version != translate.V3 else None
-            emit("step-start", "translate", f"{version}, {settings.translation_model}"
-                 + (", only the blocks that failed before" if done else ""))
             source_transcript = load_transcript(source_file)
+            # an earlier translation: send only blocks whose request changed or that failed before
+            # (never for v3, whose markers are rendered over the whole video)
+            earlier = None if version == translate.V3 else reusable_answers(
+                translated, inputs, "translation", source_transcript,
+                {inputs["input"]: source_transcript, **previous_fixed}, _translation_plan)
+            done = earlier[0] if earlier else None
+            emit("step-start", "translate", f"{version}, {settings.translation_model}"
+                 + (", only the blocks that changed or failed before" if done else ""))
             answers, parts = _BlockAnswers(), _blocks_or_none(source_transcript, sentence_units=True)
             sources = {seg.id: seg.text for part in parts for seg in part.segments}
 
@@ -639,7 +711,8 @@ def run(settings: RunSettings, progress: Callable[[ProgressEvent], None] | None 
             finally:
                 structured_call.result_observer.reset(observing)
             save_transcript(result, translated)
-            write_result_stamp(translated, inputs, result.meta["translation"]["failed_blocks"])
+            write_result_stamp(translated, inputs, result.meta["translation"]["failed_blocks"],
+                               result.meta["translation"].get("reverted_segments"))
             cost += result.meta["translation"]["cost_usd"]
             tokens = _usage_numbers(result.meta["translation"].get("usage"))
         step_done("translate", translated, skipped and not cost, cost, t0, tokens=tokens)

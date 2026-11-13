@@ -89,6 +89,8 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   verdict offline, no paid test-set re-run, a new tag and a decisions entry;
   a moved cache key is carried over by a one-off local script. A fix that
   changes what is sent to the models is not made. Improvements stay frozen.
+  `pipeline-v3.4` (2026-11-13): a block rejected twice only for single
+  segments keeps the rest and reverts those segments (`reverted_segments`).
 - **Keys:** never printed, logged or committed; importing a module reads
   neither `.env` nor a secret. A new pipeline key goes into
   `config.SECRET_ENV_VARS`, an evaluation key into `secret_registry`, both

@@ -66,7 +66,7 @@ from pydantic import BaseModel
 from talk_autopsy import blocks, config, metrics
 from talk_autopsy import units as units_module
 from talk_autopsy.core import claude_client
-from talk_autopsy.core.structured_call import InvalidResultError, Usage, request_structured
+from talk_autopsy.core.structured_call import InvalidResultError, Usage, request_structured, tell_observer
 from talk_autopsy.glossary import Glossary
 from talk_autopsy.segments import Segment, Transcript, assert_same_ids
 
@@ -186,29 +186,61 @@ def kept_terms_missing(segments: list[Segment], glossary: Glossary, answer: Tran
     return warnings
 
 
-def validate_block(segments: list[Segment], glossary: Glossary, target_lang: str,
-                   answer: TranslationAnswer) -> list[str]:
-    """Problems with a translation answer for `segments`; empty if it can be used."""
+def check_block(segments: list[Segment], glossary: Glossary, target_lang: str,
+                answer: TranslationAnswer) -> tuple[list[str], dict[int, list[str]]]:
+    """
+    validate_block's problems in its order, and the per-segment ones by segment id
+    (every problem but other segment ids belongs to one segment).
+    """
     want = [s.id for s in segments]
     got = [s.id for s in answer.segments]
     if got != want:
-        return [f"segment ids {got} differ from the input {want}"]
-    problems = []
+        return [f"segment ids {got} differ from the input {want}"], {}
+    problems: list[str] = []
+    by_segment: dict[int, list[str]] = {}
+
+    def add(segment_id: int, problem: str) -> None:
+        problems.append(problem)
+        by_segment.setdefault(segment_id, []).append(problem)
+
     for source, out in zip(segments, answer.segments, strict=True):
         if not out.text.strip():
-            problems.append(f"segment {out.id} is empty")
+            add(out.id, f"segment {out.id} is empty")
             continue
         if left_in_english(source.text, out.text, glossary):
-            problems.append(f"segment {out.id} is left in English: {out.text[:60]!r}")
+            add(out.id, f"segment {out.id} is left in English: {out.text[:60]!r}")
         for entry in glossary.entries:
             occurs = metrics.term_accuracy(source.text, source.text, [entry.term]).rows
             if not occurs:
                 continue
             agreed = entry.translations.get(target_lang)
             if not entry.keep and agreed and not _stem_present(agreed, out.text):
-                problems.append(f"segment {out.id}: glossary translation {agreed!r} of {entry.term!r} "
-                                "not used")
-    return problems
+                add(out.id, f"segment {out.id}: glossary translation {agreed!r} of {entry.term!r} not used")
+    return problems, by_segment
+
+
+def validate_block(segments: list[Segment], glossary: Glossary, target_lang: str,
+                   answer: TranslationAnswer) -> list[str]:
+    """Problems with a translation answer for `segments`; empty if it can be used."""
+    return check_block(segments, glossary, target_lang, answer)[0]
+
+
+def revert_segments(segments: list[Segment], glossary: Glossary, target_lang: str,
+                    answer: TranslationAnswer) -> tuple[TranslationAnswer, dict[int, list[str]]] | None:
+    """
+    A rejected answer whose every problem belongs to one segment, made usable:
+    those segments keep their English source text (pipeline-v3.4). None for other
+    segment ids, or when nothing is wrong.
+    """
+    problems, by_segment = check_block(segments, glossary, target_lang, answer)
+    if not problems or len(problems) != sum(len(p) for p in by_segment.values()):
+        return None
+    if len(by_segment) == len(answer.segments):
+        return None  # every segment wrong: the block fails as a whole
+    sources = {s.id: s.text for s in segments}
+    repaired = TranslationAnswer(segments=[
+        SegmentText(id=s.id, text=sources[s.id] if s.id in by_segment else s.text) for s in answer.segments])
+    return repaired, by_segment
 
 
 def _prefix(prompt: str, glossary: Glossary, context: blocks.VideoContext, target_lang: str,
@@ -347,10 +379,15 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     one segment per sentence unit (`units=True`), or the input's ids and times
     (`units=False`).
 
-    `done`: unit id -> text accepted by an earlier run with the same inputs. A
-    block whose every unit is in it is not sent (listed in
+    `done`: unit id -> text accepted by an earlier run for a block whose request
+    would be the same. A block whose every unit is in it is not sent (listed in
     `meta.translation.reused_blocks`); the other blocks are requested as usual.
     Not for translation-v3, whose markers are rendered over the whole video.
+
+    Both attempts of a block rejected only for single segments (empty, left in
+    English, agreed glossary translation not used; translation-v2.x): the block is
+    accepted with those segments in English (`meta.translation.reverted_segments`,
+    pipeline-v3.4); other segment ids still fail the whole block.
     """
     if done and version == V3:
         raise ValueError("done (reusing accepted blocks) is not supported for translation-v3")
@@ -370,6 +407,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     started = time.perf_counter()
     parts = blocks.make_blocks(transcript)
     reused: list[int] = []
+    reverted: list[dict] = []
     for block in parts:
         label = f"{version} block {block.number}/{len(parts)}"
         if done and all(s.id in done for s in block.segments):
@@ -391,8 +429,22 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
             )
         except InvalidResultError as e:
             blocks.merge_usage(usage, e.usage)
-            failed.append({"block": block.number, "ids": [s.id for s in block.segments], "error": str(e)})
-            logger.warning("%s failed validation twice; its segments stay in English: %s", label, e)
+            usable = None if version == V3 else blocks.best_revert(
+                e.rejected, lambda answer, block=block: revert_segments(block.segments, glossary, target_lang,
+                                                                        answer))
+            if usable is None:
+                failed.append({"block": block.number, "ids": [s.id for s in block.segments], "error": str(e)})
+                logger.warning("%s failed validation twice; its segments stay in English: %s", label, e)
+            else:
+                answer, problems = usable
+                reverted.append({"block": block.number, "ids": sorted(problems),
+                                 "problems": {str(i): problems[i] for i in sorted(problems)}})
+                logger.warning("%s: both answers were rejected for single segments only; %d segment(s) stay "
+                               "in English, the block's other translations are kept: %s", label,
+                               len(problems), "; ".join(p for i in sorted(problems) for p in problems[i]))
+                texts.update({s.id: s.text for s in answer.segments})
+                warnings.extend(kept_terms_missing(block.segments, glossary, answer))
+                tell_observer(label, answer, reverted=sorted(problems))
         else:
             blocks.merge_usage(usage, response.usage)
             served_by.add(response.model or model)
@@ -420,6 +472,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
         "target_lang": target_lang,
         "blocks": len(parts),
         "failed_blocks": failed,
+        **({"reverted_segments": reverted} if reverted else {}),
         **({"reused_blocks": reused} if done else {}),
         "warnings": warnings,
         **({"marker_warnings": marker_warnings} if version == V3 else {}),

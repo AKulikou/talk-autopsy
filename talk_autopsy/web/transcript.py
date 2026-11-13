@@ -23,10 +23,13 @@ DOM; indexes are segment positions, which stay stable when later translation
 blocks merge segments into rows. Everything here is folded from events, so a
 replayed event list gives the same view.
 
-The summary names the time ranges of failed blocks (`untranslated`,
-`uncorrected`), so the page can say in plain words which minutes were left as
-they were. A segment's end comes with the recognized text (older recordings
-have none: the next segment's start, else the segment's own start).
+The summary names the time ranges of failed blocks and of reverted segments
+(`untranslated`, `uncorrected`), so the page can say in plain words which
+minutes were left as they were. A block accepted with some segments reverted
+(pipeline-v3.4) lists them in `reverted`: their rows say "not corrected" /
+"not translated", the block's other segments show their new text. A
+segment's end comes with the recognized text (older recordings have none: the
+next segment's start, else the segment's own start).
 """
 
 import difflib
@@ -150,6 +153,7 @@ class TranscriptView:
                     self.focus = index
             return
         last = None
+        reverted = {int(i) for i in event.get("reverted") or []}
         for row in event.get("segments") or []:
             index = self._index.get(int(row["id"]))
             if index is None:  # a segment the page never saw recognized (should not happen): show it
@@ -157,6 +161,7 @@ class TranscriptView:
                 if index is None:
                     continue
             self._segments[index].corrected = str(row.get("text") or "")
+            self._segments[index].failed = int(row["id"]) in reverted
             last = index
         self.edits += len(event.get("edits") or [])
         if last is not None:
@@ -172,11 +177,15 @@ class TranscriptView:
                 self._units[int(unit_id)] = _Unit(int(unit_id), None, "", ids, failed=True)
             self._focus_on_units(event.get("ids") or [])
             return
+        reverted = {int(i) for i in event.get("reverted") or []}
         for row in event.get("units") or []:
             unit_id = int(row["id"])
             ids = [int(i) for i in row.get("source_ids") or source_ids.get(str(unit_id), [])]
             text, source = str(row.get("text") or ""), str(row.get("source") or "")
-            self._units[unit_id] = _Unit(unit_id, text, source, ids)
+            if unit_id in reverted:  # kept in English: shown as not translated
+                self._units[unit_id] = _Unit(unit_id, None, source, ids, failed=True)
+            else:
+                self._units[unit_id] = _Unit(unit_id, text, source, ids)
         self._focus_on_units([row["id"] for row in event.get("units") or []])
 
     def _focus_on_units(self, unit_ids: list) -> None:

@@ -55,13 +55,22 @@ def merge_ranges(ranges: list[tuple[float, float]], gap: float = 2.0) -> list[li
     return [[round(s, 1), round(e, 1)] for s, e in out]
 
 
-def failed_ranges(transcript, stage: str) -> list[list[float]]:
+def left_ids(transcript, stage: str) -> set[int]:
     """
-    The time ranges of a result's failed blocks (`meta.<stage>.failed_blocks`,
-    stage "translation" or "correction"), from the times of their segments.
+    Ids of the segments a result left as they were: those of its failed blocks
+    and its reverted segments (`meta.<stage>.failed_blocks`, `reverted_segments`;
+    stage "translation" or "correction").
     """
     if transcript is None:
+        return set()
+    meta = transcript.meta.get(stage) or {}
+    return {int(i) for key in ("failed_blocks", "reverted_segments") for b in meta.get(key) or []
+            for i in b.get("ids") or []}
+
+
+def failed_ranges(transcript, stage: str) -> list[list[float]]:
+    """The time ranges of the segments a result left as they were (`left_ids`), from their times."""
+    left = left_ids(transcript, stage)
+    if not left:
         return []
-    failed = {int(i) for b in (transcript.meta.get(stage) or {}).get("failed_blocks") or []
-              for i in b.get("ids") or []}
-    return merge_ranges([(s.start, s.end) for s in transcript.segments if s.id in failed])
+    return merge_ranges([(s.start, s.end) for s in transcript.segments if s.id in left])

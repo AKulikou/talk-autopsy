@@ -6,6 +6,11 @@ Writes the committed replay fixtures (tests/fixtures/replay/):
     synthetic-talk-untranslated.jsonl  the same job, finished, its first translation block
                                  left in English (the model answers in English twice);
                                  `english_block` is the first unit id of that block
+    synthetic-talk-reverted.jsonl  the same job, finished; both answers of correction block 1
+                                 leave segment 12 empty and both answers of translation block 1
+                                 leave unit 6 in English, so only those two are kept as they were
+                                 (pipeline-v3.4: per-segment revert), the rest is corrected and
+                                 translated
 
 The talk is invented (about six minutes, a made-up scheduler "Quorvex"; no
 sentence comes from a real video), and so are its Russian translations. The
@@ -170,7 +175,9 @@ def transcript() -> Transcript:
                             "audio_seconds": len(TALK) * SEGMENT_SECONDS})
 
 
-def model(fail_translation_block: int | None, english_block: int | None = None):
+def model(fail_translation_block: int | None, english_block: int | None = None,
+          revert: tuple[int, int] | None = None):
+    """`revert`: (segment id whose correction comes back empty, unit id whose translation stays English)."""
     translation_blocks = [0]
 
     def handle(kwargs):
@@ -183,7 +190,7 @@ def model(fail_translation_block: int | None, english_block: int | None = None):
                 if heard and heard[0] in text:
                     text = text.replace(heard[0], heard[1])
                     edits.append(Edit(id=int(i), before=heard[0], after=heard[1], reason="glossary term"))
-                segments.append(FixSegment(id=int(i), text=text))
+                segments.append(FixSegment(id=int(i), text="" if revert and int(i) == revert[0] else text))
             answer = CorrectionAnswer(segments=segments, edits=edits)
             return response(answer, input_tokens=1100 + len(user) // 4, output_tokens=900 + len(user) // 4,
                             cache_write=2600)
@@ -199,7 +206,9 @@ def model(fail_translation_block: int | None, english_block: int | None = None):
         units = []
         for i, text in re.findall(r"^\[(\d+)\] (.*)$", body, re.M):
             parts = sorted((text.find(en), ru) for en, ru in RUSSIAN.items() if en in text)
-            units.append(UnitText(id=int(i), text=" ".join(ru for _, ru in parts) or text))
+            kept_english = revert and int(i) == revert[1]
+            russian = " ".join(ru for _, ru in parts) or text
+            units.append(UnitText(id=int(i), text=text if kept_english else russian))
         return response(TranslationAnswer(segments=units), input_tokens=1000 + len(user) // 4,
                         output_tokens=1200 + len(user) // 3, cache_write=2200)
     return handle
@@ -320,11 +329,11 @@ class GenCore(Core):
         pass
 
 
-def generate(name: str, fail_translation_block: int | None, expected: str, english_block: int | None = None
-             ) -> Path:
+def generate(name: str, fail_translation_block: int | None, expected: str, english_block: int | None = None,
+             revert: tuple[int, int] | None = None) -> Path:
     root = Path(tempfile.mkdtemp(prefix="replay-fixture-"))
     try:
-        fake = FakeClaude(model(fail_translation_block, english_block), simulate_cache=True)
+        fake = FakeClaude(model(fail_translation_block, english_block, revert), simulate_cache=True)
         claude_client.get_client = lambda: fake
         clock = Clock()
         runner = JobRunner(core=GenCore(root, clock), history_file=root / "history.json", clock=clock,
@@ -360,6 +369,7 @@ def main() -> int:
     generate("synthetic-talk", None, "finished")
     generate("synthetic-talk-failed", 2, "failed")
     generate("synthetic-talk-untranslated", None, "finished", english_block=1)
+    generate("synthetic-talk-reverted", None, "finished", revert=(12, 6))
     return 0
 
 

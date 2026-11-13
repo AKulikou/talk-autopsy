@@ -59,6 +59,14 @@ re-runs).
 
 **Fixed**
 
+- One segment that failed a check no longer costs its whole block
+  (`pipeline-v3.4`): the block is used and only that segment keeps its
+  recognized text (correction) or stays in English (translation); the warning
+  names its minutes. Found on a 26-minute talk where five minutes kept the
+  recognized text because "run MCP" was corrected to "run /mcp", which the
+  check took for removing the term MCP; a term written as a command is no
+  longer a removal. Such a result is not cached as finished: the next run
+  sends only the blocks that need it and reuses every other block.
 - A translation block was rejected, and its five minutes left in English, when
   one segment had nothing to translate (a bare version number such as
   `0.8.26.`): numbers, identifiers, file names and URLs no longer count as

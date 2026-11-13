@@ -567,7 +567,8 @@ class _Progress:
         """A finished correction or translation block (pipeline-v3.1) -> one corrected / translated event."""
         self.live_text.add(step)
         head = {"position": data.get("position"), "total": data.get("total"),
-                "failed": bool(data.get("failed")), "ids": list(data.get("ids") or [])}
+                "failed": bool(data.get("failed")), "ids": list(data.get("ids") or []),
+                **({"reverted": list(data["reverted"])} if data.get("reverted") else {})}
         if step == "fix":
             self.job.add("corrected", **head, segments=_text_rows(data.get("segments") or []),
                          edits=_edit_rows(data.get("edits") or []))
@@ -595,6 +596,7 @@ class _Progress:
             segments = transcript.segments
             total = -(-len(segments) // ROWS_PER_EVENT)
             edits = (transcript.meta.get("correction") or {}).get("edits") or []
+            left = notices.left_ids(transcript, "correction" if step == "fix" else "translation")
             for k in range(0, len(segments), ROWS_PER_EVENT):
                 part, number = segments[k:k + ROWS_PER_EVENT], k // ROWS_PER_EVENT + 1
                 ids = [s.id for s in part]
@@ -605,13 +607,15 @@ class _Progress:
                 elif step == "fix":
                     rows = _text_rows([{"id": s.id, "text": s.text} for s in part])
                     job.add("corrected", position=number, total=total, failed=False, ids=ids, from_file=True,
-                            segments=rows, edits=_edit_rows([e for e in edits if e.get("id") in ids]))
+                            segments=rows, edits=_edit_rows([e for e in edits if e.get("id") in ids]),
+                            **({"reverted": [i for i in ids if i in left]} if left & set(ids) else {}))
                 else:
                     units = [{"id": s.id, "text": short(s.text),
                               "source": short(" ".join(w.text for w in s.words or [])),
                               "source_ids": list(s.source_ids or [s.id])} for s in part]
                     job.add("translated", position=number, total=total, failed=False, ids=ids, from_file=True,
-                            source_ids={str(u["id"]): u["source_ids"] for u in units}, units=units)
+                            source_ids={str(u["id"]): u["source_ids"] for u in units}, units=units,
+                            **({"reverted": [i for i in ids if i in left]} if left & set(ids) else {}))
         except Exception:
             logger.exception("job %s: text of step %s not read", job.id, step)
 

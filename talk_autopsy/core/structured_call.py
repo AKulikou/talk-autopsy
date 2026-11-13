@@ -19,6 +19,13 @@ context, is told about every accepted result (label and parsed answer) just
 before it is returned, so a display can show a block's text as soon as it is
 ready. It never changes a request or a result; an observer that raises is
 logged and ignored.
+
+Rejected answers (pipeline-v3.4): when every attempt is rejected,
+InvalidResultError carries the parsed answers in order (`rejected`), so a
+caller can still use the parts its own checks pass (correction and translation
+revert only the segments that failed; docs/decisions.md). The requests and the
+retry are unchanged. `tell_observer` lets such a caller report the answer it
+finally used.
 """
 
 import logging
@@ -43,13 +50,19 @@ result_observer: ContextVar[Callable[[str, BaseModel], None] | None] = ContextVa
                                                                                   default=None)
 
 
-def _tell_observer(label: str, result: BaseModel) -> None:
-    """Pass an accepted result to the observer, if any; its failure never reaches the call."""
+def tell_observer(label: str, result: BaseModel, reverted: list[int] | None = None) -> None:
+    """
+    Pass an accepted result to the observer, if any; its failure never reaches the call.
+    `reverted`: ids of segments the caller put back to their input (pipeline-v3.4).
+    """
     observer = result_observer.get()
     if observer is None:
         return
     try:
-        observer(label, result)
+        if reverted:
+            observer(label, result, reverted=reverted)
+        else:
+            observer(label, result)
     except Exception:
         logger.exception(f"{label}: the result observer failed; the call goes on")
 
@@ -57,10 +70,12 @@ def _tell_observer(label: str, result: BaseModel) -> None:
 class InvalidResultError(RuntimeError):
     """Raised when the model keeps returning structurally valid but unusable output."""
 
-    def __init__(self, message: str, usage: "Usage"):
+    def __init__(self, message: str, usage: "Usage", rejected: list | None = None):
         super().__init__(message)
         # The rejected attempts are billed, so callers still report their tokens.
         self.usage = usage
+        # The parsed answer of every rejected attempt, in order (pipeline-v3.4).
+        self.rejected = list(rejected or [])
 
 
 @dataclass
@@ -178,6 +193,7 @@ def request_structured[ResultT: BaseModel](
     parse = client.beta.messages.parse if refusal_fallback else client.messages.parse
     system_param = build_system(system, cached_prefix)
     problems: list[str] = []
+    rejected: list[ResultT] = []
     for attempt in range(1, MAX_ATTEMPTS + 1):
         logger.debug(
             f"{label}: request model={model} max_tokens={max_tokens} thinking={thinking} effort={effort} "
@@ -230,8 +246,9 @@ def request_structured[ResultT: BaseModel](
                     "probably shorter than the model's minimum cacheable length"
                 )
             served_by = str(getattr(response, "model", "") or model)
-            _tell_observer(label, response.parsed_output)
+            tell_observer(label, response.parsed_output)
             return StructuredResponse(response.parsed_output, usage, served_by)
+        rejected.append(response.parsed_output)
         logger.warning(
             f"{label}: invalid result on attempt {attempt}/{MAX_ATTEMPTS} "
             f"(request_id={response._request_id}): {'; '.join(problems)}"
@@ -240,4 +257,5 @@ def request_structured[ResultT: BaseModel](
     raise InvalidResultError(
         f"{MAX_ATTEMPTS} attempts returned malformed output: {'; '.join(problems)}",
         usage,
+        rejected,
     )

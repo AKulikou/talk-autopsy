@@ -154,3 +154,13 @@ def stage_meta(input_meta: dict, cost_usd: float, wall_seconds: float) -> dict:
     meta["cost_usd"] = round(cost_usd, 6)
     meta["wall_seconds"] = round(wall_seconds, 1)
     return meta
+
+
+def best_revert(answers: list, revert) -> tuple | None:
+    """Of the rejected answers, the usable revert with the fewest reverted segments (the later on a tie)."""
+    best = None
+    for answer in answers:
+        found = revert(answer)
+        if found is not None and (best is None or len(found[1]) <= len(best[1])):
+            best = found
+    return best

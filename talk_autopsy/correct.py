@@ -12,9 +12,26 @@ three segments as read-only context. The prompt is a file,
 
 Output per block: `{segments: [{id, text}], edits: [{id, before, after, reason}]}`.
 A schema-valid answer can still be garbage, so `validate_block` checks it; a
-rejected answer is retried once (core/structured_call.py), then the block fails:
-its segments keep their input text and the block is listed in
-`meta.correction.failed_blocks` (nothing is invented, and the failure is visible).
+rejected answer is retried once (core/structured_call.py). When both attempts
+are rejected, the problems decide (pipeline-v3.4, 2026-11-13):
+
+- only problems of single segments (empty, changed without an edit, words
+  borrowed from a neighbour, a glossary term removed in it): the block is
+  accepted with just those segments reverted to their input text, provided the
+  result then passes every check (`revert_segments`; of the two answers, the one
+  that reverts fewer segments, else the second). They are listed in
+  `meta.correction.reverted_segments` with their problems;
+- a structural problem (other segment ids, an edit for a segment not in the
+  block, a removed term no segment accounts for), or a block that still fails
+  after the revert: the block fails as before; its segments keep their input
+  text and it is listed in `meta.correction.failed_blocks`.
+
+Either way nothing is invented and the failure is visible. Before v3.4 one bad
+segment failed the whole block (five minutes of a real talk on "glossary terms
+removed: MCP").
+
+A glossary term written as a command or code name ("run MCP" -> "run /mcp",
+the speaker naming the `/mcp` command) is not a removal (pipeline-v3.4).
 
 Two checks keep every edit inside its segment (added with correction-v2,
 after v1 rebuilt a garbled audience question from the next segment's words;
@@ -37,14 +54,16 @@ start and end stay.
 
 import difflib
 import logging
+import re
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic import BaseModel
 
 from talk_autopsy import blocks, config, metrics
 from talk_autopsy.core import claude_client
-from talk_autopsy.core.structured_call import InvalidResultError, Usage, request_structured
+from talk_autopsy.core.structured_call import InvalidResultError, Usage, request_structured, tell_observer
 from talk_autopsy.glossary import Glossary
 from talk_autopsy.segments import Segment, Transcript, assert_same_ids
 
@@ -151,34 +170,78 @@ def merged_into_term(term: str, terms: list[str], edits: list[Edit]) -> bool:
     return False
 
 
-def validate_block(segments: list[Segment], glossary: Glossary, answer: CorrectionAnswer,
-                   context: list[Segment] | None = None) -> list[str]:
+def command_forms(term: str, text: str) -> int:
     """
-    Problems with a correction answer for `segments` (`context`: the read-only
-    segments before them); empty if it can be used.
+    How often `text` writes `term` as a command or code name: "/mcp", "`/mcp`",
+    "@mcp" (case aside). The term counter sees "/mcp" as another word.
     """
-    problems = []
+    if not re.fullmatch(r"[\w.+-]+", term):
+        return 0
+    pattern = rf"(?<![\w/.\-])[/@]{re.escape(term)}(?![\w\-])"
+    return len(re.findall(pattern, text, flags=re.IGNORECASE))
+
+
+def _removed_terms(before: str, after: str, terms: list[str], edits: list[Edit]) -> list[str]:
+    """Glossary terms `after` holds fewer times than `before`, not explained by a merge or a command form."""
+    removed = []
+    for row in metrics.term_accuracy(before, after, terms).rows:
+        if row.found >= row.expected or merged_into_term(row.term, terms, edits):
+            continue
+        if command_forms(row.term, after) - command_forms(row.term, before) >= row.expected - row.found:
+            continue  # "run MCP" -> "run /mcp" (pipeline-v3.4)
+        removed.append(row.term)
+    return removed
+
+
+@dataclass
+class BlockCheck:
+    """
+    The problems of a correction answer: all of them in the order validate_block
+    reports them, and which of them belong to one segment or to the whole block.
+    """
+
+    problems: list[str] = field(default_factory=list)
+    structural: list[str] = field(default_factory=list)  # only the whole block can answer for these
+    segments: dict[int, list[str]] = field(default_factory=dict)  # segment id -> its own problems
+
+    def add(self, problem: str, segment_id: int | None = None, structural: bool = False) -> None:
+        self.problems.append(problem)
+        if structural:
+            self.structural.append(problem)
+        elif segment_id is not None:
+            self.segments.setdefault(segment_id, []).append(problem)
+
+
+def check_block(segments: list[Segment], glossary: Glossary, answer: CorrectionAnswer,
+                context: list[Segment] | None = None) -> BlockCheck:
+    """
+    validate_block's problems, sorted: structural, per segment, and the block's
+    text length (neither: a revert may cure it, so a reverted answer is checked
+    again in full).
+    """
+    check = BlockCheck()
     want = [s.id for s in segments]
     got = [s.id for s in answer.segments]
     if got != want:
-        return [f"segment ids {got} differ from the input {want}"]
+        check.add(f"segment ids {got} differ from the input {want}", structural=True)
+        return check
     by_id = {s.id: s.text for s in segments}
     explained = {e.id for e in answer.edits if e.reason.strip()}
     for e in answer.edits:
         if e.id not in by_id:
-            problems.append(f"edit for segment {e.id}, which is not in the block")
+            check.add(f"edit for segment {e.id}, which is not in the block", structural=True)
     for s in answer.segments:
         if not s.text.strip():
-            problems.append(f"segment {s.id} is empty")
+            check.add(f"segment {s.id} is empty", s.id)
             continue
         share = changed_share(by_id[s.id], s.text)
         if share > MAX_CHANGED_SHARE and s.id not in explained:
-            problems.append(f"segment {s.id} changed {share:.0%} of its characters without an edit")
+            check.add(f"segment {s.id} changed {share:.0%} of its characters without an edit", s.id)
         kept = kept_share(by_id[s.id], s.text)
         if kept < MIN_KEPT_SHARE and not changes_covered(by_id[s.id], s.text,
                                                          [e for e in answer.edits if e.id == s.id]):
-            problems.append(f"segment {s.id} keeps only {kept:.0%} of its words in order, and not every "
-                            "change is listed in an edit")
+            check.add(f"segment {s.id} keeps only {kept:.0%} of its words in order, and not every "
+                      "change is listed in an edit", s.id)
     inputs = [*(context or [])[-1:], *segments]
     offset = len(inputs) - len(segments)
     for k, s in enumerate(answer.segments):
@@ -186,18 +249,57 @@ def validate_block(segments: list[Segment], glossary: Glossary, answer: Correcti
         neighbours = [inputs[i].text for i in (position - 1, position + 1) if 0 <= i < len(inputs)]
         runs = moved_runs(by_id[s.id], s.text, neighbours, glossary)
         if runs:
-            problems.append(f"segment {s.id} holds words of a neighbouring segment: {'; '.join(runs)}")
+            check.add(f"segment {s.id} holds words of a neighbouring segment: {'; '.join(runs)}", s.id)
     before = " ".join(s.text for s in segments)
     after = " ".join(s.text for s in answer.segments)
     terms = [e.term for e in glossary.entries]
     if terms:
-        removed = [r.term for r in metrics.term_accuracy(before, after, terms).rows if r.found < r.expected]
-        removed = [term for term in removed if not merged_into_term(term, terms, answer.edits)]
+        removed = _removed_terms(before, after, terms, answer.edits)
         if removed:
-            problems.append(f"glossary terms removed: {', '.join(removed)}")
+            check.problems.append(f"glossary terms removed: {', '.join(removed)}")
+            for term in removed:  # the segments that lost it; none (the term spanned two): structural
+                losing = [out.id for source, out in zip(segments, answer.segments, strict=True)
+                          if _removed_terms(source.text, out.text, [term],
+                                            [e for e in answer.edits if e.id == out.id])]
+                for segment_id in losing:
+                    check.segments.setdefault(segment_id, []).append(f"glossary terms removed: {term}")
+                if not losing:
+                    check.structural.append(f"glossary terms removed: {term}")
     if before and abs(len(after) - len(before)) > MAX_LENGTH_DRIFT * len(before):
-        problems.append(f"text length changed from {len(before)} to {len(after)} characters (over 10%)")
-    return problems
+        check.problems.append(f"text length changed from {len(before)} to {len(after)} characters (over 10%)")
+    return check
+
+
+def validate_block(segments: list[Segment], glossary: Glossary, answer: CorrectionAnswer,
+                   context: list[Segment] | None = None) -> list[str]:
+    """
+    Problems with a correction answer for `segments` (`context`: the read-only
+    segments before them); empty if it can be used.
+    """
+    return check_block(segments, glossary, answer, context).problems
+
+
+def revert_segments(segments: list[Segment], glossary: Glossary, answer: CorrectionAnswer,
+                    context: list[Segment] | None = None
+                    ) -> tuple[CorrectionAnswer, dict[int, list[str]]] | None:
+    """
+    A rejected answer with only per-segment problems, made usable: those segments
+    get their input text back and lose their edits. Returns the answer and the
+    reverted segments' problems, or None when a structural problem remains or the
+    reverted answer still fails a check.
+    """
+    check = check_block(segments, glossary, answer, context)
+    if check.structural or not check.segments or len(check.segments) == len(answer.segments):
+        return None  # a structural problem, nothing wrong, or every segment wrong: the block fails
+    reverted = check.segments
+    by_id = {s.id: s.text for s in segments}
+    repaired = CorrectionAnswer(
+        segments=[SegmentText(id=s.id, text=by_id[s.id] if s.id in reverted else s.text)
+                  for s in answer.segments],
+        edits=[e for e in answer.edits if e.id not in reverted])
+    if validate_block(segments, glossary, repaired, context):
+        return None
+    return repaired, reverted
 
 
 def _prefix(prompt: str, glossary: Glossary, context: blocks.VideoContext) -> str:
@@ -231,11 +333,16 @@ def estimate(transcript: Transcript, glossary: Glossary, context: blocks.VideoCo
 
 def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoContext | str, *,
             model: str | None = None, version: str = PROMPT_VERSION, progress=None,
-            refusal_fallback: bool = False) -> Transcript:
+            refusal_fallback: bool = False, done: dict[int, str] | None = None,
+            done_edits: list[dict] | None = None) -> Transcript:
     """
     The corrected transcript: same ids and times, corrected texts, the edits and
     the API usage in `meta.correction`. `progress(block_number, block_count)` is
     called after each block.
+
+    `done`: segment id -> text an earlier run accepted for a block whose request
+    would be the same (pipeline-v3.4); a block whose every segment is in it is not
+    sent (`meta.correction.reused_blocks`), and its edits come from `done_edits`.
     """
     config.require_api_key()
     if isinstance(context, str):
@@ -251,8 +358,18 @@ def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoCon
     served_by: set[str] = set()
     started = time.perf_counter()
     parts = blocks.make_blocks(transcript)
+    reverted: list[dict] = []
+    reused: list[int] = []
     for block in parts:
         label = f"{version} block {block.number}/{len(parts)}"
+        if done and all(s.id in done for s in block.segments):
+            ids = {s.id for s in block.segments}
+            texts.update({s.id: done[s.id] for s in block.segments})
+            edits.extend(e for e in done_edits or [] if e.get("id") in ids)
+            reused.append(block.number)
+            if progress is not None:
+                progress(block.number, len(parts))
+            continue
         try:
             response = request_structured(
                 client, label=label, model=model, max_tokens=config.MAX_TOKENS, system="",
@@ -263,8 +380,21 @@ def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoCon
             )
         except InvalidResultError as e:
             blocks.merge_usage(usage, e.usage)
-            failed.append({"block": block.number, "ids": [s.id for s in block.segments], "error": str(e)})
-            logger.warning("%s failed validation twice; its segments keep their input text: %s", label, e)
+            usable = blocks.best_revert(e.rejected, lambda answer, block=block: revert_segments(
+                block.segments, glossary, answer, block.context))
+            if usable is None:
+                failed.append({"block": block.number, "ids": [s.id for s in block.segments], "error": str(e)})
+                logger.warning("%s failed validation twice; its segments keep their input text: %s", label, e)
+            else:
+                answer, problems = usable
+                reverted.append({"block": block.number, "ids": sorted(problems),
+                                 "problems": {str(i): problems[i] for i in sorted(problems)}})
+                logger.warning("%s: both answers were rejected for single segments only; %d segment(s) keep "
+                               "their input text, the block's other corrections are kept: %s", label,
+                               len(problems), "; ".join(p for i in sorted(problems) for p in problems[i]))
+                texts.update({s.id: s.text for s in answer.segments})
+                edits.extend(e.model_dump() for e in answer.edits)
+                tell_observer(label, answer, reverted=sorted(problems))
         else:
             blocks.merge_usage(usage, response.usage)
             served_by.add(response.model or model)
@@ -287,6 +417,8 @@ def correct(transcript: Transcript, glossary: Glossary, context: blocks.VideoCon
         "refusal_fallback": refusal_fallback,
         "blocks": len(parts),
         "failed_blocks": failed,
+        **({"reverted_segments": reverted} if reverted else {}),
+        **({"reused_blocks": reused} if done else {}),
         "segments_changed": sum(1 for a, b in zip(transcript.segments, segments, strict=True)
                                 if a.text != b.text),
         "edits": edits,
