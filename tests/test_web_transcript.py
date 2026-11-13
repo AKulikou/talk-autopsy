@@ -107,3 +107,45 @@ def test_other_events_change_nothing():
     view = TranscriptView()
     assert not view.apply({"type": "step_started", "step": "fix"})
     assert view.version == 0 and view.window()["rows"] == []
+
+
+def test_the_follow_window_holds_the_newest_changed_row_at_every_step():
+    """
+    The page scrolls to the row marked newest in a follow window (follow.js). At every step that
+    changes the text, that row is in the window, exactly once, and holds the block's last segment:
+    recognition (the last row), correction blocks changing rows already shown (newer rows follow),
+    translation blocks merging segments into rows, and failed blocks; 320 segments, so the
+    120-segment window moves (bug report 2026-11-13).
+    """
+    view = TranscriptView()
+
+    def newest(expected_index):
+        window = view.window(count=120, follow=True)
+        marked = [r for r in window["rows"] if r["newest"]]
+        assert len(marked) == 1, expected_index
+        assert marked[0]["first"] <= expected_index <= marked[0]["last"]
+        assert len(window["rows"]) <= 120 and window["start"] <= expected_index < window["end"]
+        return window
+
+    recognized(view, [f"Sentence {n} as recognized." for n in range(1, 321)])
+    assert not newest(319)["more_after"]
+    for block in range(9):  # correction blocks of 36 segments, the last one shorter
+        ids = list(range(1 + block * 36, min(321, 1 + (block + 1) * 36)))
+        failed = block == 4
+        view.apply({"type": "corrected", "position": block + 1, "total": 9, "failed": failed, "ids": ids,
+                    **({} if failed else {
+                        "segments": [{"id": i, "text": f"Sentence {i} as corrected."} for i in ids],
+                        "edits": [{"id": i} for i in ids]})})
+        window = newest(ids[-1] - 1)
+        assert window["more_after"] == (ids[-1] < 320)
+    for block in range(8):  # translation blocks of 40 segments, units of two segments: rows merge
+        ids = list(range(1 + block * 20, 1 + (block + 1) * 20))
+        failed = block == 2
+        units = [{"id": u, "text": f"перевод {u}", "source": "", "source_ids": [2 * u - 1, 2 * u]}
+                 for u in ids]
+        view.apply({"type": "translated", "position": block + 1, "total": 8, "failed": failed, "ids": ids,
+                    **({"source_ids": {str(u["id"]): u["source_ids"] for u in units}} if failed
+                       else {"units": units})})
+        window = newest(2 * ids[-1] - 1)
+        row = next(r for r in window["rows"] if r["newest"])
+        assert (row["first"], row["last"]) == (2 * ids[-1] - 2, 2 * ids[-1] - 1)

@@ -55,7 +55,8 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   `translation_rating.py`, `baselines/google_translate.py`, `secret_registry.py`
   (every secret name; the tests use it).
 - `tests/` — offline; `conftest.py` has the fake Claude client and a placeholder
-  for every secret.
+  for every secret; `tests/js/` tests the page's scroll module in Node
+  (skipped without Node, required in CI).
 - `data/test-set/` — only `README.md` and `*.glossary.md` are tracked; media and
   reference transcripts stay local.
 - `docs/experiments.md` (experiment log, metrics, criteria, Backlog),

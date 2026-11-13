@@ -76,6 +76,11 @@ re-runs).
   VLC"); new file and folder names are cut at a word, not mid-word (older
   folders keep their names); `meta.json`, `done.json` and the page's marker
   moved into a hidden `.talk-autopsy` folder inside the result folder.
+- Found in the owner's second check: during correction and translation the
+  waiting screen's text did not follow the newest change, and "Jump to the
+  latest text" did not reach it, whenever the text box was small or low on
+  the page (one-column layout, 150 % zoom); the scroll position was measured
+  from the page instead of the box.
 
 **Pipeline (observability and cleanup only)**
 

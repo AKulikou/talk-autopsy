@@ -22,7 +22,7 @@ job at a time. This note describes the code as built (v1.1).
 ```
 talk-autopsy web (web/server.py)  ->  uvicorn on 127.0.0.1:8765 (or the next free port)
    ->  LocalGuard (Host, Origin, Sec-Fetch-Site, token)  ->  FastAPI app (web/app.py)
-   page: web/static/ (index.html, app.css, app.js + api, i18n, events, steps, transcript, player
+   page: web/static/ (index.html, app.css, app.js + api, i18n, events, steps, transcript, follow, player
          modules, strings/<lang>.json; no build step, no CDN)
    POST /api/estimate -> JobRunner.preview: metadata (yt-dlp or ffprobe), cost (youtube.estimate),
                          time (time_estimate.py)
@@ -110,7 +110,15 @@ cost. Right: the text, in two aligned columns.
   change (at most every 0.4 s) and scrolls to it. When the reader scrolls up
   (wheel, touch, keys or pointer on the text), it stops moving the text and
   shows "Jump to the latest text"; "Show earlier / later text" moves the
-  window by 100 segments. The DOM never holds more than one window.
+  window by 100 segments. The DOM never holds more than one window. The
+  newest row is the one the latest event changed (the last segment of a
+  recognition pass, correction block or translation block), so during
+  correction and translation newer rows follow it in the window; the page
+  puts that row at the bottom of the text box. Scroll positions are computed
+  from the rows' on-screen rectangles in `follow.js` (tested in Node,
+  `tests/js/follow.test.mjs`): `offsetTop` is measured from the page, not
+  the box, and in the one-column layout it scrolled the newest row out of
+  view (bug, 2026-11-13).
 - **Plain words only.** Nothing the core says is shown as it is: a known
   kind of message (subtitles written, burn-in started, a fallback engine)
   becomes one sentence in the interface language; every core line (and each

@@ -3,6 +3,7 @@
 // the rows (web/transcript.py); this module only fetches a bounded window of them and renders it.
 // It follows the newest text until the reader scrolls up; "Jump to latest" follows again.
 import { api } from "./api.js";
+import { Follower, anchorOf, scrollToKeep, scrollToShow } from "./follow.js";
 import { clock, gapsWarning, t } from "./i18n.js";
 
 const WINDOW = 120; // segments per window: the DOM never holds an hour of text
@@ -12,14 +13,12 @@ const MAX_TECH_LINES = 60; // technical details kept on the page
 
 let els = null;
 let jobId = null;
-let following = true;
+let follower = new Follower();
 let windowStart = 0;
 let last = null; // the last window from the server
 let timer = null;
 let inFlight = false;
 let again = false;
-let lastScrollTop = 0;
-let userInput = 0; // time of the reader's last wheel, touch, key or pointer input on the text
 
 const node = (tag, className, text) => {
   const el = document.createElement(tag);
@@ -34,7 +33,7 @@ const spoken = (key) => node("span", "sr", `${t(key)} `);
 export function reset(elements, id, targetName) {
   els = elements;
   jobId = id;
-  following = true;
+  follower = new Follower();
   windowStart = 0;
   last = null;
   clearTimeout(timer);
@@ -107,7 +106,7 @@ async function refresh() {
     return;
   }
   inFlight = true;
-  const query = following ? `count=${WINDOW}&follow=true` : `start=${windowStart}&count=${WINDOW}`;
+  const query = follower.following ? `count=${WINDOW}&follow=true` : `start=${windowStart}&count=${WINDOW}`;
   const id = jobId;
   const { ok, data } = await api("GET", `/api/jobs/${encodeURIComponent(id)}/transcript?${query}`);
   inFlight = false;
@@ -169,74 +168,67 @@ function statusText(summary) {
   return parts.join(" · ");
 }
 
+// The box's scrolling area and a row, as viewport rectangles (follow.js).
+function boxRect(box) {
+  const r = box.getBoundingClientRect();
+  return { top: r.top + box.clientTop, scrollTop: box.scrollTop, clientHeight: box.clientHeight,
+    scrollHeight: box.scrollHeight };
+}
+
+function rowRect(row) {
+  const r = row.getBoundingClientRect();
+  return { key: row.dataset.first, top: r.top, bottom: r.bottom };
+}
+
 function render(data) {
   last = data;
   const box = els.rows;
   // keep the reader's place: the first visible row and its offset
-  let anchor = null;
-  if (!following) {
-    for (const child of box.children) {
-      if (child.offsetTop + child.offsetHeight > box.scrollTop) {
-        anchor = { first: child.dataset.first, offset: child.offsetTop - box.scrollTop };
-        break;
-      }
-    }
-  }
+  const anchor = follower.following ? null : anchorOf(boxRect(box), [...box.children].map(rowRect));
   box.replaceChildren(...data.rows.map(rowOf));
   els.status.textContent = statusText(data.summary);
   showWarning(gapsWarning(data.summary.untranslated, data.summary.uncorrected));
   els.earlier.hidden = !data.more_before;
   els.later.hidden = !data.more_after;
   windowStart = data.start;
-  if (following) {
+  if (follower.following) {
     const newest = box.querySelector('[data-newest="true"]') || box.lastElementChild;
-    if (newest) box.scrollTop = Math.max(0, newest.offsetTop + newest.offsetHeight - box.clientHeight + 8);
+    if (newest) box.scrollTop = scrollToShow(boxRect(box), rowRect(newest));
   } else if (anchor) {
-    const same = box.querySelector(`[data-first="${anchor.first}"]`);
-    if (same) box.scrollTop = same.offsetTop - anchor.offset;
+    const same = box.querySelector(`[data-first="${anchor.key}"]`);
+    if (same) box.scrollTop = scrollToKeep(boxRect(box), rowRect(same), anchor.offset);
   }
-  lastScrollTop = box.scrollTop;
-  els.jump.hidden = following;
+  follower.placed(box.scrollTop);
+  els.jump.hidden = follower.following;
 }
 
+// Only the reader's own scrolling stops or resumes the following (follow.js).
 function onScroll() {
-  const box = els.rows;
-  // only the reader's own scrolling counts, not the page moving the text or the browser clamping it
-  if (Date.now() - userInput > 1500) {
-    lastScrollTop = box.scrollTop;
-    return;
+  if (follower.scrolled(boxRect(els.rows), Date.now(), !last || last.more_after)) {
+    els.jump.hidden = follower.following;
   }
-  const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 12;
-  if (box.scrollTop < lastScrollTop - 4 && following) {
-    following = false; // the reader went back: stop moving the text under them
-    els.jump.hidden = false;
-  } else if (!following && atBottom && last && !last.more_after) {
-    following = true; // back at the newest text by scrolling
-    els.jump.hidden = true;
-  }
-  lastScrollTop = box.scrollTop;
 }
 
 export function wire(elements) {
   els = elements;
   els.rows.addEventListener("scroll", onScroll, { passive: true });
   for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
-    els.rows.addEventListener(type, () => { userInput = Date.now(); }, { passive: true });
+    els.rows.addEventListener(type, () => follower.input(Date.now()), { passive: true });
   }
   els.jump.addEventListener("click", () => {
-    following = true;
+    follower.jump();
     els.jump.hidden = true;
     refresh();
     els.rows.focus({ preventScroll: true });
   });
   els.earlier.addEventListener("click", () => {
-    following = false;
+    follower.stop();
     windowStart = Math.max(0, (last?.start || 0) - STEP);
     refresh();
   });
   els.later.addEventListener("click", () => {
     windowStart = (last?.start || 0) + STEP;
-    following = false;
+    follower.stop();
     refresh();
   });
 }
