@@ -129,8 +129,14 @@ cost. Right: the text, in two aligned columns.
 - **Following.** The page fetches a window of 120 segments around the newest
   change (at most every 0.4 s) and scrolls to it. When the reader scrolls up
   (wheel, touch, keys or pointer on the text), it stops moving the text and
-  shows "Jump to the latest text", the one way back to the newest text.
-  "Show earlier text" moves the window 100 segments back; reading on and
+  enables "Jump to the latest text", the one way back to the newest text.
+  "Show earlier text" moves the window 100 segments back and shows the start
+  of the part it loaded (before, the view stayed where it was, so nothing
+  seemed to happen; bug, 2026-11-13). The two are outlined buttons like
+  "Hide text", at the grid's left edge, "↑ Show earlier text" above it and
+  "↓ Jump to the latest text" below; each stays in place and is disabled when
+  it has nothing to do (nothing earlier; the newest text already followed);
+  filled blue is kept for primary actions. Reading on and
   reaching the end of the rows shown loads the next 100 by itself, up to the
   newest text, where following resumes (owner, 2026-11-13: a "Show later
   text" button did in practice what "Jump to the latest text" does, and was

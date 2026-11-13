@@ -58,7 +58,10 @@ re-runs).
   choice.
 - One way to the newest text on the waiting screen: "Jump to the latest text"
   stays, "Show later text" is gone; reading earlier text and reaching the
-  end of the rows loads the next ones by itself.
+  end of the rows loads the next ones by itself. "Show earlier text" now
+  shows the start of the part it loaded; both buttons are outlined, at the
+  text's left edge (one above, one below), and disabled when there is
+  nothing to do.
 - The page's console window shows only the address, one line per run start
   and finish (ok, or with problems: see the log) and real errors; warnings
   and tracebacks go to the log file only.

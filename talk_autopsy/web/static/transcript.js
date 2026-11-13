@@ -25,6 +25,7 @@ let timer = null;
 let inFlight = false;
 let again = false;
 let shown = false; // the text panel is open
+let earlierFrom = null; // "show earlier text" asked for the window starting here: show its start
 
 const node = (tag, className, text) => {
   const el = document.createElement(tag);
@@ -52,8 +53,8 @@ export function reset(elements, id, targetName) {
   els.techList.replaceChildren();
   els.tech.hidden = true;
   showWarning("");
-  els.jump.hidden = true;
-  els.earlier.hidden = true;
+  earlierFrom = null;
+  navigation();
   refresh();
 }
 
@@ -204,9 +205,11 @@ function render(data) {
   const anchor = follower.following ? null : anchorOf(boxRect(box), [...box.children].map(rowRect));
   box.replaceChildren(...data.rows.map(rowOf));
   showSummary(data.summary);
-  els.earlier.hidden = !data.more_before;
   windowStart = data.start;
-  if (follower.following) {
+  if (earlierFrom !== null && !follower.following && data.start <= earlierFrom) {
+    box.scrollTop = 0; // the earlier part just loaded: show its start, not the old place
+    earlierFrom = null;
+  } else if (follower.following) {
     const newest = box.querySelector('[data-newest="true"]') || box.lastElementChild;
     if (newest) box.scrollTop = scrollToShow(boxRect(box), rowRect(newest));
   } else if (anchor) {
@@ -214,15 +217,20 @@ function render(data) {
     if (same) box.scrollTop = scrollToKeep(boxRect(box), rowRect(same), anchor.offset);
   }
   follower.placed(box.scrollTop);
-  els.jump.hidden = follower.following;
+  navigation();
+}
+
+// Both buttons stay in place: "show earlier text" is off when nothing is earlier, "jump to the
+// latest text" while the newest text is already followed (visible).
+function navigation() {
+  els.earlier.disabled = !last || !last.more_before;
+  els.jump.disabled = follower.following;
 }
 
 // Only the reader's own scrolling stops or resumes the following (follow.js). Reading earlier text
 // and reaching the end of the rows shown loads the next ones (no "show later text" button).
 function onScroll() {
-  if (follower.scrolled(boxRect(els.rows), Date.now(), !last || last.more_after)) {
-    els.jump.hidden = follower.following;
-  }
+  if (follower.scrolled(boxRect(els.rows), Date.now(), !last || last.more_after)) navigation();
   const loading = !last || windowStart !== last.start; // a window is on its way
   if (!loading && needsLater(boxRect(els.rows), follower.following, last.more_after)) {
     windowStart = last.start + STEP;
@@ -253,7 +261,7 @@ function setShown(value) {
   } else {
     els.rows.replaceChildren(); // closed: no rows kept or updated
     last = null;
-    els.jump.hidden = els.earlier.hidden = true;
+    navigation();
   }
   if (jobId) refresh();
 }
@@ -277,13 +285,16 @@ export function wire(elements) {
   }
   els.jump.addEventListener("click", () => {
     follower.jump();
-    els.jump.hidden = true;
+    earlierFrom = null;
+    els.rows.focus({ preventScroll: true }); // before the button is disabled, so focus is not lost
+    navigation();
     refresh();
-    els.rows.focus({ preventScroll: true });
   });
   els.earlier.addEventListener("click", () => {
     follower.stop();
     windowStart = Math.max(0, (last?.start || 0) - STEP);
+    earlierFrom = windowStart;
+    navigation();
     refresh();
   });
 }

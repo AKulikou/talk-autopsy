@@ -190,13 +190,9 @@ body:not([data-live-text="shown"]) .live {
 .row .pending { color: var(--muted); letter-spacing: 0.15em; }
 .row .flag { display: block; color: var(--warn); font-size: 0.85rem; }
 .row .flag::before { content: "⚠ "; }
-button.link {
-  border: none; background: transparent; color: var(--accent); padding: 0.35rem 0; text-decoration: underline;
-}
-button.jump {
-  display: block; margin: 0.5rem 0 0 auto; background: var(--accent); color: var(--accent-text);
-  font-weight: 600; padding: 0.4rem 0.9rem;
-}
+/* The text's two navigation buttons: outlined like "Hide text", at the grid's left edge, one
+   above it and one below; filled blue is kept for primary actions (owner, 2026-11-13). */
+button.text-nav { display: block; margin: 0.4rem 0; }
 .notices { list-style: none; padding: 0; margin: 0.5rem 0 0; font-size: 0.9rem; color: var(--muted); }
 .notices li { overflow-wrap: anywhere; }
 /* The one real warning: part of the video left as it was. Yellow is kept for this. */

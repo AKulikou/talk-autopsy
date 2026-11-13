@@ -131,7 +131,7 @@
   "live_removed": "removed:",
   "live_added": "added:",
   "live_earlier": "↑ Show earlier text",
-  "live_jump": "Jump to the latest text ↓",
+  "live_jump": "↓ Jump to the latest text",
   "live_show": "Show text as it is processed",
   "live_hide": "Hide text",
   "unit_byte": "MB",
