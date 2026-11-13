@@ -120,14 +120,13 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
 
 ## State
 
-Version 1.0.0 tagged `v1.0` (2026-11-12); package metadata now says 1.1.0
-(`CHANGELOG.md`, date set with the `v1.1` tag); the repository stays private.
+Version 1.1.0 tagged `v1.1` (2026-11-13), on a history rewritten once to
+remove identifying details from every earlier version (all tags re-created on
+the rewritten commits); the repository is private until the owner publishes it.
 Gate 2 -> 3 passed on 2026-11-11 (T6 run once: pass, not demonstrated).
 Independent LLM reviews #1 and #2 done and answered (`docs/review-*.md`). The
-web UI is built (`docs/web.md`); left for v1.1: the owner tries the UI, the
-git-history rewrite (dry run: `work/rewrite-dryrun-report.md`), publication
-and the `v1.1` tag (`docs/experiments.md`, Backlog › v1.1; never rewrite
-history or force-push before then). VideoLingo is out of scope; dubbing is stage 4.
+web UI is built (`docs/web.md`) and the owner accepted it. Never rewrite
+history or force-push again. VideoLingo is out of scope; dubbing is stage 4.
 
 ## Pitfalls
 

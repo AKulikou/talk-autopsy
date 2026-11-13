@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 — DATE-TBD (set when the `v1.1` tag is created)
+## 1.1.0 — 2026-11-13
 
 A local web page over the same core, on the frozen pipeline (`pipeline-v3.5`:
 model requests identical to `pipeline-v3`, plus bug fixes in how answers are
@@ -167,6 +167,11 @@ verdict as before, so 1.0's measured numbers carry over without re-runs).
   next to "accent", a role at a named company, video-ID file names); anything
   specific to one person lives in the git-ignored local list. The history
   rewrite also cleans earlier versions of the check's own files.
+- The git history was rewritten once, before publication: identifying details
+  are gone from every earlier file version and message (0 hits of the name
+  check over all 184 commits, gitleaks clean); authors, dates, subjects and
+  the tip's files are unchanged, the tags point at the rewritten commits, and
+  the commit hashes cited in the docs were updated.
 
 **Not in 1.1**
 

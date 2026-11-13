@@ -554,8 +554,8 @@ in Russian and not published) concern this version:
 | F13: a local web interface over the same core | done in v1.1: one video end to end from the page (link or file, estimate and confirmation, live steps and text, player); playlists through the command line |
 | F14: the target language is a parameter | works end to end (`run --lang`, the page's "Translate into"); only Russian is measured |
 
-**Next:** the git history rewritten so that old commits carry no identifying
-details, then the repository made public with the `v1.1` tag; after that, T3
+**Next:** the repository made public (v1.1 is tagged, on a git history
+rewritten so that old commits carry no identifying details); after that, T3
 on a new domain ([Backlog](docs/experiments.md#v11-web-interface-the-repository-becomes-public-with-it)).
 
 | Stage | Content | Gate |
