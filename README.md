@@ -1,10 +1,15 @@
 # Talk Autopsy [![CI](https://github.com/AKulikou/talk-autopsy/actions/workflows/ci.yml/badge.svg)](https://github.com/AKulikou/talk-autopsy/actions/workflows/ci.yml)
 
+<p align="center">
+  <img src="docs/img/talk_autopsy_banner.jpg"
+       alt="Talk Autopsy: a doctor dissects a vintage microphone and pulls out an audio waveform that turns into subtitle cards"
+       width="100%">
+</p>
+
 Subtitles in your language for English technical talks, with every stage of the
 pipeline measured on a fixed test set.
 
-Part of the Autopsy series: [Startup Autopsy](https://github.com/AKulikou/startup-autopsy) ·
-[Stock Autopsy](https://github.com/AKulikou/stock-autopsy)
+Part of the Autopsy series: [Startup Autopsy](https://github.com/AKulikou/startup-autopsy) · [Stock Autopsy](https://github.com/AKulikou/stock-autopsy)
 
 Machine subtitles for technical talks fail where it matters most. Whisper followed
 by Google Translate mangled the technical terms, product names and shell commands,
