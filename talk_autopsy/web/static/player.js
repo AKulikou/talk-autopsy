@@ -8,6 +8,7 @@
 // off only, with one line saying the translation is already in the picture.
 import { api } from "./api.js";
 import { t } from "./i18n.js";
+import { SubtitleChoice } from "./subs.js";
 
 const enc = encodeURIComponent;
 
@@ -85,37 +86,42 @@ export function show(els, info) {
 function subtitleButtons(els, media, info, trackElements) {
   const names = info.tracks.map((tr) => (tr.srclang === "en" ? t("subs_english") : tr.label || tr.srclang));
   const choices = [...names.map((name, index) => ({ name, index })), { name: t("subs_off"), index: -1 }];
-  let chosen = info.burned ? -1 : Math.max(0, info.tracks.findIndex((tr) => tr.default));
+  // the target language by default (the server marks it), off when the translation is burned in
+  const choice = new SubtitleChoice(info.burned ? -1 : Math.max(0, info.tracks.findIndex((tr) => tr.default)));
   const buttons = choices.map((c) => {
     const b = node("button", "secondary", c.name);
     b.type = "button";
     b.addEventListener("click", () => {
-      chosen = c.index;
+      choice.pick(c.index);
       apply();
     });
     return b;
   });
   const showState = () => {
+    const chosen = choice.chosen;
     buttons.forEach((b, k) => b.setAttribute("aria-pressed", String(choices[k].index === chosen)));
     els.subsState.textContent = chosen < 0 ? t("subs_state_off") : t("subs_state_on", { name: names[chosen] });
   };
   const apply = () => {
-    trackElements.forEach((el, k) => { el.track.mode = k === chosen ? "showing" : "disabled"; });
+    trackElements.forEach((el, k) => { el.track.mode = k === choice.chosen ? "showing" : "disabled"; });
     showState();
   };
   els.subsButtons.replaceChildren(...buttons);
   els.subs.hidden = false;
   apply();
-  // some browsers reset the modes once the media or a track has loaded: apply the choice again
-  media.addEventListener("loadedmetadata", apply);
-  for (const el of trackElements) el.addEventListener("load", apply);
-  // the browser's own menu (or anything else) changed a mode: the buttons follow, nothing is reset
+  // the browser changes modes by itself while the media and the tracks load: put the choice back,
+  // and count the browser's menu as the reader's only once everything has loaded (subs.js)
+  const loaded = () => media.readyState >= 1 && trackElements.every((el) => el.readyState >= 2);
+  const onLoad = () => {
+    apply();
+    if (loaded()) choice.settle();
+  };
+  media.addEventListener("loadedmetadata", onLoad);
+  for (const el of trackElements) el.addEventListener("load", onLoad);
   media.textTracks.addEventListener("change", () => {
-    const showing = trackElements.findIndex((el) => el.track.mode === "showing");
-    if (showing !== chosen) {
-      chosen = showing;
-      showState();
-    }
+    const action = choice.changed(trackElements.map((el) => el.track.mode));
+    if (action === "apply") apply();
+    else if (action === "follow") showState();
   });
 }
 

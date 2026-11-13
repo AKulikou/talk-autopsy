@@ -177,7 +177,13 @@ the choice is stated in words beside them). The browser's own subtitle menu
 note here said they had none, which was wrong) changes the same tracks, and
 the buttons follow it: they listen to the tracks' `change` event, so the page
 and the menu always agree (bug, 2026-11-13: the buttons said "off" while the
-menu had English on). It plays the video without burned-in subtitles when
+menu had English on). While the video and the tracks are still loading, the
+browser changes the modes by itself (automatic track selection, resets); such
+a change is not the reader's, so the page puts its choice back, and follows
+the menu only once everything has loaded (`subs.js`, tested in Node; the
+owner's second check, 2026-11-13: a video with the target track opened with
+"Off" selected). The default is always the target language; the page
+remembers no earlier choice. It plays the video without burned-in subtitles when
 there is one (the downloaded original `<stem>.mp4`, then the subtitle-track
 `<stem>.subs.mp4`). With only the burned-in `<stem>.<lang>.mp4` the
 target-language track is not offered at all, in the buttons or in the

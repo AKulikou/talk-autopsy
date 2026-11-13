@@ -94,7 +94,9 @@ re-runs).
   details"); buttons under the player choose the subtitles (target language,
   English, off), kept in step with the browser's own subtitle menu in both
   directions; a video with the translation burned in offers only English and
-  off (its translation track drew a second copy over the picture); the file
+  off (its translation track drew a second copy over the picture); the
+  browser's own track changes while the video loads no longer switch the
+  default (the target language) off; the file
   list says what each file is for ("Subtitles (Russian) — for the TV and
   VLC"); new file and folder names are cut at a word, not mid-word (older
   folders keep their names); `meta.json`, `done.json` and the page's marker
