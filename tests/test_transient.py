@@ -71,7 +71,7 @@ def ask(fake):
 def test_a_failure_on_the_service_side_is_retried(fake_claude, waits, error):
     fake = flaky(fake_claude, [error, error])
     result = ask(fake)
-    assert result.parsed.text == "ok" and len(fake.requests) == 3
+    assert result.result.text == "ok" and len(fake.requests) == 3
     assert waits == list(transient.DELAYS_S[:2])
     assert result.usage.input_tokens == 1000 and result.usage.output_tokens == 500  # counted once
 
@@ -135,7 +135,8 @@ def test_a_retried_block_gives_the_same_result_and_cost(default_path, fake_claud
     assert failed and waits == [transient.DELAYS_S[0]]
     assert [s["text"] for s in fixed["segments"]] == [s["text"] for s in clean_fixed["segments"]]
     assert fixed["meta"]["correction"]["cost_usd"] == clean_fixed["meta"]["correction"]["cost_usd"]
-    assert rerun.cost_usd == pytest.approx(sum(s.cost_usd for s in clean.steps if s.step in ("fix", "translate")))
+    paid = [s.cost_usd for s in clean.steps if s.step in ("fix", "translate")]
+    assert rerun.cost_usd == pytest.approx(sum(paid))
 
 
 def test_a_run_stopped_by_the_service_writes_no_partial_result(default_path, fake_claude,  # noqa: F811

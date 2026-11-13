@@ -134,3 +134,10 @@ def no_real_client(monkeypatch):
     def refuse():
         raise RuntimeError("a test reached the real Anthropic client; use the fake_claude fixture")
     monkeypatch.setattr(claude_client_module, "_direct_client", refuse)
+
+
+@pytest.fixture(autouse=True)
+def no_retry_waits(monkeypatch):
+    """A transient failure in a test is retried at once (core/transient.py waits about a minute)."""
+    from talk_autopsy.core import transient
+    monkeypatch.setattr(transient, "sleep", lambda seconds: None)

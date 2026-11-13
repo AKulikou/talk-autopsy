@@ -26,15 +26,25 @@ caller can still use the parts its own checks pass (correction and translation
 revert only the segments that failed; docs/decisions.md). The requests and the
 retry are unchanged. `tell_observer` lets such a caller report the answer it
 finally used.
+
+Transient failures (pipeline-v3.5): a request that fails on the service's side
+(unavailable, overloaded, rate limited, timeout, dropped connection) is sent
+again, unchanged, for about a minute (`core/transient.py`) before the failure
+stands. `spend_observer`, when set, is told the model and usage of every paid
+response (accepted or rejected), so a display can show what a run spent before
+it stopped; like `result_observer` it never changes a request or a result.
 """
 
 import logging
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
+from functools import partial
 
 from anthropic import Anthropic
 from pydantic import BaseModel
+
+from talk_autopsy.core.transient import retrying
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +58,18 @@ FALLBACK_BETA = "server-side-fallback-2026-07-01"
 # pipeline-v3.1, observability only: (label, accepted result) -> None, set by the pipeline around a step.
 result_observer: ContextVar[Callable[[str, BaseModel], None] | None] = ContextVar("result_observer",
                                                                                   default=None)
+# pipeline-v3.5, observability only: (model asked, usage of one paid response) -> None.
+spend_observer: ContextVar[Callable[[str, object], None] | None] = ContextVar("spend_observer", default=None)
+
+
+def _tell_spend(model: str, usage) -> None:
+    observer = spend_observer.get()
+    if observer is None:
+        return
+    try:
+        observer(model, usage)
+    except Exception:
+        logger.exception("the spend observer failed; the call goes on")
 
 
 def tell_observer(label: str, result: BaseModel, reverted: list[int] | None = None) -> None:
@@ -179,7 +201,7 @@ def request_structured[ResultT: BaseModel](
     Raises:
         RuntimeError: on truncation or refusal
         InvalidResultError: if every attempt returned output rejected by `validate`
-        anthropic.APIError: on API failures (the SDK has already retried transient ones)
+        anthropic.APIError: on API failures (transient ones only after about a minute of retries)
     """
     usage = Usage()
     extra: dict = {"thinking": {"type": "adaptive"}} if thinking else {}
@@ -203,15 +225,17 @@ def request_structured[ResultT: BaseModel](
         messages = [{"role": "user", "content": user}]
         paused_content = []
         for continuation in range(MAX_CONTINUATIONS + 1):
-            response = parse(
+            response = retrying(partial(
+                parse,
                 model=model,
                 max_tokens=max_tokens,
                 system=system_param,
                 messages=messages,
                 output_format=output_format,
                 **extra,
-            )
+            ), label)
             usage.add(response.usage)
+            _tell_spend(model, response.usage)
             logger.debug(
                 f"{label}: response request_id={response._request_id} "
                 f"stop_reason={response.stop_reason} input_tokens={response.usage.input_tokens} "

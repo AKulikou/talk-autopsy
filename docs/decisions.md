@@ -6,6 +6,44 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-13 — A failure on the service's side is retried for a minute; `pipeline-v3.5`
+
+Decision (owner, after the fourth check of v1.1): failures on a service's
+side that pass by themselves (unavailable, overloaded, rate limited, timeout,
+dropped connection) are retried automatically with growing waits, about a
+minute in all, before a run stops. Same proof conditions as `pipeline-v3.3`.
+
+The bug: a 34-minute video stopped at 15:20 in the correction step, block 3
+(two blocks had been answered), on HTTP 503 Service Unavailable from the
+Claude API. The Anthropic SDK retried twice, after 0.4 and 0.9 s, and gave
+up 5.4 s after the first 503; the page said "Unexpected error
+(ServiceUnavailableError)". A manual restart at 15:22 went through. Retries
+existed but were far too short for an outage of a minute or two.
+
+Fix (`core/transient.py`, `core/structured_call.py`): a Claude request that
+fails this way is sent again, unchanged, after 5, 15 and 30 s (four tries;
+the SDK's own two quick retries inside each try stay). Anything else (a bad
+request, a key error, a refusal, a rejected answer) is not retried. A failed
+try returned no answer, so its usage is never counted and nothing is written
+for it; a run that still stops writes no partial step result and keeps the
+finished steps. `spend_observer` (observability, like `result_observer`)
+reports the usage of every paid response, so the page can show what a run
+spent before it stopped.
+
+Not changed: AssemblyAI. Its failures never stop a run (the first pass falls
+back to Gemini or faster-whisper, the key-term pass keeps the first pass,
+both visibly), and `stt/assemblyai.py` is in the speech-recognition cache
+key; a retry there is an improvement for the Backlog.
+
+Proofs:
+
+| | result |
+|---|---|
+| (a) | `Tests: a transient service failure must be retried, not stop the run` (10 of 20 failing on the old code; the other 10 pin what held already: no retry of our own errors, no partial result) |
+| (b) | golden request snapshots unchanged; no module in `pipeline.STEP_CODE` changed, so no cache key moved |
+| (c) | the validators, `pipeline.py` and the prompts are unchanged since `pipeline-v3.4` (`git diff` empty), so every cached T2/T6 answer gets the same verdict |
+| (d) | no paid run; the T2 re-run from cache with invalid keys: every model step skipped, 0 USD, the 22 files of `work/T2-v3-cache/` byte-identical |
+
 ## 2026-11-13 — Estimates and outputs follow the cache; the agreed-term check stays
 
 Three decisions after the owner's third check, none of them a change to a frozen module:

@@ -68,6 +68,11 @@ re-runs).
 
 **Fixed**
 
+- A short outage of the Claude API no longer stops a run (`pipeline-v3.5`):
+  a request that fails on the service's side (unavailable, overloaded, rate
+  limited, timeout, dropped connection) is sent again after 5, 15 and 30 s;
+  nothing is counted or written twice. Found when a 34-minute video stopped
+  on HTTP 503 after the SDK's two retries within five seconds.
 - The estimate counts only what will run: cached steps, reused blocks and
   reused videos cost nothing and take no time; the screen names what comes
   from the cache and the price of a run from scratch, and says "up to" when
