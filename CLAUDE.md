@@ -56,7 +56,7 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   (every secret name; the tests use it).
 - `tests/` — offline; `conftest.py` has the fake Claude client and a placeholder
   for every secret; `tests/js/` tests the page's DOM-free modules (scroll,
-  subtitle choice) with Node's built-in runner, no package install (skipped
+  subtitle choice, money) with Node's built-in runner, no package install (skipped
   without Node, required in CI).
 - `data/test-set/` — only `README.md` and `*.glossary.md` are tracked; media and
   reference transcripts stay local.

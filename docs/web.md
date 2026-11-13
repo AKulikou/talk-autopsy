@@ -81,8 +81,8 @@ Every event: `{"id": int, "type": str, "t": seconds since the job started, ...}`
 | `translated` | `position`, `total`, `failed`, `ids`, `units` (`id`, `text`, `source`, `source_ids`), `source_ids`; `from_file` for a cached step | one per translation block, live; from `<lang>.json` when cached |
 | `estimate_updated` | `claude_usd` + `claude_parts`, and/or `time` (`seconds`, `source`, `first_run_rough`, `excludes`); at the start also `cost` | pipeline `estimate` events; the time estimator (start, every step end, a 30 s tick when the value moved) |
 | `notice` | `code`, `text` (the core's own line), `message` + `params` (a known kind, `web/notices.py`; null otherwise), `kind` | pipeline `fallback` and `srt` lines, output writer messages, a progress-display error |
-| `finished` | `folder`, `result` (the result id for the player), `files` (`name`, `format`, `purpose`), `cost_usd`, `stt_cost_usd`, `fallbacks`, `untranslated` and `uncorrected` (time ranges of failed blocks) | the job, after the outputs are written (costs: the pipeline's own report; ranges: the step outputs' `failed_blocks`) |
-| `failed` | `reason`, `hint` (`doctor`, `youtube`, `outputs`, `cost_limit`, `input`, `log`), `step`, `error_type` (for an unexpected error) | any exception, mapped to a plain message; secret values are masked |
+| `finished` | `folder`, `result` (the result id for the player), `files` (`name`, `format`, `purpose`), `cost_usd`, `stt_cost_usd`, `cached` (`claude`, `stt`: every paid step of that service came from the cache), `attempts` (`failed`, `claude_usd`, `stt_usd`: the video's total with the failed runs before this one, or null), `fallbacks`, `untranslated` and `uncorrected` (time ranges of failed blocks) | the job, after the outputs are written (costs: the pipeline's own report; ranges: the step outputs' `failed_blocks`; attempts: the result folder's run log) |
+| `failed` | `reason` (technical, English), `hint` (`service`, `doctor`, `youtube`, `outputs`, `cost_limit`, `input`, `log`), `step`, `error_type`, for `service` also `service` (`claude`, `assemblyai`, `gemini`, `network`), `kind` (`unavailable`, `overloaded`, `rate_limited`, `timeout`, `connection`) and `status` (HTTP); `cost_usd` and `stt_cost_usd` (spent before the stop, including the paid answers of the step that stopped), `cached` | any exception, mapped to a plain message; secret values are masked |
 
 The SSE stream sends the three text events as a light `text_changed`
 (`kind`, `position`, `total`, `failed`, `source`) without their text; the page
@@ -249,6 +249,44 @@ folder moves its old service files in. No frozen module reads these files:
 the pipeline's own `meta.json` is in `work/<video-id>/`, so no cache key
 depends on them.
 
+**Money, one way everywhere.** Every amount on the page (the estimate, each
+paid step on the waiting screen, the running total, Done, Failed, a result
+opened from the start page) is written by one function, `static/money.js`,
+tested per language in Node: the total first, then each service, two
+decimals, the decimal comma in Russian and Lithuanian, "< 0.01" for an
+amount above zero but below one cent, and "(from cache)" after a part that
+cost nothing because its steps were reused:
+
+    Spent: 0.40 USD — Claude 0.40 + speech recognition 0.00 (from cache)
+    Потрачено: 0,40 USD — на Claude 0,40 + на распознавание речи 0,00 (из кэша)
+
+A step shows only its own service's part ("Spent: 0.04 USD — Claude 0.04");
+the estimate shows the line without "Spent" (its label says what it is), "up
+to …" when it is an upper bound. The console window's finish line follows
+the same rule in English (`web/money.py`).
+
+**A service that is down.** A Claude request that fails on the service's
+side (HTTP 503 unavailable, 529 overloaded, 429 rate limited, a timeout, a
+dropped connection) is tried again after 5, 15 and 30 s before the run stops
+(`pipeline-v3.5`, `core/transient.py`; owner's report, 2026-11-13: a
+34-minute video stopped on one 503 after the SDK's two retries within five
+seconds). If it still fails, the Failed screen says in words which service was
+unavailable and that it is on the service's side, that the finished steps are
+kept, and what was spent before the stop (finished steps plus the paid answers
+of the step that stopped, from `structured_call.spend_observer`). "Run again"
+asks for the estimate of the same job first, as usual; the cache makes it
+continue where it stopped. The exception's class and message are only under
+"Technical details", for every failure. AssemblyAI is not retried: its
+failures never stop a run (the first pass falls back to another engine, the
+key-term pass keeps the first pass).
+
+**Run log.** Every finished or failed web run appends a line to the result
+folder's `.talk-autopsy/runs.jsonl` (state and money). When a run finishes
+after failed attempts (since the previous finished run of that video), Done
+shows this run's money and, on a second line, the video's total with them;
+the console's finish line says it too, and the result marker keeps it for the
+start page.
+
 ## API
 
 | method, path | what |
@@ -358,7 +396,9 @@ Without a browser the same screens can be taken by hand: `uv run talk-autopsy
 web --replay tests/fixtures/replay/synthetic-talk.jsonl --speed 1`, open the
 page with `?ui=en`, use a link (one containing `long` shows the over-limit
 confirmation), and for the failed screen replay
-`synthetic-talk-failed.jsonl`. The Done screen then plays a test pattern and
+`synthetic-talk-unavailable.jsonl` (the Claude API answers HTTP 503 to every
+try: the README picture, with "Run again") or `synthetic-talk-failed.jsonl`
+(an unexpected error). The Done screen then plays a test pattern and
 shows the demo folder's path below the player: keep it out of the picture.
 
 ## Not in v1.1

@@ -68,6 +68,17 @@ re-runs).
 
 **Fixed**
 
+- A run stopped by a service outage says so in plain words: which service
+  was unavailable, that it is on the service's side, that the finished
+  steps are kept, and what was spent before the stop (including the
+  answers already paid in the step that stopped); "Run again" starts the
+  same job from its estimate. Exception class names appear only under
+  "Technical details". When a video finishes after failed attempts, Done
+  and the console also give the video's total with them.
+- Money is written the same way everywhere (estimate, each step, Done,
+  Failed, recent results, console): "Spent: 0.40 USD — Claude 0.40 +
+  speech recognition 0.00 (from cache)", two decimals, "< 0.01" below a
+  cent, a decimal comma in Russian and Lithuanian.
 - A short outage of the Claude API no longer stops a run (`pipeline-v3.5`):
   a request that fails on the service's side (unavailable, overloaded, rate
   limited, timeout, dropped connection) is sent again after 5, 15 and 30 s;
