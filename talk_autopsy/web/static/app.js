@@ -306,7 +306,7 @@ function onEvent(event) {
 
 function liveElements() {
   return { rows: $("live-rows"), status: $("live-status"), target: $("col-target"), notices: $("live-notices"),
-    jump: $("live-jump"), earlier: $("live-earlier"), later: $("live-later"), warning: $("run-warning"),
+    jump: $("live-jump"), earlier: $("live-earlier"), warning: $("run-warning"),
     tech: $("live-tech"), techList: $("live-tech-list"), toggle: $("live-toggle"), panel: $("live-panel") };
 }
 

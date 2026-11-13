@@ -56,6 +56,9 @@ re-runs).
   summary line (corrections made, phrases translated) and the warnings stay
   visible. "Show text as it is processed" opens it; the browser remembers the
   choice.
+- One way to the newest text on the waiting screen: "Jump to the latest text"
+  stays, "Show later text" is gone; reading earlier text and reaching the
+  end of the rows loads the next ones by itself.
 
 **Fixed**
 

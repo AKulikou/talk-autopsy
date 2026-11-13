@@ -7,11 +7,11 @@
 // opening it fetches the newest window, folded on the server from every event so far. The choice
 // is remembered in this browser when storage is available.
 import { api } from "./api.js";
-import { Follower, anchorOf, scrollToKeep, scrollToShow } from "./follow.js";
+import { Follower, anchorOf, needsLater, scrollToKeep, scrollToShow } from "./follow.js";
 import { clock, gapsWarning, t } from "./i18n.js";
 
 const WINDOW = 120; // segments per window: the DOM never holds an hour of text
-const STEP = 100; // how far "show earlier / later" moves the window
+const STEP = 100; // how far "show earlier text", or reaching the end of the rows, moves the window
 const REFRESH_MS = 400; // at most this often while text keeps arriving
 const MAX_TECH_LINES = 60; // technical details kept on the page
 const STORAGE_KEY = "talk-autopsy.live-text"; // "shown" when the reader opened the text panel
@@ -54,7 +54,6 @@ export function reset(elements, id, targetName) {
   showWarning("");
   els.jump.hidden = true;
   els.earlier.hidden = true;
-  els.later.hidden = true;
   refresh();
 }
 
@@ -206,7 +205,6 @@ function render(data) {
   box.replaceChildren(...data.rows.map(rowOf));
   showSummary(data.summary);
   els.earlier.hidden = !data.more_before;
-  els.later.hidden = !data.more_after;
   windowStart = data.start;
   if (follower.following) {
     const newest = box.querySelector('[data-newest="true"]') || box.lastElementChild;
@@ -219,10 +217,16 @@ function render(data) {
   els.jump.hidden = follower.following;
 }
 
-// Only the reader's own scrolling stops or resumes the following (follow.js).
+// Only the reader's own scrolling stops or resumes the following (follow.js). Reading earlier text
+// and reaching the end of the rows shown loads the next ones (no "show later text" button).
 function onScroll() {
   if (follower.scrolled(boxRect(els.rows), Date.now(), !last || last.more_after)) {
     els.jump.hidden = follower.following;
+  }
+  const loading = !last || windowStart !== last.start; // a window is on its way
+  if (!loading && needsLater(boxRect(els.rows), follower.following, last.more_after)) {
+    windowStart = last.start + STEP;
+    refresh();
   }
 }
 
@@ -249,7 +253,7 @@ function setShown(value) {
   } else {
     els.rows.replaceChildren(); // closed: no rows kept or updated
     last = null;
-    els.jump.hidden = els.earlier.hidden = els.later.hidden = true;
+    els.jump.hidden = els.earlier.hidden = true;
   }
   if (jobId) refresh();
 }
@@ -280,11 +284,6 @@ export function wire(elements) {
   els.earlier.addEventListener("click", () => {
     follower.stop();
     windowStart = Math.max(0, (last?.start || 0) - STEP);
-    refresh();
-  });
-  els.later.addEventListener("click", () => {
-    windowStart = (last?.start || 0) + STEP;
-    follower.stop();
     refresh();
   });
 }

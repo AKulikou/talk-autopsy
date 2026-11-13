@@ -39,6 +39,19 @@ export function scrollToKeep(box, row, offset) {
   return clamp(box.scrollTop + (row.top - box.top) - offset, box);
 }
 
+/** The box is scrolled to its end (within a few pixels). */
+export function atEnd(box) {
+  return box.scrollTop + box.clientHeight >= box.scrollHeight - 12;
+}
+
+/**
+ * The reader, reading earlier text, reached the end of the rows shown while newer rows exist:
+ * the page loads the next rows itself (there is no "show later text" button; owner, 2026-11-13).
+ */
+export function needsLater(box, following, moreAfter) {
+  return !following && moreAfter && atEnd(box);
+}
+
 function clamp(value, box) {
   return Math.max(0, Math.min(Math.round(value), Math.max(0, box.scrollHeight - box.clientHeight)));
 }
@@ -63,7 +76,7 @@ export class Follower {
     this.userInput = -Infinity;
   }
 
-  /** The reader chose to read elsewhere (earlier / later text). */
+  /** The reader chose to read earlier text. */
   stop() {
     this.following = false;
   }
@@ -84,9 +97,8 @@ export class Follower {
     if (ours) {
       this.placedAt = null;
     } else if (now - this.userInput <= INPUT_MS) {
-      const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 12;
       if (this.following && box.scrollTop < this.lastTop - 4) this.following = false;
-      else if (!this.following && atBottom && !moreAfter) this.following = true;
+      else if (!this.following && atEnd(box) && !moreAfter) this.following = true;
     }
     this.lastTop = box.scrollTop;
     return this.following !== before;

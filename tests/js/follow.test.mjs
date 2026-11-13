@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const source = readFileSync(new URL("../../talk_autopsy/web/static/follow.js", import.meta.url), "utf-8");
-const { Follower, anchorOf, scrollToKeep, scrollToShow } = await import(
+const { Follower, anchorOf, needsLater, scrollToKeep, scrollToShow } = await import(
   `data:text/javascript,${encodeURIComponent(source)}`);
 
 // A box whose scrolling area starts `top` pixels down the viewport, and a row at `at` pixels
@@ -101,4 +101,13 @@ test("jump to latest: the wheel just before the click does not undo it", () => {
   // the window is rebuilt around the newest row and the browser settles one pixel off
   assert.equal(f.scrolled({ scrollTop: 2600, clientHeight: 400, scrollHeight: 6000 }, 1550, true), false);
   assert.equal(f.following, true);
+});
+
+test("reading earlier text, the end of the rows loads the next ones (no 'show later' button)", () => {
+  const end = { scrollTop: 5600, clientHeight: 400, scrollHeight: 6000 };
+  const middle = { scrollTop: 3000, clientHeight: 400, scrollHeight: 6000 };
+  assert.equal(needsLater(end, false, true), true); // at the end, newer rows exist
+  assert.equal(needsLater(middle, false, true), false); // not at the end yet
+  assert.equal(needsLater(end, false, false), false); // nothing newer: following resumes instead
+  assert.equal(needsLater(end, true, true), false); // following: the window is the newest already
 });
