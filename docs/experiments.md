@@ -1463,6 +1463,41 @@ Through the web server's HTTP API (`talk-autopsy web`), the frozen
   this video. Subtitles from 0:00; folder holds only the video, the burned-in
   video and two `.srt` files, plus the hidden service folder.
 
+### Bug-fix check runs (2026-11-13, v1.1 session 4, round 2, `pipeline-v3.4`; not scored)
+
+- **The owner's third real video again, through the web API.** A 25:56 talk on
+  using Claude Code (local file, profile `tv`, Russian) whose correction block 3
+  (10:03–15:03, 59 segments) had kept the recognized text: both answers were
+  rejected for "glossary terms removed: MCP". Offline first (no API call): the
+  rejected answers are not stored (two request ids in the log); "MCP" occurs
+  three times in the block, the first recognition pass without a glossary has
+  the same words, and a local faster-whisper pass over 676–700 s hears "run
+  MCP" too, meaning the `/mcp` command; the term
+  counter reads "/mcp" as another word. The re-run sent the identical request
+  for block 3 only (blocks 1, 2, 4, 5, 6 reused): accepted on the first attempt,
+  with "So run MCP" -> "So run /mcp" (reason "slash command"), and "/clear",
+  "/compact" written the same way in two other segments, so the reading above
+  is confirmed for this answer; no segment reverted. Translation: blocks 3 and 4
+  sent (4 because its read-only context is the end of block 3), 1, 2, 5, 6
+  reused; the three units carry "/mcp", "/clear", "/compact". Page estimate:
+  0.55 USD (a full run); own estimate 0.10–0.22 USD. Spent: **0.1084 USD Claude
+  (correction 0.0356, translation 0.0728), 0 USD AssemblyAI**; no warning; the
+  burned-in MP4 remade (462 s).
+- **A fully cached re-run** of the 5:30 Python video, to see the server's new
+  console lines: every model step skipped, **0 USD**; the console showed only
+  "Started: ..." and "Finished: ok (0.00 USD)".
+- **Fallbacks in every log** under `logs/` (5 log files, 6 recorded jobs,
+  2026-11-12 and 13; the CLI writes no log file there): 1 correction block
+  fallback ("glossary terms removed: MCP", this video), 1 translation block
+  fallback ("left in English", `0.8.26.`, the first video), each after 2
+  rejected attempts; no speech-recognition engine fallback, no refusal
+  fallback, no rate limit, timeout or overload. Other lines: 3 refused requests
+  from the page's guard test, 47 `ConnectionResetError` tracebacks from before
+  the fix of 2026-11-12. In the cached results under `work/` the same check
+  had also failed one correction block of the T2 source on its first run
+  ("glossary terms removed: Claude, MCP, JSON", fixed then by the merged-term
+  rule).
+
 ### Web UI smoke run (2026-11-12, v1.1 session 2; not scored)
 
 - **Smoke 3, link mode, fresh video, through the page.** A 5:43 public
@@ -2512,11 +2547,13 @@ paths, so they wait until those modules are reopened for the web interface.
 - Diarization for interviews (speaker labels; stress-01, review #1 finding 14).
 - translation-v4 idea (below: short glosses, no acronym expansion, common
   jargon kept); needs a blind rating against v2.1 before it can replace it.
-- One failed segment, not a failed block (owner's first real video,
-  2026-11-12): when one segment of a translation block fails the checks twice,
-  keep the block's other segments translated and leave only that segment in
-  English (now the whole block, about five minutes, stays English until a
-  re-run). Needs a change to `translate.py` and a new tag.
+- Done as a bug fix (`pipeline-v3.4`, 2026-11-13): one failed segment, not a
+  failed block, in correction and translation (it happened on two of three
+  real videos).
+- A translation segment rejected only because an agreed glossary rendering is
+  missing is now kept in English (the per-segment rule); a translated
+  sentence with another word for the term may serve a viewer better than
+  English. Measure on cached answers before changing it.
 - Segments the "left in English" check still rejects although they may be
   correct as they are (left out of the `pipeline-v3.3` bug fix because telling
   them from ordinary English needs more than the token's shape): a bare acronym
@@ -2530,9 +2567,9 @@ paths, so they wait until those modules are reopened for the web interface.
     that skips up-to-date steps would say what a re-run really costs.
   - The estimate's "not counting: Download from YouTube" puts a step name
     with its capital letter in mid-sentence (all three languages).
-  - A failed correction block makes the next run redo the whole correction
-    (and so the translation); per-block reuse as for the translation would
-    need a change to `correct.py`.
+  - Done in `pipeline-v3.4`: a correction with a failed block or reverted
+    segment sends only those blocks again, and the translation reuses every
+    block whose request is unchanged.
   - A result folder made before 1.1 keeps its mid-word file names on a re-run
     (the old download is reused); renaming the files there would need care
     with players that remember positions by file name.
