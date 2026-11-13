@@ -258,6 +258,9 @@ not a real video):
    recognised text, then each correction shown in place: struck-through words
    replaced by underlined ones) and the translation, filled block by block. It
    follows the newest text until you scroll up, and a reload rebuilds it.
+   The text panel is collapsed by default (one summary line stays: corrections
+   made, phrases translated); "Show text as it is processed" opens it, and the
+   browser remembers the choice. The pictures show it open.
 3. **Done.** A player in the page with the target-language and English
    subtitles as tracks, the list of files and "Open folder"; the start page
    lists recent results.

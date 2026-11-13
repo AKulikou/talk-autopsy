@@ -51,6 +51,11 @@ re-runs).
   the download) unless `--max-cost` is raised. Playlists apply the same
   per-video limit. One function (`youtube.over_video_limit`) serves the CLI
   and the page.
+- The waiting screen's text panel (English and translation side by side) is
+  collapsed by default (owner's decision): the steps take one column, and a
+  summary line (corrections made, phrases translated) and the warnings stay
+  visible. "Show text as it is processed" opens it; the browser remembers the
+  choice.
 
 **Fixed**
 

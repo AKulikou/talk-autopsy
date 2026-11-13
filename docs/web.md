@@ -106,6 +106,21 @@ cost. Right: the text, in two aligned columns.
   model listed. A failed block says so on its rows and keeps its text.
 - **Translation.** Rows fill block by block; rows still waiting show a quiet
   "…" (with a hidden "translation not ready yet").
+- **Collapsed by default** (owner's decision, 2026-11-13: not needed in
+  everyday use). The running screen shows the steps in one column of the
+  usual width and, under them, the text's summary line (corrections made,
+  phrases translated) and a button, "Show text as it is processed" / "Hide
+  text" (a real button with `aria-expanded`, so Tab and Enter or Space work).
+  The warnings stay visible either way: the untranslated / uncorrected
+  warning with its minutes, the notices and the technical details. While
+  collapsed the page asks only for the summary
+  (`/api/jobs/{id}/transcript?rows=false`) and builds no rows; opening the
+  panel fetches the newest window, which the server folds from every event so
+  far, and widens the screen to the two columns. The choice is kept in this
+  browser's `localStorage` (`talk-autopsy.live-text`); every read and write is
+  in try/catch, so without storage (a private window, blocked site data) the
+  panel starts collapsed and the toggle still works until the page is
+  reloaded.
 - **Following.** The page fetches a window of 120 segments around the newest
   change (at most every 0.4 s) and scrolls to it. When the reader scrolls up
   (wheel, touch, keys or pointer on the text), it stops moving the text and
@@ -187,7 +202,7 @@ depends on them.
 | `POST /api/jobs` | start a job (cost confirmation when needed) |
 | `GET /api/jobs/current` | the running or last job and its state, for a page reload |
 | `GET /api/jobs/{id}/events?after=<id>` | SSE stream with replay (also from `Last-Event-ID`), a heartbeat comment every 15 s, closed after the last event |
-| `GET /api/jobs/{id}/transcript?start=&count=&follow=` | a window of rows and the summary (counts, newest position) |
+| `GET /api/jobs/{id}/transcript?start=&count=&follow=` | a window of rows and the summary (counts, newest position); `rows=false`: the summary only (text panel collapsed) |
 | `GET /api/results` | recent results |
 | `GET /api/results/{id}` | one result: files, the media to play, its kind, burned-in or not, subtitle tracks |
 | `GET /api/results/{id}/media/{name}` | the video or audio, with HTTP Range (seeking) |
@@ -262,6 +277,7 @@ left in English); regenerate with
 ```
 uv run python scripts/web_screenshots.py                    # English -> docs/img/
 uv run python scripts/web_screenshots.py --ui lt --out work/screenshots-lt
+uv run python scripts/web_screenshots.py --ui ru --set all --out work/screenshots-ru   # + warning, collapsed
 ```
 
 The script needs Edge or Chrome (driven headless over the DevTools protocol,
@@ -271,7 +287,9 @@ folder of its own (so the recent-results list holds only the replayed demo),
 uses link mode on the form (no local folder on screen), plays a title card it
 makes with ffmpeg, and pauses the playback right after chosen events to catch
 the waiting screen: during the second recognition pass (a spinner) and after
-the first translation block (a real bar, corrections in place). Each picture
+the first translation block (a real bar, corrections in place). It opens the
+text panel for these pictures (collapsed by default); `--set collapsed` adds
+the waiting screen as it opens, and checks that no row was built. Each picture
 is cut at the bottom of its card; the Done picture ends at the cost line, and
 the script checks that the result folder (a local path) is below it. About
 four minutes per language (the replay runs at natural speed so the elapsed

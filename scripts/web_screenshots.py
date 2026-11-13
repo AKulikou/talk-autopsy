@@ -19,9 +19,12 @@ Screens: form (with the synthetic recent result), estimate with the
 over-limit confirmation, running (translation block 1 of 2: a real progress
 bar, corrections highlighted, half the translation), running during a step
 without a position (a spinner), done with the player and subtitles, failed.
+The waiting screen's text panel is opened for every picture (it is collapsed
+by default, and the rows are the best picture of what the pipeline does).
 `--set untranslated` (or `all`) adds the run whose first translation block was
 left in English: the waiting screen right after that block, and the Done screen
-with the warning. `--zoom 1.5` renders as the browser does at 150% (fewer CSS
+with the warning; `--set collapsed` (or `all`) the waiting screen as it opens,
+text panel collapsed, in translation block 1. `--zoom 1.5` renders as the browser does at 150% (fewer CSS
 pixels across, each drawn bigger).
 Each PNG is reduced to a palette with ffmpeg when that keeps it smaller.
 """
@@ -267,6 +270,15 @@ def start_estimate(b: Browser, base: str, ui: str, link: str) -> None:
     time.sleep(0.4)
 
 
+def text_panel(b: Browser, shown: bool) -> None:
+    """Open or close the waiting screen's text panel (the page remembers it in the browser profile)."""
+    b.wait("document.getElementById('live-toggle') !== null")
+    expanded = b.js("document.getElementById('live-toggle').getAttribute('aria-expanded') === 'true'")
+    if expanded != shown:
+        b.js("document.getElementById('live-toggle').click()")
+    time.sleep(0.6)
+
+
 def take(b: Browser, out: Path, name: str, shots: list[Path], down_to: str, margin: int = 24) -> None:
     """A screenshot from the top of the page to the bottom of element `down_to` (plus a margin)."""
     b.js("document.activeElement && document.activeElement.blur()")
@@ -289,6 +301,7 @@ def finished_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]
     srv.pause_when = lambda e: e["type"] == "step_started" and e.get("step") == "stt2"
     b.js("document.getElementById('start').click()")
     b.wait("!document.getElementById('view-run').hidden")
+    text_panel(b, True)
     srv.paused.wait(60)
     srv.paused.clear()
     b.wait("document.querySelectorAll('#live-rows .row').length > 5", 30)
@@ -346,6 +359,7 @@ def untranslated_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[P
     srv.pause_when = lambda e: e["type"] == "translated" and e.get("position") == 1
     b.js("document.getElementById('start').click()")
     b.wait("!document.getElementById('view-run').hidden")
+    text_panel(b, True)
     srv.paused.wait(120)
     srv.paused.clear()
     b.wait("!document.getElementById('run-warning').hidden", 30)
@@ -358,14 +372,32 @@ def untranslated_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[P
     take(b, out, "web-done-untranslated", shots, "view-done")
 
 
+def collapsed_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) -> None:
+    """The waiting screen with the text panel collapsed (the default): steps, summary line, no rows."""
+    start_estimate(b, srv.url, ui, LINK)
+    srv.pause_when = lambda e: e["type"] == "translated" and e.get("position") == 1
+    b.js("document.getElementById('start').click()")
+    b.wait("!document.getElementById('view-run').hidden")
+    text_panel(b, False)
+    srv.paused.wait(120)
+    srv.paused.clear()
+    b.wait("document.getElementById('live-status').textContent.includes('·')", 30)
+    assert b.js("document.querySelectorAll('#live-rows .row').length === 0"), "rows built while collapsed"
+    time.sleep(1.0)
+    take(b, out, "web-running-collapsed", shots, "view-run")
+    srv.resume.set()
+    b.wait("!document.getElementById('view-done').hidden", 120)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--ui", default="en", help="Interface language: en, ru or lt.")
     parser.add_argument("--out", type=Path, default=ROOT / "docs" / "img")
     parser.add_argument("--speed", type=float, default=1.0,
                         help="Replay speed; 1 (natural) keeps the elapsed time in line with the step times.")
-    parser.add_argument("--set", choices=("readme", "untranslated", "all"), default="readme",
-                        help="readme: the README pictures; untranslated: the warning screens; all: both.")
+    parser.add_argument("--set", choices=("readme", "untranslated", "collapsed", "all"), default="readme",
+                        help="readme: the README pictures; untranslated: the warning screens; "
+                             "collapsed: the waiting screen with the text panel collapsed; all: every one.")
     parser.add_argument("--zoom", type=float, default=1.0, help="Browser zoom, e.g. 1.5 for 150%%.")
     args = parser.parse_args()
     if shutil.which("ffmpeg") is None:
@@ -380,6 +412,8 @@ def main() -> None:
             flows += [(FINISHED, finished_flow), (FAILED, failed_flow)]
         if args.set in ("untranslated", "all"):
             flows += [(UNTRANSLATED, untranslated_flow)]
+        if args.set in ("collapsed", "all"):
+            flows += [(FINISHED, collapsed_flow)]
         try:
             for recording, flow in flows:
                 srv = Server(recording, tmp / recording.stem, args.speed)

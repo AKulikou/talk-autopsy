@@ -10,7 +10,8 @@ The local web application: one page and a small JSON API (docs/web.md).
     POST /api/jobs                  start a job (cost gate in the runner)
     GET  /api/jobs/current          the running or last job, for a page reload
     GET  /api/jobs/{id}/events      Server-Sent Events, replay after ?after=<id> or Last-Event-ID
-    GET  /api/jobs/{id}/transcript  a window of the waiting screen's rows (web/transcript.py)
+    GET  /api/jobs/{id}/transcript  a window of the waiting screen's rows (web/transcript.py);
+                                    ?rows=false: the summary only (text panel collapsed)
     GET  /api/results               recent finished results in the output root (web/results.py)
     GET  /api/results/{id}          one result: files, the media to play, subtitle tracks
     GET  /api/results/{id}/media/{name}  the video or audio, with HTTP Range (seeking)
@@ -279,10 +280,13 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
     @app.get("/api/jobs/{job_id}/transcript")
-    def transcript(job_id: str, start: int | None = None, count: int = 120, follow: bool = False):
+    def transcript(job_id: str, start: int | None = None, count: int = 120, follow: bool = False,
+                   rows: bool = True):
         job = runner.get(job_id)
         if job is None:
             return error(404, "no_job", "This job is not known (the server was restarted).")
+        if not rows:  # the text panel is collapsed: the summary line and the warning only
+            return {"summary": job.view.summary()}
         return job.view.window(start, count, follow=follow or start is None)
 
     media_headers = {"Cross-Origin-Resource-Policy": "same-origin", "X-Content-Type-Options": "nosniff",

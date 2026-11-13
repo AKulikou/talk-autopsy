@@ -133,6 +133,8 @@
   "live_earlier": "↑ Rodyti ankstesnį tekstą",
   "live_later": "↓ Rodyti vėlesnį tekstą",
   "live_jump": "Į naujausią tekstą ↓",
+  "live_show": "Rodyti tekstą, kol jis apdorojamas",
+  "live_hide": "Slėpti tekstą",
   "unit_byte": "MB",
   "unit_second": "s",
   "tokens": "žetonai: {input} įvesties / {output} išvesties",

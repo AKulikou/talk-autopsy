@@ -138,13 +138,21 @@ legend { font-weight: 600; padding: 0; margin-bottom: 0.25rem; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; border-top-color: var(--accent); } }
 
-/* The running and done screens use more width: two text columns, a player. */
-body[data-view="view-run"] main, body[data-view="view-run"] .top,
+/* The done screen and the running screen with its text panel open use more width: two text
+   columns, a player. With the panel collapsed (the default) the running screen is one column
+   of the usual width: the steps, then the text's summary line and the button to open it. */
+body[data-view="view-run"][data-live-text="shown"] main, body[data-view="view-run"][data-live-text="shown"] .top,
 body[data-view="view-done"] main, body[data-view="view-done"] .top { max-width: 72rem; }
 @media (min-width: 56rem) {
-  #view-run { display: grid; grid-template-columns: minmax(16rem, 22rem) 1fr; gap: 0 1.5rem; }
-  #view-run > :not(.live) { grid-column: 1; }
-  #view-run > .live { grid-column: 2; grid-row: 1 / span 6; min-width: 0; }
+  body[data-live-text="shown"] #view-run {
+    display: grid; grid-template-columns: minmax(16rem, 22rem) 1fr; gap: 0 1.5rem;
+  }
+  body[data-live-text="shown"] #view-run > :not(.live) { grid-column: 1; }
+  body[data-live-text="shown"] #view-run > .live { grid-column: 2; grid-row: 1 / span 6; min-width: 0; }
+}
+.live-toggle { margin: 0.25rem 0 0.5rem; }
+body:not([data-live-text="shown"]) .live {
+  border-top: 1px solid var(--line); padding-top: 0.75rem; margin-top: 0.5rem;
 }
 
 /* Live text: English | translation, one row per sentence group. */

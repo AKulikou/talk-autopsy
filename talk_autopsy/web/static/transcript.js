@@ -2,6 +2,10 @@
 // shown in place), the translation on the right, one row per sentence group. The server builds
 // the rows (web/transcript.py); this module only fetches a bounded window of them and renders it.
 // It follows the newest text until the reader scrolls up; "Jump to latest" follows again.
+// The panel with the rows is collapsed by default (the owner's choice, 2026-11-13); the summary
+// line and the warning stay. While it is collapsed only the summary is fetched and no row is built;
+// opening it fetches the newest window, folded on the server from every event so far. The choice
+// is remembered in this browser when storage is available.
 import { api } from "./api.js";
 import { Follower, anchorOf, scrollToKeep, scrollToShow } from "./follow.js";
 import { clock, gapsWarning, t } from "./i18n.js";
@@ -10,6 +14,7 @@ const WINDOW = 120; // segments per window: the DOM never holds an hour of text
 const STEP = 100; // how far "show earlier / later" moves the window
 const REFRESH_MS = 400; // at most this often while text keeps arriving
 const MAX_TECH_LINES = 60; // technical details kept on the page
+const STORAGE_KEY = "talk-autopsy.live-text"; // "shown" when the reader opened the text panel
 
 let els = null;
 let jobId = null;
@@ -19,6 +24,7 @@ let last = null; // the last window from the server
 let timer = null;
 let inFlight = false;
 let again = false;
+let shown = false; // the text panel is open
 
 const node = (tag, className, text) => {
   const el = document.createElement(tag);
@@ -39,6 +45,7 @@ export function reset(elements, id, targetName) {
   clearTimeout(timer);
   timer = null;
   els.rows.replaceChildren();
+  showPanel();
   els.target.textContent = t("col_target", { lang: targetName });
   els.status.textContent = t("live_wait_stt");
   els.notices.replaceChildren();
@@ -106,11 +113,17 @@ async function refresh() {
     return;
   }
   inFlight = true;
-  const query = follower.following ? `count=${WINDOW}&follow=true` : `start=${windowStart}&count=${WINDOW}`;
+  const withRows = shown;
+  let query = "rows=false";
+  if (withRows) query = follower.following ? `count=${WINDOW}&follow=true` : `start=${windowStart}&count=${WINDOW}`;
   const id = jobId;
   const { ok, data } = await api("GET", `/api/jobs/${encodeURIComponent(id)}/transcript?${query}`);
   inFlight = false;
-  if (ok && id === jobId) render(data);
+  if (ok && id === jobId) {
+    if (withRows !== shown) again = true; // opened or closed meanwhile: fetch what is needed now
+    else if (withRows) render(data);
+    else showSummary(data.summary);
+  }
   if (again) {
     again = false;
     refresh();
@@ -180,14 +193,18 @@ function rowRect(row) {
   return { key: row.dataset.first, top: r.top, bottom: r.bottom };
 }
 
+function showSummary(summary) {
+  els.status.textContent = statusText(summary);
+  showWarning(gapsWarning(summary.untranslated, summary.uncorrected));
+}
+
 function render(data) {
   last = data;
   const box = els.rows;
   // keep the reader's place: the first visible row and its offset
   const anchor = follower.following ? null : anchorOf(boxRect(box), [...box.children].map(rowRect));
   box.replaceChildren(...data.rows.map(rowOf));
-  els.status.textContent = statusText(data.summary);
-  showWarning(gapsWarning(data.summary.untranslated, data.summary.uncorrected));
+  showSummary(data.summary);
   els.earlier.hidden = !data.more_before;
   els.later.hidden = !data.more_after;
   windowStart = data.start;
@@ -209,8 +226,47 @@ function onScroll() {
   }
 }
 
+// The text panel open or closed, with its button and the page layout (app.css).
+function showPanel() {
+  els.panel.hidden = !shown;
+  els.toggle.setAttribute("aria-expanded", String(shown));
+  els.toggle.dataset.i18n = shown ? "live_hide" : "live_show";
+  els.toggle.textContent = t(els.toggle.dataset.i18n);
+  document.body.dataset.liveText = shown ? "shown" : "hidden";
+}
+
+function setShown(value) {
+  shown = value;
+  try {
+    localStorage.setItem(STORAGE_KEY, shown ? "shown" : "hidden");
+  } catch {
+    // no storage (private window, blocked site data): the choice lasts until the page is reloaded
+  }
+  showPanel();
+  if (shown) {
+    follower = new Follower(); // opened: the newest text, as on a fresh page
+    windowStart = 0;
+  } else {
+    els.rows.replaceChildren(); // closed: no rows kept or updated
+    last = null;
+    els.jump.hidden = els.earlier.hidden = els.later.hidden = true;
+  }
+  if (jobId) refresh();
+}
+
+function storedShown() {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "shown";
+  } catch {
+    return false;
+  }
+}
+
 export function wire(elements) {
   els = elements;
+  shown = storedShown();
+  showPanel();
+  els.toggle.addEventListener("click", () => setShown(!shown));
   els.rows.addEventListener("scroll", onScroll, { passive: true });
   for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
     els.rows.addEventListener(type, () => follower.input(Date.now()), { passive: true });

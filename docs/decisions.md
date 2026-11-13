@@ -6,6 +6,15 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-13 — The waiting screen's text panel is collapsed by default
+
+Decision (owner, after the second check of v1.1): the two-column text panel is
+not needed in everyday use, so the running screen opens with it collapsed; the
+summary line and the warnings stay, and "Show text as it is processed" opens
+it (remembered per browser). The README pictures still show it open: it is the
+clearest picture of what the pipeline does. Rules out building rows nobody
+sees: while collapsed the page fetches the summary only.
+
 ## 2026-11-12 — Bugs in frozen modules are fixed; `pipeline-v3.3` (untranslatable segments, failed blocks)
 
 Decision (owner, v1.1 session 4): the freeze holds for improvements, not for

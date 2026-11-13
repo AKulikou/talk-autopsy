@@ -126,6 +126,9 @@ def test_the_page_gets_light_text_events_and_reads_rows(tmp_path, loopback_only)
         assert window["rows"][1]["units"][0]["text"].startswith("Сегодня")
         follow = client.get(f"/api/jobs/{job_id}/transcript").json()
         assert follow["end"] == 40 and not follow["more_after"]
+        # the text panel collapsed: the summary line and the warning, no rows
+        summary = client.get(f"/api/jobs/{job_id}/transcript", params={"rows": "false"}).json()
+        assert summary == {"summary": follow["summary"]}
         assert client.get("/api/jobs/nope/transcript").status_code == 404
 
 
