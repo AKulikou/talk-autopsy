@@ -2550,10 +2550,11 @@ paths, so they wait until those modules are reopened for the web interface.
 - Done as a bug fix (`pipeline-v3.4`, 2026-11-13): one failed segment, not a
   failed block, in correction and translation (it happened on two of three
   real videos).
-- A translation segment rejected only because an agreed glossary rendering is
-  missing is now kept in English (the per-segment rule); a translated
-  sentence with another word for the term may serve a viewer better than
-  English. Measure on cached answers before changing it.
+- Measured 2026-11-13, kept: the translation check "agreed glossary
+  translation not used" never fired on any cached translation or in any log;
+  only one real run (the web3 domain glossary) had agreed renderings, 7 units
+  held such a term and all 7 answers used it, in inflected forms the check
+  accepts. Revisit if it ever leaves a sentence in English on real data.
 - Segments the "left in English" check still rejects although they may be
   correct as they are (left out of the `pipeline-v3.3` bug fix because telling
   them from ordinary English needs more than the token's shape): a bare acronym
