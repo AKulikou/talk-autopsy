@@ -2,11 +2,10 @@
 
 ## 1.1.0 — DATE-TBD (set when the `v1.1` tag is created)
 
-A local web page over the same core, on the frozen pipeline (`pipeline-v3.3`:
-model requests identical to `pipeline-v3`, plus two bug fixes in how
-translation answers are checked and cached; every cached T2 and T6 answer gets
-the same verdict as before, so 1.0's measured numbers carry over without
-re-runs).
+A local web page over the same core, on the frozen pipeline (`pipeline-v3.5`:
+model requests identical to `pipeline-v3`, plus bug fixes in how answers are
+checked, cached and retried; every cached T2 and T6 answer gets the same
+verdict as before, so 1.0's measured numbers carry over without re-runs).
 
 **Web UI**
 
@@ -63,7 +62,8 @@ re-runs).
   text's left edge (one above, one below), and disabled when there is
   nothing to do.
 - The page's console window shows only the address, one line per run start
-  and finish (ok, or with problems: see the log) and real errors; warnings
+  and finish (ok, or with problems: see the log; with the money spent, and
+  for a stop on a service outage, which service) and real errors; warnings
   and tracebacks go to the log file only.
 
 **Fixed**
@@ -135,7 +135,7 @@ re-runs).
   the page (one-column layout, 150 % zoom); the scroll position was measured
   from the page instead of the box.
 
-**Pipeline (observability and cleanup only)**
+**Pipeline (observability, cleanup and bug fixes; model requests unchanged)**
 
 - `pipeline-v3.1`: the pipeline's events carry numbers (estimates, cost,
   seconds and tokens of each step) and, for every finished correction or
@@ -146,11 +146,27 @@ re-runs).
 - `pipeline-v3.2`: the unused `edge-tts` dependency and the `ingest.download`
   stub removed; cache keys, model requests and outputs unchanged.
   `metrics.timing_drift` stays: removing it would invalidate cached runs.
+- `pipeline-v3.3`: numbers, identifiers and file names are not "English left
+  in"; a step with a failed block is not cached as finished, and the next run
+  sends only the failed translation blocks (Fixed, above).
+- `pipeline-v3.4`: a block rejected twice only for single segments keeps the
+  rest and reverts those segments; the next run sends only the blocks that
+  need it, for correction too (Fixed, above).
+- `pipeline-v3.5`: a Claude request that fails on the service's side is
+  retried after 5, 15 and 30 s; every paid response is reported to the page
+  (Fixed, above).
+- Each bug fix: a failing test first, golden request snapshots unchanged,
+  every cached T2/T6 answer with the same verdict, no paid re-run of the test
+  set ([decisions](docs/decisions.md)).
 
 **Code**
 
 - `cli.py` split into the package `talk_autopsy/cli/` (one module per command
   group); help, dry-run and doctor output unchanged, checked by snapshot tests.
+- The name check's committed patterns are generic only (nationality or region
+  next to "accent", a role at a named company, video-ID file names); anything
+  specific to one person lives in the git-ignored local list. The history
+  rewrite also cleans earlier versions of the check's own files.
 
 **Not in 1.1**
 
