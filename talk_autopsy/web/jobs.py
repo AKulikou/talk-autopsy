@@ -46,7 +46,16 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from talk_autopsy import config, ingest, outputs, pipeline, secret_registry, user_glossary, youtube
+from talk_autopsy import (
+    config,
+    ingest,
+    outputs,
+    pipeline,
+    rerun_plan,
+    secret_registry,
+    user_glossary,
+    youtube,
+)
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError
 from talk_autopsy.segments import Transcript, load_transcript
@@ -166,6 +175,10 @@ class Core:
     def check_keys(self, settings: pipeline.RunSettings) -> None:
         pipeline.check_keys(settings)
 
+    def plan_rerun(self, settings: pipeline.RunSettings, fresh: youtube.Estimate, formats: list[str],
+                   dest: Path, stem: str) -> "rerun_plan.RerunPlan | None":
+        return rerun_plan.plan(settings, fresh, formats, dest, stem)
+
     def run_pipeline(self, settings: pipeline.RunSettings, progress) -> pipeline.RunReport:
         return pipeline.run(settings, progress=progress)
 
@@ -210,6 +223,8 @@ class Preview:
     notes: list[str] = field(default_factory=list)  # codes: audio_only, quality_not_measured
     video: youtube.VideoInfo | None = None
     made: float = field(default_factory=time.monotonic)
+    plan: "rerun_plan.RerunPlan | None" = None  # what the cache already holds (rerun_plan.py); cost is its
+    full: youtube.Estimate | None = None  # the per-hour estimate of a full run, when `plan` set the cost
 
     @property
     def cost_known(self) -> bool:
@@ -229,7 +244,9 @@ class Preview:
             "duration_s": None if self.duration_s is None else round(self.duration_s),
             "cost": None if not self.cost_known else {
                 "claude_usd": self.cost.claude_usd, "stt_usd": self.cost.stt_usd,
-                "total_usd": self.amount_usd},
+                "total_usd": self.amount_usd, "upper": bool(self.plan and self.plan.upper),
+                "full_usd": round(self.full.total_usd, 2) if self.full else None},
+            "cache": self.plan.as_dict() if self.plan else None,
             "limit_usd": limit_usd,
             "needs_confirmation": self.needs_confirmation(limit_usd),
             "time": self.time.as_dict(),
@@ -251,8 +268,24 @@ def output_step(formats: list[str]) -> str:
     return "outputs_soft" if "mp4-soft" in formats else "outputs_subs"
 
 
-def estimator_steps(mode: str, formats: list[str]) -> list[str]:
-    return (["download"] if mode == "url" else []) + PIPELINE_STEPS + [output_step(formats)]
+def estimator_steps(mode: str, formats: list[str], cached: list[str] | None = None) -> list[str]:
+    """The steps the time estimate counts; with `cached` (rerun_plan), only those that will run."""
+    steps = (["download"] if mode == "url" else []) + PIPELINE_STEPS + [output_step(formats)]
+    skip = set(cached or [])
+    return [s for s in steps if s not in skip and not (s.startswith("outputs") and "outputs" in skip)]
+
+
+def run_target(request: JobRequest, video: "youtube.VideoInfo | None", output_root: Path
+               ) -> tuple[str, str, Path, str, Path]:
+    """(work name, context, result folder, file stem, source) of a request, for the estimate and the run."""
+    if request.mode == "url":
+        name, context = f"yt-{youtube.safe_name(video.id, 40)}", video.context()
+        dest = output_root / youtube.video_folder_name(video, output_root)
+        stem = youtube.video_file_stem(video, dest)
+        return name, context, dest, stem, dest / f"{stem}.mp4"  # where the download goes (and is reused)
+    source = Path(request.path)
+    stem = youtube.safe_name(source.stem)
+    return "", "", output_root / stem, stem, source
 
 
 # --- events and jobs -----------------------------------------------------------------------
@@ -713,13 +746,31 @@ class JobRunner:
 
     # --- preview ---------------------------------------------------------------------
 
-    def _estimator(self, mode: str, formats: list[str], duration: float | None) -> TimeEstimator:
+    def _estimator(self, mode: str, formats: list[str], duration: float | None,
+                   cached: list[str] | None = None) -> TimeEstimator:
         try:
             key = self.core.machine_key(self.engine)
         except Exception:
             key = None
-        return TimeEstimator(key, duration, estimator_steps(mode, formats), history_file=self.history_file,
-                             clock=self.clock)
+        return TimeEstimator(key, duration, estimator_steps(mode, formats, cached),
+                             history_file=self.history_file, clock=self.clock)
+
+    def _plan(self, request: JobRequest, video, formats: list[str], fresh: youtube.Estimate):
+        """What the cache already holds for this request (rerun_plan.py), or None; never fails."""
+        planner = getattr(self.core, "plan_rerun", None)
+        if planner is None or fresh.minutes is None:
+            return None
+        try:
+            name, context, dest, stem, source = run_target(request, video, Path(self.core.output_root()))
+            settings = pipeline.RunSettings(source=source, target_lang=request.target_lang,
+                                            steps=list(PIPELINE_STEPS), engine=self.engine, context=context,
+                                            name=name)
+            if settings.work_dir.is_dir():  # nothing cached otherwise; the planner says so too
+                settings.glossary = self.core.user_glossary(request.domain, settings.work_dir)
+            return planner(settings, fresh, formats, dest, stem)
+        except Exception:
+            logger.exception("the cache could not be read for the estimate; the full estimate is shown")
+            return None
 
     def preview(self, request: JobRequest) -> Preview:
         """Metadata, cost and time for the estimate screen. InputError / YouTubeError / RuntimeError."""
@@ -747,12 +798,17 @@ class JobRunner:
                     formats = ["srt"]
         if duration is not None and (not math.isfinite(duration) or duration <= 0):
             duration = None
+        fresh = youtube.estimate(duration)
+        plan = self._plan(request, video, formats, fresh)
+        cost = fresh if plan is None else youtube.Estimate(fresh.minutes, round(plan.claude_usd, 2),
+                                                           round(plan.stt_usd, 2), fresh.pipeline_minutes)
         try:
-            time_estimate = self._estimator(request.mode, formats, duration).initial()
+            time_estimate = self._estimator(request.mode, formats, duration,
+                                            plan.cached if plan else None).initial()
         except Exception:
             time_estimate = NO_ESTIMATE
-        preview = Preview(request.mode, request.source, title, duration, youtube.estimate(duration), formats,
-                          time_estimate, notes, video)
+        preview = Preview(request.mode, request.source, title, duration, cost, formats,
+                          time_estimate, notes, video, plan=plan, full=fresh if plan else None)
         with self._previews_lock:
             now = time.monotonic()
             self._previews = {k: p for k, p in self._previews.items() if now - p.made < PREVIEW_TTL_S}
@@ -803,8 +859,11 @@ class JobRunner:
                                                        "confirm that you want to start anyway.")
             return self.limit_usd
         amount = preview.amount_usd
+        # With most of the work cached the pipeline still checks its own estimate of the full Claude
+        # steps before it starts; that must not stop a cheap re-run of a long video (rerun_plan.py).
+        allowance = max(self.limit_usd, 2 * preview.full.claude_usd) if preview.full else self.limit_usd
         if not youtube.over_video_limit(preview.cost, self.limit_usd):
-            return self.limit_usd
+            return allowance
         if request.confirmed_cost_usd is None:
             raise GateError("confirm_cost", f"The estimate {amount:.2f} USD is above the limit of "
                                             f"{self.limit_usd:.2f} USD; confirm this amount to start.",
@@ -880,17 +939,9 @@ class JobRunner:
             job.add("estimate_updated", time=estimator.initial().as_dict(),
                     cost=preview.as_dict(self.limit_usd)["cost"])
             output_root = core.output_root()
+            name, context, dest, stem, source = run_target(request, preview.video, output_root)
             if request.mode == "url":
-                video = preview.video
-                name, context = f"yt-{youtube.safe_name(video.id, 40)}", video.context()
-                dest = output_root / youtube.video_folder_name(video, output_root)
-                stem = youtube.video_file_stem(video, dest)
                 source = Path(".")  # replaced after the download
-            else:
-                source = Path(request.path)
-                name, context = "", ""
-                stem = youtube.safe_name(source.stem)
-                dest = output_root / stem
             settings = pipeline.RunSettings(source=source, target_lang=request.target_lang,
                                             steps=list(PIPELINE_STEPS), engine=self.engine,
                                             max_cost_usd=max_cost, context=context, name=name)

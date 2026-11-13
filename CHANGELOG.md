@@ -68,6 +68,11 @@ re-runs).
 
 **Fixed**
 
+- The estimate counts only what will run: cached steps, reused blocks and
+  reused videos cost nothing and take no time; the screen names what comes
+  from the cache and the price of a run from scratch, and says "up to" when
+  part of it depends on the correction still to run. A fully cached re-run of
+  a 26-minute video now shows 0.00 USD and takes about 5 seconds.
 - A re-run with every step cached no longer re-encodes the TV video: an MP4
   is reused when the video, the subtitles, the encoder settings and the file
   itself are unchanged, and made again otherwise (also when it was deleted

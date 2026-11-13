@@ -216,6 +216,19 @@ the output root that hold `talk-autopsy-result.json` (written by every
 finished web job) or `done.json` (CLI YouTube runs); at most 300 folders
 scanned, 12 listed. After a reload the last result is reachable from there.
 
+**Estimate from the cache.** The estimate screen counts only what will run
+(`talk_autopsy/rerun_plan.py`, no API call): steps whose cache stamps match
+are listed as "already done, taken from the cache" and cost nothing; for the
+correction and the translation only the blocks that would be sent count; MP4s
+that would be reused take no time; the price of a run from scratch is shown
+beside it. When the correction has to run, the translation counts in full and
+the amount says "up to" with the reason (which translation blocks change is
+known only after the correction). The over-limit confirmation uses this
+amount; the pipeline's own check of the full Claude estimate gets twice the
+full estimate as its ceiling, so a cheap re-run of a long video is not
+stopped. A fully cached re-run of a 25:56 video: estimate 0.00 USD, run 4.8 s
+(bug, 2026-11-13: 0.55 USD shown, eight minutes of re-encoding).
+
 **Outputs from cache.** A re-run makes the MP4s again only when something
 they are made from changed: the source video, the subtitles (with their
 style), the encoder settings or ffmpeg itself; a deleted, truncated or

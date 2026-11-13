@@ -127,6 +127,35 @@ def test_preview_of_a_link(tmp_path):
     assert d["needs_confirmation"] is False
 
 
+def test_a_cached_rerun_is_estimated_from_the_cache(tmp_path):
+    """Bug 2026-11-13: 0.55 USD shown for a re-run that cost 0.11 (talk_autopsy/rerun_plan.py)."""
+    from talk_autopsy import rerun_plan
+    r, core = runner(tmp_path)
+    seen = {}
+
+    def plan_rerun(settings, fresh, formats, dest, stem):
+        seen.update(work=settings.work_dir, dest=dest, stem=stem, fresh=fresh)
+        cached = ["download", "stt", "glossary", "stt2", "align", "fix", "translate", "outputs"]
+        return rerun_plan.RerunPlan(cached=cached, claude_usd=0.0, stt_usd=0.0)
+
+    core.plan_rerun = plan_rerun
+    preview = r.preview(request())
+    d = preview.as_dict(3.0)
+    assert d["cost"]["total_usd"] == 0.0 and d["cost"]["upper"] is False
+    assert d["cost"]["full_usd"] == pytest.approx(seen["fresh"].total_usd, abs=0.01)
+    assert d["cache"]["cached"][-1] == "outputs" and d["needs_confirmation"] is False
+    assert jobs.estimator_steps("url", ["srt", "mp4-burned"], d["cache"]["cached"]) == ["srt"]
+    # the pipeline's own full Claude estimate must not stop the cheap re-run of a long video
+    assert r._gate(request(), preview) >= 2 * seen["fresh"].claude_usd
+
+
+def test_no_plan_keeps_the_full_estimate(tmp_path):
+    r, core = runner(tmp_path)
+    core.plan_rerun = lambda *a: None
+    d = r.preview(request()).as_dict(3.0)
+    assert d["cache"] is None and d["cost"]["full_usd"] is None and d["cost"]["upper"] is False
+
+
 def test_russian_has_no_quality_flag(tmp_path):
     r, _ = runner(tmp_path)
     assert r.preview(request(target_lang="ru")).notes == []

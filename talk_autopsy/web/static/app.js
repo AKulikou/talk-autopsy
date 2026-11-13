@@ -191,8 +191,9 @@ function timeText(time) {
 function renderEstimate(p) {
   $("est-title").textContent = p.title;
   $("est-duration").textContent = p.duration_s ? clock(p.duration_s) : "—";
+  const amount = p.cost && (p.cost.upper ? t("est_cost_upper", { amount: usd(p.cost.total_usd) }) : usd(p.cost.total_usd));
   $("est-cost").textContent = p.cost
-    ? `${usd(p.cost.total_usd)} (${t("est_cost_detail", { claude: p.cost.claude_usd.toFixed(2), stt: p.cost.stt_usd.toFixed(2) })})`
+    ? `${amount} (${t("est_cost_detail", { claude: p.cost.claude_usd.toFixed(2), stt: p.cost.stt_usd.toFixed(2) })})`
     : t("est_cost_none");
   $("est-time").textContent = timeText(p.time);
   $("est-formats").replaceChildren(...p.formats.map((f) => {
@@ -201,6 +202,13 @@ function renderEstimate(p) {
     return li;
   }));
   const notes = [];
+  // what the cache already holds (rerun_plan.py): named, so a small amount is not a surprise
+  if (p.cache?.cached?.length) {
+    const names = [...new Set(p.cache.cached.map((s) => t(`step_${s}`)))];
+    notes.push(t("est_cached", { steps: names.join(", ") }));
+    if (p.cost?.full_usd) notes.push(t("est_full", { amount: usd(p.cost.full_usd) }));
+  }
+  if (p.cache?.reasons?.includes("translation_after_correction")) notes.push(t("est_upper_translation"));
   if (p.notes.includes("audio_only")) notes.push(t("est_audio_only"));
   if (p.notes.includes("quality_not_measured")) notes.push(t("lang_not_measured"));
   if (p.busy) notes.push(t("est_busy"));

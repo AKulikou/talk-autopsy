@@ -6,6 +6,27 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-13 — Estimates and outputs follow the cache; the agreed-term check stays
+
+Three decisions after the owner's third check, none of them a change to a frozen module:
+
+- The estimate counts only what will run (`rerun_plan.py`): the steps whose
+  cache stamps already match, the correction and translation blocks that would
+  be reused, and MP4s that would be reused are left out of cost and time. It
+  reads the stamps with the pipeline's own functions, and a test pins the plan
+  to a real pipeline run. Before the correction runs, which translation blocks
+  its new text changes is unknown: then the translation counts in full and the
+  amount is shown as "up to". Rules out an estimate that guesses below what
+  can be spent.
+- An MP4 output is reused when its source video, subtitle files, encoder
+  settings and ffmpeg are unchanged and the file is the one written (stamp in
+  the result's service folder); otherwise it is made again. Rules out keying
+  on file times alone (a replaced subtitle file with an older time).
+- The translation check "agreed glossary translation not used" is kept: on
+  every cached translation and every log it never fired (7 units exposed, all
+  with the agreed rendering in an inflected form), so there is no false
+  positive to fix.
+
 ## 2026-11-13 — One bad segment no longer costs a block; `pipeline-v3.4` (per-segment revert)
 
 Decision (owner, after the third real video): when a correction or translation
