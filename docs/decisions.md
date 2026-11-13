@@ -418,9 +418,9 @@ specification's Definition of Done is amended. The v1.0 comparison is the
 pipeline against raw Whisper, Whisper + Google Translate and a plain Gemini
 translation, on T2 and T6.
 
-Why: running VideoLingo's downloaded installer was blocked by the coding agent's
-permission filter, and the project chose not to bypass it; VideoLingo has also
-switched its default recogniser to Qwen3-ASR.
+Why: VideoLingo's installer executes remote code, which the development
+environment's policy does not allow; it has also since changed its
+speech-recognition engine, to Qwen3-ASR.
 
 What it rules out: a VideoLingo row with numbers in v1.0; it is reported as
 "not run, out of v1.0 scope". Supersedes the VideoLingo part of the

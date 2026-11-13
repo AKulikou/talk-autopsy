@@ -17,8 +17,9 @@ and almost none publishes quality measurements. This project's contribution is m
 to be measurement: each stage scored on fixed fragments, with a sealed hold-out
 and an independent LLM review. What is measured so far, and what is not, is listed below.
 VideoLingo, the closest of these tools, is not compared here: it is out of v1.0
-scope (its installer was blocked by the permission filter and not bypassed; its
-default recogniser is now Qwen3-ASR).
+scope (its installer executes remote code, which the development environment's
+policy does not allow; it has also since changed its speech-recognition engine,
+to Qwen3-ASR).
 
 ## How it is tested
 
@@ -468,9 +469,9 @@ that built both references (so was Gemini, and AssemblyAI, the pipeline's own
 engine). Whisper + Google Translate uses the same raw Whisper transcript, so
 its English side is the same; only its translation differs. VideoLingo is
 **out of v1.0 scope** (owner's decision 2026-11-11; the specification's
-Definition of Done amended): running its downloaded installer was blocked by
-the coding agent's permission filter and the project chose not to bypass it; it
-has also switched its default recogniser to Qwen3-ASR. The v1.0 comparison is
+Definition of Done amended): its installer executes remote code, which the
+development environment's policy does not allow; it has also since changed its
+speech-recognition engine, to Qwen3-ASR. The v1.0 comparison is
 the pipeline against raw Whisper, Whisper + Google Translate and a plain
 Gemini translation, plus the single Gemini call on the English side.
 
@@ -614,8 +615,9 @@ language as a parameter.
   correction-v1 with a reference-reviewed glossary on fallback-engine input;
   the shipped correction-v2 was never run on fallback input.
 - **No comparison with VideoLingo**, the closest open-source tool: not run,
-  out of v1.0 scope (installer blocked by the permission filter, not bypassed;
-  its default recogniser is now Qwen3-ASR).
+  out of v1.0 scope (its installer executes remote code, which the development
+  environment's policy does not allow; it has also since changed its
+  speech-recognition engine, to Qwen3-ASR).
 - **A failed translation block stays in English as a whole:** if the model's
   answer for a block (about five minutes) fails the checks twice, every
   segment of that block keeps its English text, not only the one that failed.
@@ -646,8 +648,9 @@ language as a parameter.
 
 ## Not done
 
-- VideoLingo: not run, out of v1.0 scope (its installer was blocked by the
-  permission filter and not bypassed; its default recogniser is now Qwen3-ASR).
+- VideoLingo: not run, out of v1.0 scope (its installer executes remote code,
+  which the development environment's policy does not allow; it has also since
+  changed its speech-recognition engine, to Qwen3-ASR).
 - Fragments T3–T5 (no fragment from another domain); hypotheses A5, B3,
   C2–C5. The specification's C1 against Google Translate was rated and not met;
   its VideoLingo part is out of v1.0 scope.

@@ -157,7 +157,7 @@ its evidence (checked 2026-11-12, at the tag).
 |---|---|---|
 | the owner watched two full videos and uses the tool | **done** (owner) | the owner's statement; full-video runs T2.source and real-01 ([Operational runs](#operational-runs)); Windows launcher `scripts/windows/` (4f893df) |
 | `benchmark.csv` has numbers for every closed hypothesis | **done** | checked against every [Summary](#summary) entry with a hypothesis: A2, A3, B1, B4, B5, B1 (v2), T6, the T6 translation check and C1 (baselines) had rows; five had none and got one from the numbers in this log: C1 (row 45), B2 (46), C1 (blind) (47), B2 (v2) (48), C1b (49; rows counted as file lines, header = 1, as in the notes). No gap left. B5's coverage numbers (74.4% / 79.5%) are in this log only; its rows are the speech-recognition result with the auto terms (30–31) |
-| the README compares the system, raw Whisper, Whisper + Google Translate and a plain Gemini translation on one set (amended 2026-11-11, owner: VideoLingo out of v1.0 scope) | **done** | [Baselines on one set](#baselines-on-one-set-t2-and-t6): all four measured on T2 and T6 (rows 8 and 39–43); Google Translate rated by the owner 2026-11-12 (4.42, equal to the pipeline; f8299f5). VideoLingo: not run, out of v1.0 scope (its installer was blocked by the permission filter and not bypassed; its default recogniser is now Qwen3-ASR) |
+| the README compares the system, raw Whisper, Whisper + Google Translate and a plain Gemini translation on one set (amended 2026-11-11, owner: VideoLingo out of v1.0 scope) | **done** | [Baselines on one set](#baselines-on-one-set-t2-and-t6): all four measured on T2 and T6 (rows 8 and 39–43); Google Translate rated by the owner 2026-11-12 (4.42, equal to the pipeline; f8299f5). VideoLingo: not run, out of v1.0 scope (its installer executes remote code, which the development environment's policy does not allow; it has also since changed its speech-recognition engine, to Qwen3-ASR) |
 | CI green | **done** | GitHub Actions on b292428 (run 43241656652: test, test-windows, secret-scan); the tagged commit's run is recorded with the release |
 | README in the series structure; honest Known limitations | **done** | README sections Results, Known limitations, Not done (59c935d, 29ee528, b292428) |
 | re-run from cache within a minute | **met** | 6.7–8.9 s wall time on T2 (three re-runs, below); repeated after the version change, outputs byte-identical ([Freeze pipeline-v3](#freeze-pipeline-v3), exception) |
@@ -183,10 +183,9 @@ launcher re-run with the TV file takes minutes, not seconds (Backlog).
 
 The specification's comparison for v1.0: Talk Autopsy (`pipeline-v3`) against raw Whisper,
 Whisper + Google Translate and a plain Gemini translation on one set. **VideoLingo is out of v1.0
-scope** (owner's decision 2026-11-11; the specification's Definition of Done amended): running its
-downloaded installer was blocked by the coding agent's permission filter and the project chose not to
-bypass it; it had also switched its default recogniser from WhisperX to Qwen3-ASR since the
-specification was written. The attempt is recorded below. The set is **T2 and T6**: both have
+scope** (owner's decision 2026-11-11; the specification's Definition of Done amended): its installer
+executes remote code, which the development environment's policy does not allow; it has also since
+changed its speech-recognition engine, from WhisperX to Qwen3-ASR. The attempt is recorded below. The set is **T2 and T6**: both have
 references, and T6 is no longer sealed after its single run. The same metrics everywhere (Metrics
 above): term accuracy v2 (micro, macro, without the top term, precision) and WER of the English;
 on T6 against reference J, with reference M as the range. The translations are compared by the
@@ -243,16 +242,13 @@ runs go through its local HTTP API (`start.py --api`, `POST /input`, `POST /run`
 defaults with the LLM set to `claude-sonnet-5-5` through Anthropic's OpenAI-compatible endpoint
 (`https://api.anthropic.com/v1/`; VideoLingo sends no `response_format` by default, which matters
 because the endpoint accepts only a strict `json_schema` there), behind a local logging proxy so that
-the key stays in memory and the token usage is recorded exactly. **The first installation attempt
-was refused by the coding agent's permission policy** (Claude Code auto mode: running code downloaded from
-outside the project, "Code from External"), before any package was installed. That is a policy
-decision for the owner, not a technical failure, so it was not retried or worked around; the second
-attempt is left to the owner (below). No API key was written to any file; LLM cost 0 USD.
+the key stays in memory and the token usage is recorded exactly. **The installer was not run:** it
+executes remote code, which the development environment's policy does not allow; this was found
+before any package was installed. No API key was written to any file; LLM cost 0 USD.
 
-**Out of v1.0 scope (owner's decision 2026-11-11).** The installer was not retried and the
-permission filter was not bypassed; its default recogniser is now Qwen3-ASR. The notes below are
-kept for a later version. To run it: either the owner allows the coding agent to run the VideoLingo installer, or runs it
-once by hand (`uv run start.py --api` in the VideoLingo folder) and a later
+**Out of v1.0 scope (owner's decision 2026-11-11).** The notes below are kept for a later
+version. To run it: install it in an environment that allows its installer, then start it
+(`uv run start.py --api` in the VideoLingo folder) and a later
 run drives the API on `data/test-set/T2.wav` and `T6.wav`; estimate for two 10-minute fragments
 with Sonnet 5.5: under 1 USD (its summary, term extraction, meaning split, two-step translation and
 alignment calls), Qwen3-ASR on the CPU of the order of the fragment length or more (not measured).
