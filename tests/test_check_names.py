@@ -1,4 +1,8 @@
-"""scripts/check_names.py: the local name list and the committed patterns, both across line breaks."""
+"""
+scripts/check_names.py: the local name list and the committed patterns, both across line breaks.
+Every example here is synthetic: invented names, and nationality words chosen because no real
+description in the repository uses them.
+"""
 
 import importlib.util
 from pathlib import Path
@@ -35,11 +39,10 @@ def test_names_match_whole_words_only(tmp_path):
 
 
 @pytest.mark.parametrize("text", [
-    # [removed]
-    "the speaker's Italian-accented English",
-    "an Eastern European English accent",
-    "accent: Brazilian",
-    # [removed]
+    "a talk with a strong Finnish\naccent",           # split across a line break
+    "the speaker's Mexican-accented English",
+    "a Norwegian English accent",
+    "accent: Welsh",
     "an OpenAI researcher said",
     "researcher at DeepMind",
     "run data/test-set/aB3dE5gH7jK9mN1p.mp4 --name x",
@@ -60,14 +63,14 @@ def test_the_committed_patterns_leave_generic_wording_alone(tmp_path, text):
 
 
 def test_pattern_hits_report_the_line_of_the_match_start(tmp_path):
-    hits = _hits("ok\nok\nstrong Polish\naccent here\n", patterns=PATTERNS, tmp_path=tmp_path)
+    hits = _hits("ok\nok\nstrong Hungarian\naccent here\n", patterns=PATTERNS, tmp_path=tmp_path)
     assert [(h.line, h.source) for h in hits] == [(3, "pattern 1")]
 
 
 def test_the_check_files_themselves_are_exempt(tmp_path):
     (tmp_path / "scripts").mkdir()
-    # [removed]
-    # [removed]
+    (tmp_path / "scripts" / "identifying_patterns.txt").write_text("Finnish accent", encoding="utf-8")
+    assert check_names.scan(["scripts/identifying_patterns.txt"], ["Finnish"], PATTERNS, root=tmp_path) == []
 
 
 def test_every_tracked_file_passes_the_committed_patterns():
@@ -101,7 +104,7 @@ def test_the_sources_section_is_still_scanned_by_the_committed_patterns(tmp_path
     (tmp_path / "data" / "test-set" / "README.md").write_text(
         "# Test set\n\n## Sources\n\nan OpenAI researcher\n", encoding="utf-8")
     hits = check_names.scan(["data/test-set/README.md"], None, PATTERNS, root=tmp_path)
-    assert [(h.line, h.source) for h in hits] == [(5, "pattern 5")]
+    assert [(h.line, h.source) for h in hits] == [(5, "pattern 3")]
 
 
 # --- scripts/history_rewrite.py: the replacements built on the same list and patterns ----------------
@@ -119,16 +122,37 @@ def _replacer(names):
 
 
 def test_the_rewrite_leaves_nothing_the_check_would_find(tmp_path):
-    text = ("A talk by Jane\n  Example with an Indian accent (accent: Polish).\n"
-            # [removed]
+    text = ("A talk by Jane\n  Example with a Kazakh accent (accent: Welsh).\n"
+            "She is a chief widget officer, a Google engineer, and was an engineer at OpenAI.\n"
             "Files: AbCdEf12345.mp4, AbCdEf12345.wav, ZyXw9876543.mkv.\n")
-    replacer = _replacer(["Jane Example"])
+    replacer = _replacer(["Jane Example", "chief widget officer"])
     new = replacer.text(text)
-    assert _hits(new, names=["Jane Example"], patterns=PATTERNS, tmp_path=tmp_path) == []
+    names = ["Jane Example", "chief widget officer"]
+    assert _hits(new, names=names, patterns=PATTERNS, tmp_path=tmp_path) == []
     assert "A talk by [removed] with a regional accent (accent: regional)." in new
-    assert "a staff member, an engineer, and was an engineer." in new
+    assert "a [removed], an engineer, and was an engineer." in new
     assert "source-video-1.mp4, source-video-1.wav, source-video-2.mkv" in new
-    assert replacer.counts["list entries"] == 1
+    assert replacer.counts["list entries"] == 2
+
+
+def test_earlier_versions_of_the_check_files_lose_every_line_with_a_list_entry():
+    """Also an entry written as a regular expression, with an escaped break, or wrapped over two lines."""
+    old = "\n".join([
+        '"""',
+        "A docstring that names a chief widget",
+        "officer over two lines.",
+        '"""',
+        "PATTERNS = [",
+        r'    r"\bchief\s+(?:the\s+)?widget\w*\s+officer\b",',
+        r'    r"\b(?:abc|finnish|xyz)\s+accent",',
+        r'    "a chief widget\n  officer",',
+        '    "generic",',
+        "]",
+    ])
+    new = _replacer(["chief widget officer", "Finnish"]).exempt_lines(old)
+    assert new.split("\n") == ['"""', "# [removed]", "# [removed]", '"""', "PATTERNS = [", "    # [removed]",
+                               "    # [removed]", "    # [removed]", '    "generic",', "]"]
+    compile(new, "old_version.py", "exec")  # still Python
 
 
 def test_the_rewrite_keeps_the_allowed_sources_section():

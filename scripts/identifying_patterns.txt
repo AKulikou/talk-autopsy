@@ -1,16 +1,15 @@
 # Generic identifying descriptors that must not appear in tracked files (scripts/check_names.py, part b).
 # One Python regular expression per line, matched case-insensitively over a whole file, so `\s+` also
 # crosses line breaks. Speakers are described only as "native" or "non-native speaker" (owner, 2026-11-12).
+# Anything that points to a specific person (a name, a job title, a detail of one speaker) belongs in the
+# git-ignored local list (work/names.local.txt), never here.
 #
-# 1. A nationality or region word before "accent" (also hyphenated, or with "English" between).
-# [removed]
-# 2. "accent" followed by a colon or bracket and a nationality or region word.
-# [removed]
-# 3. A job-title phrase, in English and as its Russian calque.
-# [removed]
-# [removed]
-# 4. A role at a named company, in either order.
-\b(?:anthropic|openai|deepmind|google|meta|microsoft|apple|amazon|nvidia)\s+(?:engineers?|researchers?|employees?|scientists?|staff|founders?|co-?founders?|ceo|cto)\b
-\b(?:engineer|researcher|employee|scientist|founder|co-?founder|ceo|cto|head\s+of\s+\w+)\s+(?:at|of)\s+(?:anthropic|openai|deepmind|google|meta|microsoft|apple|amazon|nvidia)\b
-# 5. Original file names that look like video IDs (11+ characters mixing upper case, lower case and digits).
+# 1. A nationality or region word (alphabetical) before "accent" (also hyphenated, or with "English" between).
+\b(?:african|american|arab|arabic|argentinian|armenian|asian|australian|austrian|baltic|bangladeshi|belarusian|belgian|brazilian|british|bulgarian|canadian|chinese|croatian|czech|danish|dutch|east\s+asian|eastern\s+european|estonian|european|filipino|finnish|french|georgian|german|greek|hebrew|hindi|hispanic|hungarian|indian|indonesian|iranian|irish|israeli|italian|japanese|kazakh|korean|latin\s+american|latino|latvian|lithuanian|malaysian|mexican|middle\s+eastern|nigerian|nordic|norwegian|pakistani|persian|polish|portuguese|romanian|russian|scandinavian|scottish|serbian|singaporean|slavic|slovak|south\s+asian|spanish|swedish|swiss|thai|turkish|ukrainian|uzbek|vietnamese|welsh)(?:-|\s+)(?:english\s+)?accent
+# 2. "accent" followed by a colon or bracket and one of the same words.
+\baccent(?:ed)?\s*[:(]\s*(?:african|american|arab|arabic|argentinian|armenian|asian|australian|austrian|baltic|bangladeshi|belarusian|belgian|brazilian|british|bulgarian|canadian|chinese|croatian|czech|danish|dutch|east\s+asian|eastern\s+european|estonian|european|filipino|finnish|french|georgian|german|greek|hebrew|hindi|hispanic|hungarian|indian|indonesian|iranian|irish|israeli|italian|japanese|kazakh|korean|latin\s+american|latino|latvian|lithuanian|malaysian|mexican|middle\s+eastern|nigerian|nordic|norwegian|pakistani|persian|polish|portuguese|romanian|russian|scandinavian|scottish|serbian|singaporean|slavic|slovak|south\s+asian|spanish|swedish|swiss|thai|turkish|ukrainian|uzbek|vietnamese|welsh)\b
+# 3. A role at a named company, in either order.
+\b(?:amazon|anthropic|apple|deepmind|google|meta|microsoft|nvidia|openai)\s+(?:engineers?|researchers?|employees?|scientists?|staff|founders?|co-?founders?|ceo|cto)\b
+\b(?:engineer|researcher|employee|scientist|founder|co-?founder|ceo|cto|head\s+of\s+\w+)\s+(?:at|of)\s+(?:amazon|anthropic|apple|deepmind|google|meta|microsoft|nvidia|openai)\b
+# 4. Original file names that look like video IDs (11+ characters mixing upper case, lower case and digits).
 \b(?-i:(?=[\w-]*\d)(?=[\w-]*[A-Z])(?=[\w-]*[a-z])[\w-]{11,})\.(?:mp4|webm|m4a|mkv|mov|wav|flac|mp3)\b

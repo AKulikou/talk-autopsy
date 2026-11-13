@@ -10,8 +10,9 @@ De-identification check over every tracked file (`git ls-files`). Two parts:
     number, never the entry.
 (b) Committed patterns: `scripts/identifying_patterns.txt`, regular expressions
     for generic identifying descriptors (a nationality or region word next to
-    # [removed]
-    file names that look like video IDs). Matched case-insensitively over the
+    "accent", a role at a named company, original file names that look like
+    video IDs). Anything specific to one person belongs in the local list, not
+    here. Matched case-insensitively over the
     whole file text, so a pattern's `\\s+` also crosses line breaks. A hit prints
     the file, the line and the pattern's number.
 

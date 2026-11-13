@@ -25,15 +25,20 @@ What is replaced (file contents, file paths, commit and tag messages):
   named on purpose, is left as it is;
 - a nationality or region word before "accent" by "regional accent", and after
   "accent:" / "accent (" by "regional";
-- the job-title phrase (and its Russian calque) by "staff member" ("сотрудник");
 - a role at a named company by the role alone ("<company> engineer" ->
   "engineer");
 - an original file name that looks like a video ID by `source-video-<n>.<ext>`,
   the same number for the same ID everywhere.
 
 The three files that hold the patterns and their test examples
-(`check_names.EXEMPT`) are not rewritten, as the check does not scan them:
-they must contain the generic descriptors to work.
+(`check_names.EXEMPT`) must contain the generic descriptors to work, so the
+check does not scan them and their version at the tip is kept as it is. Their
+earlier versions are rewritten line by line: a line that holds a local-list
+entry, also when it is written as a regular expression (`\\s+` between the
+words, `\\w*`, an optional group, an alternation), becomes `# [removed]` with
+its indentation (a comment in Python and in the pattern file, so nothing else
+breaks); an entry split over two lines removes both. `verify` checks those
+versions the same way.
 """
 
 import argparse
@@ -50,6 +55,9 @@ sys.path.insert(0, str(SCRIPTS))
 import check_names  # noqa: E402  (stdlib only; shared rules with the check)
 
 REMOVED = "[removed]"
+# A list entry written as a regular expression: an optional group goes, the rest of the syntax becomes spaces.
+OPTIONAL_GROUP = re.compile(r"\(\?:[^()]*\)\?")
+REGEX_SYNTAX = re.compile(r"\\[bBsSwWdDnt][+*?]?|\(\?[:!=i-]*|\)[?*+]?|[|^$]")  # \n, \t: escaped breaks
 HASH = re.compile(r"(?<![0-9A-Za-z])[0-9a-f]{7,40}(?![0-9A-Za-z])")
 CITED = ["README.md", "CHANGELOG.md", "docs", "results"]
 
@@ -60,8 +68,8 @@ CITED = ["README.md", "CHANGELOG.md", "docs", "results"]
 def build_rules(names_path: Path, patterns_path: Path) -> dict:
     names = check_names.read_names(names_path)
     patterns = [p.pattern for p in check_names.read_patterns(patterns_path)]
-    if len(patterns) != 7:
-        raise SystemExit(f"expected the 7 patterns of identifying_patterns.txt, found {len(patterns)}; "
+    if len(patterns) != 5:
+        raise SystemExit(f"expected the 5 patterns of identifying_patterns.txt, found {len(patterns)}; "
                          "update the replacement for each pattern in history_rewrite.py first")
     return {"names": sorted(names, key=len, reverse=True), "patterns": patterns, "removed": REMOVED,
             "exempt": sorted(check_names.EXEMPT),
@@ -92,11 +100,9 @@ class Replacer:
         subs = [
             lambda m: "regional accent",  # 1 (a nationality word is capitalised anyway)
             lambda m: re.sub(r"([:(]\s*).*$", r"\1regional", m.group(0), flags=re.S),  # 2
-            lambda m: self._like(m.group(0), "staff member"),                        # 3
-            lambda m: "сотрудник",                                                   # 4
-            lambda m: m.group(0).split()[-1],                                        # 5: "<company> engineer"
-            lambda m: m.group(0).split()[0],                                         # 6: "<role> at <co>"
-            self._video,                                                             # 7
+            lambda m: m.group(0).split()[-1],                                        # 3: "<company> engineer"
+            lambda m: m.group(0).split()[0],                                         # 4: "<role> at <co>"
+            self._video,                                                             # 5
         ]
         for i, (regex, sub) in enumerate(zip(self.patterns, subs, strict=True), start=1):
             text, n = regex.subn(sub, text)
@@ -105,6 +111,23 @@ class Replacer:
         text = re.sub(r"\b([Aa])n regional accent", r"\1 regional accent", text)
         text = re.sub(r"\b([Aa]) (engineers?|employees?)\b", r"\1n \2", text)
         return text
+
+    def _holds_entry(self, line: str) -> bool:
+        plain = REGEX_SYNTAX.sub(" ", OPTIONAL_GROUP.sub(" ", line))
+        return any(r.search(line) or r.search(plain) for r in self.names)
+
+    def exempt_lines(self, text: str) -> str:
+        """An earlier version of a check file: each line holding a list entry -> `# [removed]`."""
+        lines = text.split("\n")
+        drop = {i for i, line in enumerate(lines) if self._holds_entry(line)}
+        for i in range(len(lines) - 1):  # an entry split over a line break
+            if i not in drop and i + 1 not in drop and self._holds_entry(lines[i] + " " + lines[i + 1]):
+                drop |= {i, i + 1}
+        for i in sorted(drop):
+            indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+            lines[i] = f"{indent}# {self.removed}"
+        self.counts["check-file lines"] += len(drop)
+        return "\n".join(lines)
 
     def names_only(self, text: str) -> str:
         for regex in self.names:
@@ -152,11 +175,17 @@ def rewrite(repo: Path, rules: dict) -> None:
     replacer = Replacer(rules)
     exempt = {e.encode() for e in rules["exempt"]}
     seen: dict[bytes, bytes] = {}
+    keep = set()  # the check files as they are at the tip: kept byte for byte
+    for name in rules["exempt"]:
+        try:
+            keep.add(git(repo, "rev-parse", f"HEAD:{name}").strip().encode())
+        except subprocess.CalledProcessError:
+            pass
 
     def file_info(filename: bytes, mode: bytes, blob_id: bytes, value):
         path = filename.decode("utf-8", "surrogateescape")
         new_name = replacer.text(path).encode("utf-8", "surrogateescape")
-        if filename in exempt:
+        if filename in exempt and blob_id in keep:
             return new_name, mode, blob_id
         key = filename + b"\0" + blob_id
         if key not in seen:
@@ -168,7 +197,8 @@ def rewrite(repo: Path, rules: dict) -> None:
                 except UnicodeDecodeError:
                     text = None
                 if text is not None:
-                    new_text = replacer.text(text, path)
+                    new_text = (replacer.exempt_lines(text) if filename in exempt
+                                else replacer.text(text, path))
                     if new_text != text:
                         new_id = value.insert_file_with_contents(new_text.encode("utf-8"))
             seen[key] = new_id
@@ -221,6 +251,13 @@ def verify(repo: Path, names_path: Path, patterns_path: Path) -> int:
     objects = Objects(repo)
     blob_hits: dict[tuple[str, str], list] = {}
     commits = git(repo, "rev-list", "--all").split()
+    tip_blobs = set()
+    for name in check_names.EXEMPT:
+        try:
+            tip_blobs.add(git(repo, "rev-parse", f"HEAD:{name}").strip())
+        except subprocess.CalledProcessError:
+            pass
+    lines_check = Replacer({"names": names, "patterns": [], "removed": REMOVED, "names_allowed_sections": {}})
     problems: Counter = Counter()
     first_seen: dict[str, str] = {}
     for commit in commits:
@@ -234,6 +271,18 @@ def verify(repo: Path, names_path: Path, patterns_path: Path) -> int:
                 shown = regex.sub("<...>", shown)
             for hit in check_names.find_hits(shown, path, name_regexes + pattern_regexes):
                 problems[f"path {shown}: {hit.source}"] += 1
+            if kind == "blob" and path in check_names.EXEMPT and oid not in tip_blobs:
+                key = (path, oid)
+                if key not in blob_hits:  # an earlier version of a check file: no line may hold an entry
+                    text = objects.read(oid).decode("utf-8", "replace")
+                    pairs = zip(text.split("\n"), lines_check.exempt_lines(text).split("\n"), strict=True)
+                    blob_hits[key] = [check_names.Hit(path, n, "list entry (check file)")
+                                      for n, (before, after) in enumerate(pairs, 1) if before != after]
+                for hit in blob_hits[key]:
+                    label = f"{shown}:{hit.line}: {hit.source}"
+                    first_seen.setdefault(label, commit[:10])
+                    problems[label] += 1
+                continue
             if kind != "blob" or path in check_names.EXEMPT:
                 continue
             key = (path, oid)
