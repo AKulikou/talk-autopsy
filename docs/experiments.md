@@ -155,22 +155,22 @@ its evidence (checked 2026-11-12, at the tag).
 
 | Item | State | Evidence |
 |---|---|---|
-| the owner watched two full videos and uses the tool | **done** (owner) | the owner's statement; full-video runs T2.source and real-01 ([Operational runs](#operational-runs)); Windows launcher `scripts/windows/` (4f893df) |
+| the owner watched two full videos and uses the tool | **done** (owner) | the owner's statement; full-video runs T2.source and real-01 ([Operational runs](#operational-runs)); Windows launcher `scripts/windows/` (3075055) |
 | `benchmark.csv` has numbers for every closed hypothesis | **done** | checked against every [Summary](#summary) entry with a hypothesis: A2, A3, B1, B4, B5, B1 (v2), T6, the T6 translation check and C1 (baselines) had rows; five had none and got one from the numbers in this log: C1 (row 45), B2 (46), C1 (blind) (47), B2 (v2) (48), C1b (49; rows counted as file lines, header = 1, as in the notes). No gap left. B5's coverage numbers (74.4% / 79.5%) are in this log only; its rows are the speech-recognition result with the auto terms (30–31) |
-| the README compares the system, raw Whisper, Whisper + Google Translate and a plain Gemini translation on one set (amended 2026-11-11, owner: VideoLingo out of v1.0 scope) | **done** | [Baselines on one set](#baselines-on-one-set-t2-and-t6): all four measured on T2 and T6 (rows 8 and 39–43); Google Translate rated by the owner 2026-11-12 (4.42, equal to the pipeline; f8299f5). VideoLingo: not run, out of v1.0 scope (its installer executes remote code, which the development environment's policy does not allow; it has also since changed its speech-recognition engine, to Qwen3-ASR) |
-| CI green | **done** | GitHub Actions on b292428 (run 43241656652: test, test-windows, secret-scan); the tagged commit's run is recorded with the release |
-| README in the series structure; honest Known limitations | **done** | README sections Results, Known limitations, Not done (59c935d, 29ee528, b292428) |
+| the README compares the system, raw Whisper, Whisper + Google Translate and a plain Gemini translation on one set (amended 2026-11-11, owner: VideoLingo out of v1.0 scope) | **done** | [Baselines on one set](#baselines-on-one-set-t2-and-t6): all four measured on T2 and T6 (rows 8 and 39–43); Google Translate rated by the owner 2026-11-12 (4.42, equal to the pipeline; 93c2405). VideoLingo: not run, out of v1.0 scope (its installer executes remote code, which the development environment's policy does not allow; it has also since changed its speech-recognition engine, to Qwen3-ASR) |
+| CI green | **done** | GitHub Actions on 00b0529 (run 43241656652: test, test-windows, secret-scan); the tagged commit's run is recorded with the release |
+| README in the series structure; honest Known limitations | **done** | README sections Results, Known limitations, Not done (9fafd54, bd0bfcc, 00b0529) |
 | re-run from cache within a minute | **met** | 6.7–8.9 s wall time on T2 (three re-runs, below); repeated after the version change, outputs byte-identical ([Freeze pipeline-v3](#freeze-pipeline-v3), exception) |
-| independent LLM review #2 | **done** 2026-11-12 | [findings and responses](review-2026-11-12.md); fixes 60040f9..b292428; the history rewrite moved to v1.1 (owner, 2026-11-12) |
-| test-set sources published | **done** | [data/test-set/README.md › Sources](../data/test-set/README.md#sources) (386cd6e): originals linked for T2, real-01, stress-01; T1 and T6 named without a link |
-| version 1.0.0 | **done** | 8c335b2 (recorded freeze exception) |
+| independent LLM review #2 | **done** 2026-11-12 | [findings and responses](review-2026-11-12.md); fixes fd564c8..00b0529; the history rewrite moved to v1.1 (owner, 2026-11-12) |
+| test-set sources published | **done** | [data/test-set/README.md › Sources](../data/test-set/README.md#sources) (8fd13e4): originals linked for T2, real-01, stress-01; T1 and T6 named without a link |
+| version 1.0.0 | **done** | ce40fe9 (recorded freeze exception) |
 | tag `v1.0` | **done** | annotated tag `v1.0` on the commit that adds this table and `CHANGELOG.md` |
 | repository public; git history rewritten without identifying details | **moved to v1.1** (owner, 2026-11-12) | the repository stays private after `v1.0`; the rewrite happens once, right before publication with the web interface ([Backlog](#backlog), v1.1) |
 
 **Re-run from cache (2026-11-11).** The work folder of the `pipeline-v3` T2 repeat 2 (a fresh run
 from a clean worktree of the tag, Freeze pipeline-v3, Repeats) was copied to `work/T2-v3-cache/` and
 `talk-autopsy run data/test-set/T2.wav --lang ru --name T2-v3-cache` was run three times from the main
-checkout (HEAD 67bb53e, frozen paths equal to the tag), with well-formed but invalid API keys in the
+checkout (HEAD 75004bc, frozen paths equal to the tag), with well-formed but invalid API keys in the
 environment so that a stale step would fail instead of spending. Every model step was skipped as up to
 date (stt, glossary, stt2, align, fix, translate: the stamps are content hashes plus the code hash, so a
 copied folder counts as cached); only the subtitles were rendered (about 1 s), byte-identical to the
@@ -427,7 +427,7 @@ clip carries 5 s of padding; neighbouring clips overlap.
 - faster-whisper splits some written words into pieces (`up` + `-level`); the
   alignment joins them back to the words of the segment text (13 joins on T2,
   12 on T1). The T1 backbone still holds the two `.`-only segments from A1 (setup)
-  (the engine has dropped such segments since 4f378a5); they normalize to
+  (the engine has dropped such segments since 2e44571); they normalize to
   nothing and do not enter the alignment.
 
 ### Who decided each reference
@@ -715,7 +715,7 @@ fluent listener is available (owner's decision); this is a limitation, not
 fixed.
 
 **Run.** `talk-autopsy run` from a clean `git worktree` of tag `pipeline-v3`
-(commit `d180a73ddc3c95f2b7cb79e8621e541aa36f99b5`; Freeze pipeline-v3 below),
+(commit `96d9b707732b9dbc3c5fdcba49bf681c51c2e0d0`; Freeze pipeline-v3 below),
 the commit hash recorded with the run; auto-glossary only (no hand glossary,
 no context); one run; the settings in `.env` that select models or versions
 empty. Then `talk-autopsy eval T6 --hyp <worktree>/work/<name>/fixed.json
@@ -929,7 +929,7 @@ after the numbers were seen.
 
 - **Run:** `talk-autopsy run data/test-set/T6.wav --lang ru --name T6-v3
   --max-cost 1.0` from a clean `git worktree` of tag `pipeline-v3`, commit
-  **`d180a73ddc3c95f2b7cb79e8621e541aa36f99b5`** (status clean, hash checked),
+  **`96d9b707732b9dbc3c5fdcba49bf681c51c2e0d0`** (status clean, hash checked),
   keys from the main checkout's `.env` by path; fresh work folder (no cache);
   auto-glossary only (32 terms, all 32 sent as key terms, none dropped), no
   hand glossary, no `--domain`, no context; `.env` and shell settings that
@@ -1060,7 +1060,7 @@ The stage 2 gate, criterion by criterion (CLAUDE.md, Stage gates):
 |---|---|---|
 | term accuracy >= 85% | T6 (hold-out, run once): 100% against J and M, lower bound 91.67% (Wilson 83.0%), verdict **pass (not demonstrated)**, no overfitting signal; T2 repeats 94.39–96.26% | met (not demonstrated at 85% with 72 occurrences) |
 | blind translation score >= 4/5 (absolute translation quality on T6) | T6 check: pipeline mean 4.42 (12 units, single-rated, blind), Gemini 4.33, difference +0.08 [−0.33, +0.50] | met |
-| hold-out T6 run once | 2026-11-11, `pipeline-v3` (d180a73), one run | met |
+| hold-out T6 run once | 2026-11-11, `pipeline-v3` (96d9b70), one run | met |
 | independent LLM review | review #1, 2026-11-11 ([findings and responses](review-2026-11-11.md)) | met |
 
 **Owner's decision (2026-11-11): gate 2 -> 3 passed.** Stage 3 finishes v1.0
@@ -1081,7 +1081,7 @@ so transfer to another domain is not shown (T3).
 ## Freeze pipeline-v3
 
 Frozen on 2026-11-11 with the annotated git tag `pipeline-v3` on commit
-**`d180a73ddc3c95f2b7cb79e8621e541aa36f99b5`**, after independent LLM review #1. It
+**`96d9b707732b9dbc3c5fdcba49bf681c51c2e0d0`**, after independent LLM review #1. It
 supersedes `pipeline-v2` for the T6 run; T6 has never been run on either.
 What changed against `pipeline-v2`:
 
@@ -1151,7 +1151,7 @@ the evaluation tooling (`judge.py`, `translation_check.py`).
 - **Why:** independent LLM review #1, finding 12: no number had a repeat. These three
   T2 runs are also the comparison point of the T6 overfitting signal.
 - **Run:** `talk-autopsy run <fragment>.wav --lang ru --name <run>` from a clean
-  `git worktree` of `pipeline-v3` (d180a73), a fresh work folder per run (no
+  `git worktree` of `pipeline-v3` (96d9b70), a fresh work folder per run (no
   cache), no context, no hand glossary, keys from the main checkout's `.env`
   (`uv run --env-file`). Scored from the main checkout:
   `eval <fragment> --hyp <run>/fixed.json --raw <run>/raw2.json --record
@@ -1527,7 +1527,7 @@ Through the web server's HTTP API (`talk-autopsy web`), the frozen
 | T6 key-term ablation | 2026-11-12 | none: what the key terms do on the hold-out | `eval T6` on existing transcripts (no API call): AssemblyAI without key terms, the run's first and second pass | without key terms 98.61% (71/72), with key terms 98.61%, after correction 100% | on T6 the key terms changed no occurrence; correction's one edit added the last; on T2 the key terms do the work | recorded; README "what does the work" gives T2 and T6 |
 | C1 (baselines) | 2026-11-12 | the pipeline's blind mean is at least 1 point above Whisper + Google Translate (spec C1, Google Translate part) | owner rated `C1-T6-rating-2.md` (12 Google Translate items + 4 anchors) blind; pipeline and Gemini from the first T6 rating; `translation_check.py score-baselines` | pipeline 4.42, Google Translate 4.42, Gemini 4.33; pipeline − Google Translate 0.00 [−0.42, +0.42]; anchor drift 0.00 (4/4 identical) | **not met** (0.00 < 1.0): on random sentences the three systems rate equal; the difference in terms is an inference from the English side | accepted as a finding (owner, 2026-11-12): not confirmed; no translation changes before v1.0 (decisions) |
 | LLM rater | 2026-11-12 | none: can Gemini serve as a second translation rater? | `gemini-rater-v1` on all 38 items, compared with the owner after the owner rated | Spearman 0.05; Gemini's own translations 4.93 vs pipeline 3.93, Google Translate 3.83; rater − owner +0.57 on Gemini items, −0.58 on the others | self-preference measured; no agreement with the owner | Gemini rater not usable; owner's rating stays the only one |
-| T6 (hold-out) | 2026-11-11 | the frozen pipeline keeps term accuracy v2 >= 85% on an unseen fragment (T6 protocol: bounds, Wilson intervals, overfitting signal) | `run` once from a clean worktree of tag `pipeline-v3` (d180a73), auto-glossary only, no cache; `eval T6 --record` | J 100.00% (72/72), M 100.00% (71/71), lower 91.67% (Wilson 83.0–96.1%), upper 100.00%; WER 2.89–4.70%; correction 1 edit, 0 false; 52.5% of Russian cues above 17 cps; 0.140 USD Claude, 0.078 USD AssemblyAI | **pass (not demonstrated)**, the best verdict T6 allows; overfitting signal no; same-topic transfer only | recorded; translation check on T6 prepared, owner rates next |
+| T6 (hold-out) | 2026-11-11 | the frozen pipeline keeps term accuracy v2 >= 85% on an unseen fragment (T6 protocol: bounds, Wilson intervals, overfitting signal) | `run` once from a clean worktree of tag `pipeline-v3` (96d9b70), auto-glossary only, no cache; `eval T6 --record` | J 100.00% (72/72), M 100.00% (71/71), lower 91.67% (Wilson 83.0–96.1%), upper 100.00%; WER 2.89–4.70%; correction 1 edit, 0 false; 52.5% of Russian cues above 17 cps; 0.140 USD Claude, 0.078 USD AssemblyAI | **pass (not demonstrated)**, the best verdict T6 allows; overfitting signal no; same-topic transfer only | recorded; translation check on T6 prepared, owner rates next |
 | pipeline-v3 repeats | 2026-11-11 | none: variance of the frozen path, and the T2 point of the T6 overfitting rule | `run` from a clean worktree of tag `pipeline-v3`, auto-glossary only, no cache; T2 three times, T1 once | term accuracy v2 T2 94.39–96.26% (mean 95.33%), macro 84.62–89.74%, without `Claude Code` 92.41–94.94%; WER 4.24–4.48%; T1 99.20%; correction 0 edits in all four; 0.511 USD Claude, 0.309 USD AssemblyAI | the earlier single-run 96.26% is the top of the range; correction does nothing on this path | T2 mean 95.33% is the overfitting comparison point (Freeze pipeline-v3) |
 | C1b | 2026-11-10 | translation-v3 (term classes keep / both / translate / ui) renders ordinary words in Russian without losing names or code, and the owner prefers it blind | `translate --prompt translation-v3` from the cached corrected transcripts of real-01 (428 units) and T2 (149 units); term classes by Haiku; 16 blind pairs | other Latin words per 100 Russian words real-01 0.81 -> 0.25, T2 2.10 -> 0.74; keep terms 43/44 -> 44/44 and 89/89 -> 89/89; 0 failed blocks, 0 marker warnings; above 17 cps real-01 49.2% -> 50.0%, T2 58.8% -> 65.1%; 0.346 USD | the owner's example words now follow the policy; T2 reads slower | **not adopted** (owner's blind rating 2026-11-11: v3 won 5 pairs, v2 6, ties 5; means v2 4.44, v3 4.25): v2 stays the default, v3 an option |
 | D1 (setup) | 2026-11-10 | none: sentence units before translation and display extended into pauses (subtitle-v2) | translation-v2 on units; T2 fragment, C1 input, T2.source, real-01 | T2 fragment Russian above 17 / 25 cps 74.7% / 25.3% -> 58.8% / 15.8%; on AssemblyAI input units = segments (149/149, 373/373, 428/426); Gemini input 109 -> 85 units; 0.547 USD | the C1 fragments become whole sentences; the extension does most of the reading-speed work; word timing raises speed variance in multi-cue segments | units frozen with the pipeline; display rule stays open |
@@ -1726,7 +1726,7 @@ linger; cues never cross a segment boundary. Writing both files takes about
   most short cues were read faster than 17 characters per second. Not a
   scored hypothesis: no reference for reading speed or timing, numbers below
   are descriptive.
-- **Change** (6eb76ea, 112580f): `units.py` regroups segments into sentence
+- **Change** (1815167, 3abd101): `units.py` regroups segments into sentence
   units before translation — consecutive segments merge until the unit ends
   with terminal punctuation or the pause after a segment exceeds 1.5 s; a
   unit over 25 s is split into the fewest parts, each break at the best
@@ -2112,7 +2112,7 @@ linger; cues never cross a segment boundary. Writing both files takes about
   missing a kept glossary term. That check went beyond the spec (which asks
   for agreed glossary translations) and contradicts the prompt's compression
   rule, so a missing kept term is now a warning in
-  `meta.translation.warnings` (daec62b). Rerun: 0 failed blocks, 1 warning
+  `meta.translation.warnings` (9b9d973). Rerun: 0 failed blocks, 1 warning
   ("GitHub" dropped in segment 35), 0.054 USD. Outputs `work/T2/T2.ru.json`,
   `work/T2/T2.ru.srt` (161 cues, 53% above 17 cps, max 30.0 cps, 3 shorter
   than 1 s) and `work/T2/T2.en.srt` (204 cues, 86% above 17 cps).
@@ -2146,7 +2146,7 @@ linger; cues never cross a segment boundary. Writing both files takes about
   already right (false-edit rate near 0) and without raising WER. (The
   project plan is not in the repository; the wording follows the owner's
   instructions and the stage 2 gate.)
-- **Run:** 2026-11-09, `talk-autopsy fix` (commit 2359042's code),
+- **Run:** 2026-11-09, `talk-autopsy fix` (commit 0f1628a's code),
   prompt `correction-v1` (`talk_autopsy/prompts/correction-v1.md`),
   `claude-sonnet-5-5`, default effort and adaptive thinking, blocks of about
   5 minutes (2 per fragment) with 3 read-only context segments, the reviewed
@@ -2370,7 +2370,7 @@ of them above 17 characters per second (verbatim English of a fast speaker),
   `keyterms_prompt` raises term accuracy over the run without it, without
   raising WER. (The project plan is not in the repository; the wording follows
   the owner's instructions of 2026-11-09.)
-- **Run:** 2026-11-09, engine code at 0505ba9 (unchanged), Universal-3.5 Pro,
+- **Run:** 2026-11-09, engine code at db8bc32 (unchanged), Universal-3.5 Pro,
   `--glossary-prompt` with the reviewed glossaries (39 terms on T2, 37 on T1;
   none over 6 words), otherwise as A3 (setup). Outputs
   `work/T<n>/raw.assemblyai+keyterms.json`. Test-set runs 9 and 10 of 10 in
@@ -2406,7 +2406,7 @@ of them above 17 characters per second (verbatim English of a fast speaker),
 - **Hypothesis:** none. These transcripts are one of the three inputs of the
   consensus reference; no quality claim is made here (see the bias caveat in the
   methodology section).
-- **Run:** 2026-11-09, engine code at deefb6d. `google-genai` 3.0.0, model
+- **Run:** 2026-11-09, engine code at 16d21af. `google-genai` 3.0.0, model
   `gemini-3.8-flash` (the most capable model on the free tier; `gemini-4-argon`
   is paid only), WAV uploaded through the Files API, prompt for a verbatim
   English transcript as a JSON array of `{start_seconds, end_seconds, text}`
@@ -2441,7 +2441,7 @@ of them above 17 characters per second (verbatim English of a fast speaker),
 ### A3 (setup): AssemblyAI transcripts of T2 and T1
 
 - **Hypothesis:** none, as A4 (setup).
-- **Run:** 2026-11-09, engine code at 0505ba9. `assemblyai` SDK 1.8.2,
+- **Run:** 2026-11-09, engine code at db8bc32. `assemblyai` SDK 1.8.2,
   `speech_models=["universal-3-5-pro"]` (the model that ran is recorded and was
   the one requested), `language_code="en"`, speaker labels off, no keyterms.
   Segments are the service's sentences. Outputs `work/T<n>/raw.assemblyai.json`.
@@ -2470,7 +2470,7 @@ Money: 0.07 USD at list price, all from free credit.
 
 - **Hypothesis:** none. This run produces the drafts for the reference transcripts
   and measures time; it is not a test of quality.
-- **Run:** 2026-11-09, engine code at 35d8efc. faster-whisper 1.2.1, model
+- **Run:** 2026-11-09, engine code at 3a7bd08. faster-whisper 1.2.1, model
   `large-v3` (`Systran/faster-whisper-large-v3`), `device=cpu`,
   `compute_type=int8`, `beam_size=5`, `vad_filter=True`, `word_timestamps=True`,
   `language=en`, no initial prompt. Laptop with 8 logical CPUs; faster-whisper's

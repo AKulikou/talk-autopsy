@@ -475,7 +475,7 @@ term-accuracy metric, no interpretation rule for T6, a cache that a
 validator fix did not invalidate, and a key-term limit that raised an error.
 
 Decision: the fixes that must precede T6 were made in one session and the
-pipeline refrozen as tag `pipeline-v3` (d180a73): `glossary-auto-v2` and
+pipeline refrozen as tag `pipeline-v3` (96d9b70): `glossary-auto-v2` and
 `translation-v2.1` (same rules, neutral examples), cache key with a code hash,
 key-term truncation, term accuracy v2. The T6 protocol (rule, intervals,
 overfitting signal, scope, translation check) was written before the run
