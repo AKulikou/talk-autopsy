@@ -79,8 +79,10 @@ re-runs).
   results stay cached.
 - Found in the owner's first real run of the page: a part left untranslated
   is now a plain warning with its minutes on the waiting and Done screens
-  ("Part of the video was not translated (0:00–4:55). Run this video again:
-  only that part will be translated again"), not a counter of "blocks"; the
+  ("Some phrases were not translated (10:21–10:30): the subtitles there are in
+  English..."), not a counter of "blocks"; it no longer advises running the
+  video again, which after two rejected answers would most likely fail the
+  same way and cost money again; the
   core's English lines are no longer shown on a Russian page (known messages
   become a sentence in the interface language, the rest goes under "Technical
   details"); buttons under the player choose the subtitles (target language,

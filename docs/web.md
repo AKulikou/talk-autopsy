@@ -139,11 +139,19 @@ cost. Right: the text, in two aligned columns.
   becomes one sentence in the interface language; every core line (and each
   step's own description) is listed, collapsed, under "Technical details".
   The failed screen names the kind of failure in words and keeps the core's
-  line there too. Yellow is kept for the one real warning: part of the video
-  left untranslated or uncorrected, with its minutes ("Part of the video was
-  not translated (0:00–4:55). Run this video again: only that part will be
-  translated again"), on the waiting screen as soon as the block fails and on
-  the Done screen (also when opened from the recent results).
+  line there too. Yellow is kept for the one real warning: phrases left
+  untranslated or uncorrected, with the minutes of those phrases ("Some
+  phrases were not translated (10:21–10:30): the subtitles there are in
+  English. The model's answer for them failed the automatic check twice, so
+  they were kept as they were. Running the video again would most likely give
+  the same result."), on the waiting screen as soon as the block is done and
+  on the Done screen (also when opened from the recent results). The warning
+  suggests nothing that costs money: a part is left as it was only after two
+  rejected answers to the same request, which a re-run would most likely
+  repeat; a transient failure (network, rate limit, timeout) is retried by the
+  API client and otherwise stops the whole run, with its own message on the
+  failed screen (owner's bug report, 2026-11-13; before, the warning said to
+  run the video again).
 - **Reload.** A reload during a run reattaches: the steps are rebuilt from the
   replayed events and the text from the current window.
 - **Narrow windows** stack the steps above the text (below 56 rem) and the two

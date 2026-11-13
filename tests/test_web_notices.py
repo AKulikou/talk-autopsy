@@ -40,8 +40,7 @@ def test_core_messages_become_known_kinds_or_technical_details(code, text, messa
 def test_every_message_and_failure_has_a_string_in_every_language():
     keys = {"notice_subtitles", "notice_subtitles_fast", "notice_burn_in", "notice_soft_tracks",
             "notice_fallback", "notice_display_error", "notice_truncated", "subs_which_target",
-            "subs_which_en", "tech_details", "warn_untranslated", "warn_uncorrected", "warn_rerun",
-            "warn_rerun_part"}
+            "subs_which_en", "tech_details", "warn_untranslated", "warn_uncorrected", "warn_checked"}
     keys |= {f"fail_{h}" for h in ("doctor", "youtube", "outputs", "cost_limit", "input", "log", "network")}
     for lang in ("en", "ru", "lt"):
         strings = json.loads((web_settings.STRINGS_DIR / f"{lang}.json").read_text(encoding="utf-8"))

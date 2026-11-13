@@ -57,7 +57,10 @@ export function gapsWarning(untranslated, uncorrected) {
   if (untranslated?.length) parts.push(t("warn_untranslated", { ranges: ranges(untranslated) }));
   if (uncorrected?.length) parts.push(t("warn_uncorrected", { ranges: ranges(uncorrected) }));
   if (!parts.length) return "";
-  parts.push(t(uncorrected?.length ? "warn_rerun" : "warn_rerun_part"));
+  // A part is left as it was only when the model's answer failed the checks twice (an API or network
+  // failure stops the whole run instead), so a re-run would most likely fail the same way and cost
+  // money again: say what happened, suggest nothing (owner's bug report, 2026-11-13).
+  parts.push(t("warn_checked"));
   return parts.join(" ");
 }
 
