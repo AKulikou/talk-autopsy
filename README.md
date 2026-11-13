@@ -16,20 +16,31 @@ by Google Translate mangled the technical terms, product names and shell command
 and broke down on non-native speakers: the words a viewer of a technical
 talk most needs are the ones it got wrong.
 
-The field is crowded: VideoLingo, pyvideotrans and other tools already chain
-speech recognition, an LLM and subtitles ([prior-art survey](docs/prior-art.md)),
-and almost none publishes quality measurements. This project's contribution is meant
-to be measurement: each stage scored on fixed fragments, with a sealed hold-out
-and an independent LLM review. What is measured so far, and what is not, is listed below.
-VideoLingo, the closest of these tools, is not compared here: it is out of v1.0
-scope (its installer executes remote code, which the development environment's
-policy does not allow; it has also since changed its speech-recognition engine,
-to Qwen3-ASR).
+The field is crowded: open tools already chain speech recognition, an LLM and
+subtitles, and almost none publishes quality measurements
+([prior-art survey](docs/prior-art.md)). This project's contribution is the
+measurement: each stage scored on fixed fragments, with a sealed hold-out and an
+independent LLM review; what is measured, and what is not, is listed below.
+
+## Example
+
+Four consecutive lines from [Create a Smart Contract in under 15 mins: Step-by-Step Tutorial](https://www.youtube.com/watch?v=yv-wJ1toBR0),
+a public Solidity tutorial that is not in the test set:
+
+| Time | English (corrected) | Russian |
+|---|---|---|
+| 02:33 | All right, the next thing we need to do is the Solidity version. | Дальше нужно указать версию Solidity. |
+| 02:36 | So we're gonna say pragma solidity and then 0.8.0. | Пишем pragma solidity и затем 0.8.0. |
+| 02:45 | 0.8.26. | 0.8.26. |
+| 02:48 | Now if you go to the Solidity compiler, we'll see that the latest version of the Solidity compiler is 0.8.26, so we'll just use that. | Если зайти в компилятор Solidity, мы увидим, что последняя версия компилятора — 0.8.26, так что возьмём её. |
+
+Unedited output (made before `pipeline-v3.4`; `pipeline-v3.5` sends the same requests and reuses it unchanged).
+Code (`pragma solidity`) and version numbers stay as spoken; "compiler" is "компилятор" both times.
 
 ## How it is tested
 
 - **Test set:** two scored fragments of English technical speech, about 10
-  minutes each: T1 (a native speaker, to be confirmed) and T2 (a
+  minutes each: T1 (a conference talk with a live demo, clear speech) and T2 (a
   non-native speaker; **the development fragment**: prompts were iterated on
   it). The hold-out T6 (another non-native speaker, a workshop) was
   run once on 2026-11-11 (pass, not demonstrated); T3–T5 are not selected. All three are
@@ -547,9 +558,14 @@ Independent LLM review #2 was done on 2026-11-12
 
 **Version 1.0.0** was tagged `v1.0` on 2026-11-12 ([CHANGELOG](CHANGELOG.md);
 [v1.0 checklist](docs/experiments.md#v10-checklist) with evidence). Version
-1.1.0 adds the web UI; the pipeline is `pipeline-v3.2`, which differs from
-`pipeline-v3` only by progress events and removed dead code (model requests,
-cache keys and outputs unchanged), so the numbers above carry over.
+1.1.0 adds the web UI; the pipeline is now `pipeline-v3.5`. `pipeline-v3.1` to
+`pipeline-v3.5` add progress events, remove dead code, and fix validation and
+retry bugs found in real use (a bare version number such as `0.8.26` no longer
+rejects a translation block; a segment that fails a check falls back on its own
+instead of its whole block; a request that fails on the service's side during an
+outage is retried). For every tag the model requests stayed byte-identical and
+the saved T2 and T6 answers get the same verdict, so the numbers above carry
+over ([decision log](docs/decisions.md)).
 
 Two requirements of the specification (summarised here; the specification is
 in Russian and not published) concern this version:
@@ -559,9 +575,8 @@ in Russian and not published) concern this version:
 | F13: a local web interface over the same core | done in v1.1: one video end to end from the page (link or file, estimate and confirmation, live steps and text, player); playlists through the command line |
 | F14: the target language is a parameter | works end to end (`run --lang`, the page's "Translate into"); only Russian is measured |
 
-**Next:** the repository made public (v1.1 is tagged, on a git history
-rewritten so that old commits carry no identifying details); after that, T3
-on a new domain ([Backlog](docs/experiments.md#v11-web-interface-the-repository-becomes-public-with-it)).
+**Next:** v1.2, a Web3 track: a smart-contract tutorial fragment added to the
+test set and measured before a new Web3 glossary is tried; dubbing after that.
 
 | Stage | Content | Gate |
 |---|---|---|
@@ -623,11 +638,17 @@ language as a parameter.
   out of v1.0 scope (its installer executes remote code, which the development
   environment's policy does not allow; it has also since changed its
   speech-recognition engine, to Qwen3-ASR).
-- **A failed translation block stays in English as a whole:** if the model's
-  answer for a block (about five minutes) fails the checks twice, every
-  segment of that block keeps its English text, not only the one that failed.
-  The page says which minutes; running the video again sends that block
-  again.
+- **A failed segment keeps its input:** if the model's answer for a block
+  (about five minutes) fails a segment's check twice, that segment keeps its
+  recognized text (correction) or its English text (translation); an answer
+  that is wrong as a whole (unparseable, other segment ids) still leaves the
+  whole block. The page says which minutes; running the video again sends
+  only those blocks again.
+- **The glossary step has no fallback:** if the model's answer for the
+  auto-glossary is malformed, the whole run stops (not seen in practice).
+- **A speech-recognition outage is not retried:** when AssemblyAI is
+  unavailable, the run does not wait for it; it switches to the fallback
+  engine (and the key-term pass keeps the first pass).
 - **Reading speed** is above the usual guideline on fast speakers; nothing is cut.
 - **Timing** of subtitles is not validated against hand-labelled onsets.
 - **Next-video failure modes** not handled: several speakers (no
@@ -662,8 +683,6 @@ language as a parameter.
 - Timing drift and term accuracy of the translation (metrics not implemented).
 - A human check of the T6 reference (no fluent listener available).
 - Dubbing (stage 4, not started).
-- Publication, the last step of v1.1: the git history rewritten without
-  identifying details, then the repository made public.
 
 ## Appendix: T1
 

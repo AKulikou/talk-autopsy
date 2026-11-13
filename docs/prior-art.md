@@ -36,4 +36,7 @@ content and code in the cache key (`pipeline-v3`); correction as its own
 stage with a false-edit metric (B1, B2). What it did not take: subtitle
 splitting to Netflix norms and multi-step translation (translation is one
 step on sentence units). VideoLingo, the closest project, was not run as a
-baseline (out of v1.0 scope; [decisions](decisions.md), 2026-11-11).
+baseline (out of v1.0 scope; [decisions](decisions.md), 2026-11-11): its
+installer executes remote code, which the development environment's policy
+does not allow; it has also since changed its speech-recognition engine, to
+Qwen3-ASR.
