@@ -33,7 +33,7 @@ result.
 | Key terms do the work | T2 107 and T6 72 occurrences, existing transcripts | as the two rows above | no: ablation after the results | T2 80.4% -> 96.3%; T6 71/72 -> 71/72 (no change; correction added the last) |
 | Pipeline vs a single Gemini call on terms (T2) | 107 occurrences, 3 runs vs 1 call | as T2 | no | 94.4–96.3% vs 93.5%: the lead is within the pipeline's own spread |
 | Absolute translation quality on T6 (mean ≥ 4.0) | 12 units, 1 rater | owner, blind, single-rated | yes: before the run, amended twice before the run | 4.42: **met**; not better than a plain Gemini translation (+0.08, −0.33 … +0.50) |
-| Term accuracy on T7 (Web3 tutorial, v1.2) with the current Web3 dictionary; E1 rule: v2 only if < 90% (or the rating fails) | 217 occurrences, 3 runs + 1 without the dictionary | references: Gemini audio judge and engine majority (70 of 145 spans by the judge alone); no human check | yes: T7 baseline, before any run (2026-11-14) | mean 88.02% (86.18–88.94%), judge-only range 76.65–97.85%: **E1 to be built**; without the dictionary 90.32% (no gain from it) |
+| Term accuracy on T7 (Web3 tutorial, v1.2) with the current Web3 dictionary; E1 rule: v2 only if < 90% (or the rating fails) | 217 occurrences, 3 runs + 1 without the dictionary | references: Gemini audio judge and engine majority (70 of 145 spans by the judge alone); no human check | yes: T7 baseline, before any run (2026-11-14) | mean 88.02% (86.18–88.94%), judge-only range 76.65–97.85%: **E1 to be built**; without the dictionary 90.32% (no gain from it); owner's rating of 20 replicas (not blind to the source) 4.75, 1 lowered by a term |
 | Specification C1: at least 1 point above Google Translate | 12 units, 1 rater, two days | owner, blind; anchor drift 0.00 | yes: Translation rating, before any Google Translate call (2026-11-11) | 0.00 (−0.42 … +0.42): **not met** |
 
 ## Metrics
@@ -352,9 +352,21 @@ and no metric depends on it.
 - **E1, condition 1: holds.** Term accuracy against J, mean of the three (b)
   runs, is **88.02% < 90%** (range of the three 86.18–88.94%; judge-only range
   of the mean 76.65–97.85%). By the rule written before the runs, **dictionary
-  v2 (E1) is to be built**. Conditions 2 and 3 (the owner's rating of 20
-  replicas, `work/T7/T7-rating.md`) are reported when he has rated; they
-  cannot change this outcome.
+  v2 (E1) is to be built**. Conditions 2 and 3 do not hold (the owner's
+  rating, below): E1 launches on condition 1 alone.
+- **The owner's rating of 20 replicas** (rated 2026-11-14 after the session's
+  runs; `scripts/translation_check.py score-single --term-accuracy 0.8802`;
+  20 sentence units of (b) run 1, at least 6 words, seed 20261114; only the
+  pipeline's translation, **not blind to the source**): **mean 4.75** (scores
+  5/4/3/2/1: 15/5/0/0/0), so condition 2 (mean < 4.0) does not hold; **1 of 20
+  scored lower because of a term** (a plural Web3 term rendered in the
+  singular), so condition 3 (more than 2) does not hold. The owner's comments
+  on the five 4s (paraphrased, no transcript text): a verb rendered with
+  another meaning and a conjunction added that the English does not have; a
+  place added that the English does not name; an English phrase left
+  untranslated; the term in the singular; one 4 without a comment. So 4 of
+  the 5 lower scores are wording, not terms. `benchmark.csv` row: T7,
+  translate.
 - **The current Web3 dictionary does not help on T7.** (a) without it scores
   90.32% against J, above all three (b) runs (86.18–88.94%), and 92.39% against
   M, above (b)'s 89.34–91.88%. One (a) run against a spread of 2.8 points
