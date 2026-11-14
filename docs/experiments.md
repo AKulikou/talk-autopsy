@@ -22,7 +22,7 @@ versions and $20; a cost estimate before every full-video run.
 
 ## Evaluation at a glance
 
-The six claims the README rests on, how much evidence each has, who decided
+The claims the README rests on (and T7's), how much evidence each has, who decided
 the reference or the score, and whether the rule was written before the
 result.
 
@@ -33,6 +33,7 @@ result.
 | Key terms do the work | T2 107 and T6 72 occurrences, existing transcripts | as the two rows above | no: ablation after the results | T2 80.4% -> 96.3%; T6 71/72 -> 71/72 (no change; correction added the last) |
 | Pipeline vs a single Gemini call on terms (T2) | 107 occurrences, 3 runs vs 1 call | as T2 | no | 94.4–96.3% vs 93.5%: the lead is within the pipeline's own spread |
 | Absolute translation quality on T6 (mean ≥ 4.0) | 12 units, 1 rater | owner, blind, single-rated | yes: before the run, amended twice before the run | 4.42: **met**; not better than a plain Gemini translation (+0.08, −0.33 … +0.50) |
+| Term accuracy on T7 (Web3 tutorial, v1.2) with the current Web3 dictionary; E1 rule: v2 only if < 90% (or the rating fails) | 217 occurrences, 3 runs + 1 without the dictionary | references: Gemini audio judge and engine majority (70 of 145 spans by the judge alone); no human check | yes: T7 baseline, before any run (2026-11-14) | mean 88.02% (86.18–88.94%), judge-only range 76.65–97.85%: **E1 to be built**; without the dictionary 90.32% (no gain from it) |
 | Specification C1: at least 1 point above Google Translate | 12 units, 1 rater, two days | owner, blind; anchor drift 0.00 | yes: Translation rating, before any Google Translate call (2026-11-11) | 0.00 (−0.42 … +0.42): **not met** |
 
 ## Metrics
@@ -321,6 +322,113 @@ unless condition 1 already holds.
 **Reading speed note** (no change to subtitle assembly): D1 numbers on T7
 compared with T2, T6 and the real runs of 12–13 Nov, and the top three causes,
 with timecodes only.
+
+### T7 baseline result (2026-11-14)
+
+The runs exactly as pre-registered above (worktree of `pipeline-v3.5` at
+`0fd70a5`, clean; order b1, b2, b3, a1; 11:55–12:21). Nothing was re-run.
+Every run did all model steps with no fallback, then stopped in the MP4
+output step (an audio file has no picture; a CLI bug fixed afterwards in
+`ccaca00`, decisions 2026-11-14); the subtitles had been written before it,
+and no metric depends on it.
+
+| T7, `pipeline-v3.5` | (b) run 1 | (b) run 2 | (b) run 3 | (b) mean (range) | (a) no dictionary |
+|---|---|---|---|---|---|
+| term accuracy v2 against J | 88.94% (193/217) | 88.94% (193/217) | 86.18% (187/217) | **88.02%** (86.18–88.94) | 90.32% (196/217) |
+| term accuracy v2 against M | 90.86% (179/197) | 91.88% (181/197) | 89.34% (176/197) | 90.69% (89.34–91.88) | 92.39% (182/197) |
+| judge-only range: lower – upper bound | 76.96–98.16% | 77.42–98.62% | 75.58–96.77% | 76.65–97.85% | 77.88–99.08% |
+| Wilson 95% of J | 84.1–92.5% | 84.1–92.5% | 81.0–90.1% | | 85.7–93.6% |
+| macro / precision (J) | 74.28% / 97.47% | 77.13% / 96.02% | 71.77% / 95.90% | | 78.08% / 96.55% |
+| WER against J / M | 3.11% / 3.21% | 3.21% / 3.18% | 3.34% / 3.08% | 3.22% / 3.16% | 3.27% / 3.31% |
+| false edits (J) | 0 of 3 word edits | 0 of 3 | 0 of 3 | 0% | 1 of 4 (25%) |
+| Russian cues above 17 / 20 cps | 32.8% / 16.9% | 35.9% / 18.3% | 35.3% / 17.3% | 34.7% / 17.5% | 39.0% / 19.2% |
+| above 25 cps; max | 6.4%; 62.5 | 6.8%; 62.5 | 7.5%; 62.5 | | 6.5%; 62.5 |
+| auto-glossary terms; run glossary | 36; 160 | 32; 157 | 44; 164 | | 36; 36 |
+| translation: rejected answers; segments left in English | 4; 8 | 4; 3 | 4; 6 | | 5; 4 |
+| Claude (whole run) | 0.3052 USD | 0.3019 USD | 0.3022 USD | 0.3031 USD | 0.3280 USD |
+| AssemblyAI, two passes (list price) | 0.1412 USD | 0.1412 USD | 0.1412 USD | | 0.1412 USD |
+| processing time (pipeline) | 265.5 s | 288.6 s | 286.5 s | | 235.5 s |
+
+- **E1, condition 1: holds.** Term accuracy against J, mean of the three (b)
+  runs, is **88.02% < 90%** (range of the three 86.18–88.94%; judge-only range
+  of the mean 76.65–97.85%). By the rule written before the runs, **dictionary
+  v2 (E1) is to be built**. Conditions 2 and 3 (the owner's rating of 20
+  replicas, `work/T7/T7-rating.md`) are reported when he has rated; they
+  cannot change this outcome.
+- **The current Web3 dictionary does not help on T7.** (a) without it scores
+  90.32% against J, above all three (b) runs (86.18–88.94%), and 92.39% against
+  M, above (b)'s 89.34–91.88%. One (a) run against a spread of 2.8 points
+  supports no stronger claim than "no gain". Part of the gap is the reference:
+  with the dictionary the pipeline writes the code forms of the two `msg.*`
+  members, which reference J writes as spoken (known limit above) and counts
+  as misses; (a) wrote the spoken form and was counted right. The dictionary
+  also made the translation check revert 1–2 segments per (b) run for its
+  agreed translation of `gas price`.
+- **What the misses are** ((b) run 1, 24 missed occurrences against J,
+  classified by comparing the spellings in the hypothesis and in J; no text
+  quoted): **14 spelling convention** (the same words in another written form
+  of an identifier: case of a file or keyword name, a hyphen or underscore for
+  a space, digits written apart), **3 reference doubt** (J has the spoken form,
+  the pipeline the code form: the two `msg.*` members and the Makefile's
+  `.PHONY`), **3 recognition** (other words written where J has a file or
+  folder name), **4 misaligned** (the term is in the hypothesis but not at
+  the aligned place). Most of the gap to 90% is how identifiers are written,
+  not what was heard. A dictionary v2 can carry the exact written forms of the
+  identifiers the owner's courses use; it cannot fix the reference doubts.
+- **Translation check and commands** (not a bug, decisions 2026-11-14): in
+  every run the check "left in English" refused both answers of block 1 for
+  segments that are shell commands or spoken identifiers (a `make` target, a
+  `forge script` line), and they stayed English. 4–5 of 8–9 translation
+  requests per run were rejected answers: about a third of the translation
+  step (0.18–0.19 USD per run) went to repeats that changed nothing.
+- **Reading speed:** T7 has fewer fast cues than T2 and T6 (note below).
+
+### T7 reading speed note (2026-11-14; no change to subtitle assembly)
+
+Share of Russian cues above 17 / 20 / 25 characters per second
+(`scripts/reading_speed.py`, `metrics.reading_speed`). The subtitle code is
+unchanged since 2026-11-11; T2 re-rendered from cache on 2026-11-13 gives the
+same numbers as its run.
+
+| | cues | above 17 cps | above 20 cps | above 25 cps | max |
+|---|---|---|---|---|---|
+| T7 (b) runs 1–3 | 295–296 | 32.8–35.9% | 16.9–18.3% | 6.4–7.5% | 62.5 |
+| T7 (a) | 292 | 39.0% | 19.2% | 6.5% | 62.5 |
+| T2, 3 `pipeline-v3` repeats | 166–174 | 58.5–60.9% | 39.2–45.0% | 16.3–17.8% | 70.8 |
+| T6 (one run) | 177 | 52.5% | 35.6% | 16.9% | 49.8 |
+| real runs of 12–13 Nov (9 videos, 73–523 cues) | | 20.8–71.1% | 10.3–42.1% | 1.4–13.8% | 25.2–74.8 |
+
+Causes of the cues above 20 cps (`--causes`; each cue counted once, in this
+order: shown less than 1 s; the English subtitles of the same time span
+already above 17 cps; Russian more than 15% longer than that English):
+
+| | cues above 20 cps | fast speech | short cue | longer Russian |
+|---|---|---|---|---|
+| T7 (b) run 1 | 50 | 34 (68%) | 12 | 4 |
+| T7 (a) | 56 | 39 (70%) | 12 | 5 |
+| T6 | 63 | 48 (76%) | 12 | 3 |
+| T2 (from cache) | 70 | 59 (84%) | 9 | 2 |
+| real run, 32-minute local video | 158 | 137 (87%) | 5 | 16 |
+| real run, 26-minute local video | 167 | 141 (84%) | 13 | 13 |
+
+Top 3 causes, with examples from T7 (b) run 1 (cue start times in the
+fragment, no text):
+
+1. **Fast speech:** the speaker says more per second than a viewer can read
+   even in English (2 of 3 fast cues on T7, 4 of 5 on T2 and the real runs);
+   e.g. 00:07.5, 00:19.6, 00:52.6. Russian subtitles cannot be slower than
+   the English without cutting words, which the owner ruled out (meaning
+   first, D1).
+2. **Short cues:** a cue shown less than 1 s (21 of 296 on T7, 12 of them among
+   the fast ones), where a short unit could not be extended into a pause;
+   e.g. 00:02.3, 01:02.6, 01:09.6.
+3. **Longer Russian:** the translation is more than 15% longer than the English
+   of the same span (4 of 50 on T7); e.g. 02:50.2, 04:14.4, 08:19.0.
+
+Why T7 has fewer fast cues than T2 and T6 although the speech is fast is not
+measured here; a plausible part is that identifiers and commands stay in
+short Latin form in both languages. D1 stays "not met"; subtitle assembly is
+not changed.
 
 ## Baselines on one set (T2 and T6)
 
@@ -2657,6 +2765,28 @@ Money: 0.07 USD at list price, all from free credit.
 ## Backlog
 
 Ideas that come up during a stage and wait for a later one.
+
+### v1.2 (Web3 track), from the T7 baseline (2026-11-14)
+
+- **E1: Web3 dictionary v2** — to be built (T7 baseline: condition 1 holds).
+  Measured starting points: most T7 misses are written forms of identifiers
+  (file names, functions, constants, Makefile targets), so v2 should carry
+  exact identifier spellings, not more jargon; the current dictionary showed
+  no gain on T7 (90.32% without it, 86.18–88.94% with it).
+- **Translation check and commands:** "left in English" refuses segments that
+  are shell commands or spoken identifiers (`make anvil.`, a `forge script`
+  line); both answers of a block are rejected and the segments stay English
+  anyway. On T7 that was 4–5 of 8–9 translation requests per run, about a
+  third of the translation step. Telling a command from English needs new
+  knowledge (command-line programs, keep-terms of the run glossary at the
+  start of a segment, or the code on screen); frozen path, a new version.
+- **Reference spoken forms:** the judge writes identifiers as heard
+  (`message.sender` for `msg.sender`, `Phony` for `.PHONY`), so a correct code
+  form counts as a miss. A writing rule for code identifiers would be a new
+  judge version and needs its own calibration.
+- **Term matching of identifiers:** case and separator variants of the same
+  identifier (`encoding.sol` / `Encoding.sol`) count as misses. Whether the
+  metric should accept them is a metric change (frozen with the pipeline).
 
 ### v1.1 (web interface; the repository becomes public with it)
 

@@ -6,6 +6,46 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-14 — T7 (v1.2): how its reference, glossary and evaluation are made; two run findings
+
+Decisions made while adding T7, the Web3 tutorial fragment of v1.2
+(`docs/experiments.md`, T7 baseline (v1.2)):
+
+- **The window was fetched as a section, not the whole course** (owner):
+  `yt-dlp --download-sections` on the HLS audio stream (a first try on the
+  direct m4a stream stalled), 15 s of margin, then cut exactly. Speaker
+  "not determined": nobody has listened to it, and nothing is guessed.
+- **`ref-glossary-v2`** for T7 (evaluation tooling): the session asked for at
+  least 60 terms, each in one of six categories; `ref-glossary-v1` keeps at
+  most 60 after dropping absent terms and writes a free category. v2 has the
+  same instructions plus 60-90 terms, version numbers and no names of people
+  (they may not appear in tracked files). v1 is unchanged (its prompt hash is
+  tested), so T6's glossary stays reproducible. Written before T7's reference
+  existed; the Web3 dictionary was not opened.
+- **`eval --bounds`** scores a fragment that is not sealed against both judge
+  references with the bounds, as for T6; `config.SEALED_FRAGMENTS` (a frozen
+  path) is not touched.
+- **The blind evaluation shows one system** (owner, before the
+  pre-registration was committed): only the pipeline's translation of 20
+  replicas, a score and "scored lower because of a term". The E1 rule needs
+  the absolute score and the term count, not a comparison; it halves the
+  owner's work. It is not blind to the source.
+- **Bug: `run <audio file> --output all` failed after the paid steps** (an
+  audio file has no picture for `mp4-soft`, `mp4-burned`). Fixed in the CLI
+  only (`cli/runs.py`, the web page's own rule), failing test first; no
+  frozen path, no request or cache key changed, so no new pipeline tag.
+- **Not a bug: commands left in English rejected by the translation check.**
+  On T7 the check "left in English" rejected segments that are shell commands
+  or spoken identifiers (`make anvil.`, `forge script, script/deploy mood.`,
+  `Deploy Mood NFT.`): both attempts of a block were refused for them, and
+  they stayed English (which is what a viewer should see for a command). The
+  check works as documented (plain English words left untranslated); telling
+  a command from English words needs new knowledge (a list of command-line
+  programs, or the code on screen), so it is an improvement, not a bug like
+  `0.8.26` (digits counted as words) or `/mcp` (a term in another written
+  form). Backlog, with its cost. Searched the real-run logs: no other case
+  besides the already fixed `0.8.26`.
+
 ## 2026-11-13 — A failure on the service's side is retried for a minute; `pipeline-v3.5`
 
 Decision (owner, after the fourth check of v1.1): failures on a service's
