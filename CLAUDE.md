@@ -102,6 +102,8 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   its Russian case and number forms (`цена` / `цену`; `translate._stem_present`).
   `pipeline-v3.8` (2026-11-14): inside a longer kept glossary term the agreed
   translation of its part is not demanded (`translate._only_inside_kept`).
+  `pipeline-v3.9` (2026-11-14): a segment refused only for an agreed term keeps
+  the model's translation with a warning (`meta.translation.agreed_term_kept`).
 - **Keys:** never printed, logged or committed; importing a module reads
   neither `.env` nor a secret. A new pipeline key goes into
   `config.SECRET_ENV_VARS`, an evaluation key into `secret_registry`, both

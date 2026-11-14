@@ -428,6 +428,14 @@ re-run.
   A/B order seed 20261117; the key in `work/T7/E1-pairs-key.json`, local).
   **Noise baseline** (same definition, (b) run 1 against (b) run 2): 4 (run 1
   against run 3: 1).
+- **v2 left more lines in English (under `pipeline-v3.8`)**: 23 / 23 / 26 per
+  run against 8 / 3 / 6 in the (b) runs (`scripts/left_english_report.py`);
+  22 / 23 / 26 of them are agreed-term refusals of v2's own forms (`deploy` ->
+  `деплоить` 14-19 per run, `storage` -> `хранилище`, `memory` -> `память`,
+  `mint` -> `выпустить`): the model kept writing another word. The pairwise
+  sample leaves out units either run left in English (as pre-registered), so
+  it does not show these lines; under `pipeline-v3.9` they would be Russian
+  sentences with the model's own word.
 - Descriptive, not part of the rule: WER is 0.2-0.7 points higher with v2 (the
   larger key-term list, 322 terms sent to the speech recognition service, is
   the likely cause; not measured); Claude costs about 20% more per run (a
@@ -3125,6 +3133,9 @@ Ideas that come up during a stage and wait for a later one.
   Russian case and number forms.
 - Done as a bug fix (`pipeline-v3.8`): a kept longer term (`hybrid smart
   contract`) no longer demands its part's agreed form (`смарт-контракт`).
+- Done as a bug fix (`pipeline-v3.9`): a sentence refused only for an agreed
+  term keeps the model's Russian with a warning, instead of English on screen.
+  The cases below now show Russian with another form of the term.
 - **Agreed nouns meet verbs and gerunds** (course run, 14 Nov): `finding` ->
   `находка` (meant for an audit finding) refused "finding a hash" four times,
   `audit` -> `аудит` refused "could audit this" once; the sentences stayed

@@ -6,6 +6,62 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-14 — A Russian sentence with another term form is kept, not English; `pipeline-v3.9`
+
+Decision (owner, after the course run): a segment whose two answers were
+refused **only** because an agreed glossary translation was not in them keeps
+the model's Russian translation, and the problem becomes a warning
+(`meta.translation.agreed_term_kept`, the run log); it is no longer reverted
+to English. Showing English is worse than showing a Russian sentence whose
+term form differs. A **bug** of the class of `0.8.26`, `pipeline-v3.3` /
+`v3.6` / `v3.7` (a check puts English on screen for a usable answer). Every
+other check, the retry (two attempts) and the requests are unchanged; a
+segment with any other problem is still reverted, and a block wrong as a whole
+still fails.
+
+Evidence: the owner's course (lessons 3, 6, 7, 9, 10): `audit` used as a verb,
+`block` / `blockchain` in words read off the screen, `blockchains`, `finding`
+as a gerund; 10 sentences stayed English.
+
+| | result |
+|---|---|
+| (a) failing test committed first | `b663906` (the synthetic talk's lines with the agreed term in another form ended in English; a segment also left in English is still reverted) |
+| (b) golden requests | `pipeline_requests` and `direct_requests` byte-identical (same requests, same retries); `pipeline_outputs` differs only in `ru.json.stamp.json` (the translate code key) |
+| (c) saved answers, offline | the check itself is unchanged (`check_block`, every saved block the same problem list); of the 107 reverted segments in all saved runs, **88 change** under the new rule and each is exactly this case (its only problems: "glossary translation ... not used"): 10 in the owner's course (and 4 in the C2b copies), 3 in the T7 baseline (b) runs (`gas price`), 71 in the three E1 v2 runs (`deploy` -> `деплоить`, `storage`, `memory`, `mint`); 19 with another problem keep their verdict |
+| (d) T2 from cache | 33 translation stamps carried over (`99609368` -> new code key; folders whose stored result would change were carried over only with their incomplete marker, so a re-run re-sends exactly those blocks): every model step skipped, 0 USD, the 22 files of `work/T2-v3-cache/` byte-identical |
+
+Then only the affected blocks of course lessons 3, 6, 7, 9 and 10 were sent
+again and their TV files burned again (the owner listed 3, 7 and 10; 6 and 9
+had the same case, with `block` read off the screen).
+
+## 2026-11-14 — Dictionary v2 built from the owner's review; how the owner's course was run
+
+- **v2 is built only from the owner's answers** (`glossaries/web3-v2.md`, 312
+  terms): every candidate row pre-filled with an action and a Russian form, the
+  owner changed 11 rows, every other row is the proposal. Removed: 18 Solidity
+  keywords that are ordinary English words (`view`, `public`, ...; the owner
+  kept `storage` and `memory`, translated with the English in brackets) and `finding` (replaced by `audit finding`:
+  the course showed `finding` refusing "finding a hash"). Russian forms were
+  hinted by ethereum.org's glossary headings (CC BY 4.0, attributed in the
+  file; no definition copied). Not used to build it: the T7 reference, its
+  glossary, and terms known only from the committed T7 term-miss breakdown.
+  The owner's "перевести + англ.: X (english)" is read as policy `both` with X
+  in the Russian column (`both` adds the English itself).
+- **Candidates from the course were checked against T7's window** (owner's
+  leakage guard): the lessons used are the course's first section and lesson
+  1, far from T7's window by the long video's curriculum, so no lesson's terms
+  were excluded.
+- **The owner's course was run through the page's own code**
+  (`scripts/course_run.py`), profile "all", Web3 dictionary on, course
+  glossary off (C2b). The C2b condition (A) had already burned its TV files
+  when the owner asked that each lesson's TV file be burned once, from the
+  final version; (B) ran without burn-in, and the course folder of (A) was
+  moved into `output/` with its cache stamps' paths rewritten (sizes and times
+  unchanged), so the final run reused what was final and burned the rest once.
+- **Every final lesson is checked for lines left in English** before its TV
+  file is copied (`scripts/left_english_report.py`); a bug found that way is
+  fixed under the bug rules and only its block is re-run.
+
 ## 2026-11-14 — A kept longer term does not demand its part's agreed form; `pipeline-v3.8`
 
 Found by the owner's check of the course lessons before burning the TV files
