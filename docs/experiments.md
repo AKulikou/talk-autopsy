@@ -441,6 +441,49 @@ re-run.
   the likely cause; not measured); Claude costs about 20% more per run (a
   longer glossary in every request).
 
+### E1: lines left in English, v2.1 and the real-use guard (2026-11-14 evening, before the owner's pairwise answers)
+
+Written after the E1 runs and before the owner's answers; E1 itself stays as
+pre-registered (closed on the existing v2 runs and the owner's pairs; no new
+T7 run).
+
+**The lines v2 left in English, by cause** (the three v2 runs, `pipeline-v3.8`;
+from `meta.translation.reverted_segments`; no block failed):
+
+| v2 run | left in English | agreed `deploy` -> `деплоить` refused | other agreed-term refusals (`storage`, `memory`, `mint`) | other checks | kept in Russian under `pipeline-v3.9` |
+|---|---|---|---|---|---|
+| 1 | 23 | 14 | 8 | 1 (a short string the tutorial's code prints, "left in English") | 22 |
+| 2 | 23 | 17 | 6 | 0 | 23 |
+| 3 | 26 | 19 | 7 | 0 | 26 |
+
+**Limitation of E1:** the pairwise rule leaves out every unit either run left
+in English, so the 22-26 lines per run that v2's own agreed forms pushed into
+English are not in the comparison; E1 compares only the sentences both
+dictionaries translated.
+
+**v2.1** (`glossaries/web3-v2.1.md`, domain `web3-v2.1`): v2 with one change
+only, the owner's decision of this evening: `deploy` -> «развернуть»,
+`deployment` -> «развёртывание» (v2: «деплоить» / «деплой», the form the
+model kept replacing). It only removes that conflict, so it is **not
+re-measured on T7**.
+
+**Default dictionary for real use** (the page's "about smart contracts"
+option, `web/settings.WEB3_DICTIONARY`): if E1 accepts v2 (wins - losses >= 3
+and the guard), the default becomes **v2.1**; otherwise the current `web3.md`
+stays the default and v2.1 is an option (`--domain web3-v2.1`).
+
+**Real-use guard** (lessons 11-20 of the owner's course, run with the chosen
+default on `pipeline-v3.9`). Reported per lesson: lines left in English
+(`scripts/left_english_report.py`), agreed-term warnings
+(`meta.translation.agreed_term_kept`), Claude cost. **The default goes back to
+the current `web3.md`** (v2.1 stays an option, and only the affected blocks are
+re-run) if any lesson has **more than 1 real sentence left in English** (a real
+sentence: not a command line, a path, a name or a short string read off the
+screen or printed by the code), **or costs more than 15% above lessons 1-10**:
+Claude per minute of video of the run that translated the lesson, against
+lessons 1-10's first runs (2.0651 USD for 130.8 min = 0.01579 USD per minute;
+the limit is 0.01816 USD per minute).
+
 ## T7 baseline (v1.2)
 
 Pre-registered on 2026-11-14, after the T7 reference and glossary were built and

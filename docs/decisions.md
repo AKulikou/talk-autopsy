@@ -6,6 +6,18 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-14 — Dictionary v2.1: deploy -> «развернуть»; the default for real use
+
+Owner (evening, after the E1 runs): rows `deploy` / `deployment` go back to the
+proposal («развернуть» / «развёртывание»; v2 had «деплоить» / «деплой», which the
+model kept replacing, so 14-19 sentences per T7 run stayed English).
+`glossaries/web3-v2.1.md` is v2 with that one change only; it is not re-measured
+on T7. E1 stays as pre-registered. If E1 accepts v2, the page's "about smart
+contracts" option uses v2.1 (`web/settings.WEB3_DICTIONARY`), else the current
+`web3.md`; the real-use guard on lessons 11-20 (docs/experiments.md) can switch
+it back. A dotted dictionary name is resolved in `user_glossary.py` (the frozen
+`glossary.domain_paths` takes names without a dot).
+
 ## 2026-11-14 — Version 1.2.0 under the cache-key rule
 
 The package version moves 1.1.0 -> 1.2.0 in `pyproject.toml` and `uv.lock`,

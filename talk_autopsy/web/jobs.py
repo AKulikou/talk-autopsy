@@ -172,7 +172,8 @@ class Core:
 
     def user_glossary(self, domain: str, work_dir: Path, extra: list[Path] | None = None) -> Path | None:
         """The run's user glossary: the domain dictionary (if any), then `extra` (a course's glossary)."""
-        paths = user_glossary.user_glossary_paths(None, None if domain == "none" else domain)
+        name = web_settings.WEB3_DICTIONARY if domain == "web3" else domain  # the page's option -> the file
+        paths = user_glossary.user_glossary_paths(None, None if domain == "none" else name)
         return user_glossary.run_glossary(paths + [p for p in extra or [] if Path(p).is_file()], work_dir)
 
     def check_keys(self, settings: pipeline.RunSettings) -> None:

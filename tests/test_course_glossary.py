@@ -94,3 +94,26 @@ def test_count_does_not_match_inside_longer_words():
     assert cg.count("event", "An event, events and the Event.") == 2
     assert cg.count("msg.sender", "Use msg.sender here.") == 1
     assert cg.count("sender", "Use msg.sender here.") == 0
+
+
+def test_a_versioned_dictionary_is_found_by_its_dotted_name():
+    from talk_autopsy import config
+    from talk_autopsy.glossary import GlossaryError
+    assert user_glossary.user_glossary_paths(None, "web3-v2.1") == [config.GLOSSARIES_DIR / "web3-v2.1.md"]
+    assert user_glossary.user_glossary_paths(None, "web3-v2") == [config.GLOSSARIES_DIR / "web3-v2.md"]
+    for bad in ("../web3", "web3.md", "web3-v2.9"):
+        try:
+            user_glossary.user_glossary_paths(None, bad)
+        except GlossaryError:
+            continue
+        raise AssertionError(bad)
+
+
+def test_the_pages_smart_contract_option_uses_the_chosen_dictionary(tmp_path, monkeypatch):
+    from talk_autopsy.web import jobs
+    from talk_autopsy.web import settings as web_settings
+    core = jobs.Core()
+    assert core.user_glossary("web3", tmp_path).name == "web3.md"  # the current default
+    monkeypatch.setattr(web_settings, "WEB3_DICTIONARY", "web3-v2.1")
+    assert core.user_glossary("web3", tmp_path).name == "web3-v2.1.md"
+    assert core.user_glossary("none", tmp_path) is None

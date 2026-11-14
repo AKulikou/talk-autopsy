@@ -34,6 +34,9 @@ TARGET_LANGUAGES: tuple[tuple[str, str], ...] = (
 MEASURED_LANGUAGES = frozenset({"ru"})  # the only target language with measured quality
 UI_LANGUAGES: tuple[tuple[str, str], ...] = (("lt", "Lietuvių"), ("ru", "Русский"), ("en", "English"))
 DOMAINS = ("none", "web3")
+# The dictionary behind the page's "about smart contracts" option (domain "web3"): glossaries/<name>.md.
+# E1 decides whether it is the current web3.md or v2.1 (docs/experiments.md, E1).
+WEB3_DICTIONARY = "web3"
 
 # Output profiles -> the core's existing --output formats (outputs.FORMATS); no new behaviour.
 PROFILES: dict[str, tuple[str, ...]] = {
