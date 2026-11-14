@@ -52,6 +52,18 @@ def test_run_dry_run_estimates_a_local_file(sine, tmp_path):
     assert "Estimate: none (ffprobe" in result.output
 
 
+def test_run_on_an_audio_file_skips_the_video_outputs(sine):
+    """An audio file has no picture: `--output all` must not end in an ffmpeg error after the paid steps
+    (T7 run, 2026-11-14); the web page already drops the video formats for an audio file."""
+    result = runner.invoke(cli.app, ["run", str(sine), "--output", "all", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "Outputs: srt, ass, bilingual\n" in result.output
+    assert "audio file: no picture for mp4-soft, mp4-burned; those outputs are skipped" in result.output
+    only_video = runner.invoke(cli.app, ["run", str(sine), "--output", "mp4-burned", "--dry-run"])
+    assert only_video.exit_code == 0, only_video.output
+    assert "Outputs: srt\n" in only_video.output
+
+
 def test_target_language_is_a_parameter(sine):
     args = ["run", str(sine), "--lang", "de", "--steps", "translate,srt", "--dry-run"]
     result = runner.invoke(cli.app, args)
