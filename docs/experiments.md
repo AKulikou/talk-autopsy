@@ -2867,11 +2867,9 @@ Ideas that come up during a stage and wait for a later one.
 - **Translation check and commands:** fixed in `pipeline-v3.6` (decisions
   2026-11-14). Left open: a short string the code prints, a terminal message
   and a spoken name not in the glossary are still refused once.
-- **Agreed translations of 4-letter words:** the inflection allowance keeps at
-  least 4 letters, so `цена` must appear whole and `цену` fails the agreed-term
-  check (decisions 2026-11-14); on T7 one sentence per (b) run stayed English
-  through that check. Not confirmed on a stored answer (rejected answers are
-  not kept).
+- Done as a bug fix (`pipeline-v3.7`, decisions 2026-11-14): **agreed
+  translations of 4-letter words** (`цена` / `цену`) are accepted in their
+  Russian case and number forms.
 - **Reference spoken forms:** the judge writes identifiers as heard
   (`message.sender` for `msg.sender`, `Phony` for `.PHONY`), so a correct code
   form counts as a miss. A writing rule for code identifiers would be a new
@@ -2928,8 +2926,9 @@ paths, so they wait until those modules are reopened for the web interface.
   - The page's estimate is that of a full run even when most steps are
     cached (0.30 USD shown, 0.0295 spent on the owner's re-run); an estimate
     that skips up-to-date steps would say what a re-run really costs.
-  - The estimate's "not counting: Download from YouTube" puts a step name
-    with its capital letter in mid-sentence (all three languages).
+  - Done as a bug fix (2026-11-14, v1.2): the estimate's "not counting:
+    Download from YouTube" put a step name with its capital letter in
+    mid-sentence; local files' result names were cut mid-word.
   - Done in `pipeline-v3.4`: a correction with a failed block or reverted
     segment sends only those blocks again, and the translation reuses every
     block whose request is unchanged.

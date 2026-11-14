@@ -6,6 +6,48 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-14 — Agreed terms accept Russian case endings of short words; `pipeline-v3.7`
+
+Decision (v1.2 session C2, Part 1): the agreed-translation check rejecting
+`цену` for the agreed `цена` (found in C1, Backlog) is a **bug**: the check
+exists to catch a *different* rendering, and an inflected form of the agreed
+word is the agreed rendering. Fixed under the bug rules.
+
+The bug: `translate._stem_present` kept at least four letters of each word of
+an agreed translation as a prefix, so a 4-letter word had to appear whole; its
+accusative, instrumental or plural failed. On T7 one real sentence per (b) run
+(`gas price`, agreed `цена газа`) stayed English after both answers were refused
+(logs of the three runs: 12 refusals, the only ones in every saved log and
+output). Which form the refused answers used is not known (refused answers are
+not stored), so the failing test is synthetic.
+
+**The rule** (docstring of `_stem_present`): a word of the agreed translation
+is present if a word of the answer starts with its first `len - 2` letters (at
+least 4), as before, **or**, for a Russian word, if cutting one case or number
+ending of nouns and adjectives (a fixed list, longest first) from each leaves
+the same stem of at least 3 letters (`цена` / `цену` / `ценой` / `цены` /
+`цене`, stem `цен`; `газа` / `газ`). A different word with the same start
+(`ценность`, `цент`) or a synonym (`стоимость`) still fails (tests). The rule
+only adds accepted forms; nothing that passed before fails now.
+
+Proofs:
+
+| | result |
+|---|---|
+| (a) failing test committed first | `eff748b` (5 failures before the fix, the 3 rejection cases pass before and after) |
+| (b) golden requests | `pipeline_requests` and `direct_requests` byte-identical; `pipeline_outputs` differs only in `ru.json.stamp.json` (the translate step's code key) |
+| (c) saved answers, offline | 22 work folders (T1, T2, T6, T7, real runs), 82 blocks: 82 the same verdict with the old and the new check |
+| (d) T2 from cache | after a one-off carry-over of 19 translation stamps (`e5c5568f` -> `80969d8b`, backups kept locally): every model step skipped, 0 USD, the 22 files of `work/T2-v3-cache/` byte-identical before and after the run; the stamp differs from its backup only in `code`. The three T7 (b) runs keep their old stamps: block 3 might have been accepted at the first answer under the new rule, so their stored results are not what the new code would make |
+| requests | not changed: the check decides whether a second attempt is sent, never what a request contains |
+
+Two Backlog items fixed in passing as bugs (not in frozen paths, no tag
+needed for them): a local file's result folder and file names were still cut
+in the middle of a word (only YouTube names were fixed in v1.1; now
+`youtube.local_result_name`, an existing folder under the old name is reused);
+the time estimate's "not counting: <Step>" put a capitalised step name in
+mid-sentence (now in lower case, an acronym keeps its capitals;
+`i18n.excludedSteps`). Failing tests `9caaec1`.
+
 ## 2026-11-14 — Commands and spoken names are not English left untranslated; `pipeline-v3.6`
 
 Decision (owner, after the T7 baseline): the T7 rejections of `make anvil.`

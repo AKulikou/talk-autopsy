@@ -98,6 +98,8 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   `pipeline-v3.6` (2026-11-14): the "left in English" check does not count
   command lines, paths, hyphenated names or names read off the screen
   (`translate.left_in_english`); requests unchanged, stamps carried over.
+  `pipeline-v3.7` (2026-11-14): an agreed glossary translation is found in
+  its Russian case and number forms (`цена` / `цену`; `translate._stem_present`).
 - **Keys:** never printed, logged or committed; importing a module reads
   neither `.env` nor a secret. A new pipeline key goes into
   `config.SECRET_ENV_VARS`, an evaluation key into `secret_registry`, both
