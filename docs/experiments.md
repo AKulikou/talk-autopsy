@@ -179,6 +179,149 @@ original run's `.srt` files. Wall time from start to exit, including `uv run` an
 re-encodes the video on every run (about 0.27x the video's length; rendering, not a model call), so a
 launcher re-run with the TV file takes minutes, not seconds (Backlog).
 
+## T7 baseline (v1.2)
+
+Pre-registered on 2026-11-14, after the T7 reference and glossary were built and
+committed and **before any baseline run on T7**. After this commit the criteria
+below do not change; a change would be a dated amendment written before the run
+it affects.
+
+**Why.** v1.2 ("Web3 track") exists because the owner will use the tool mainly on
+YouTube tutorials about Solidity and Foundry, and T1–T6 contain no such video;
+both real-world bugs of 12–13 Nov (version string `0.8.26`, command `/mcp`) came
+from tutorials with code. Before anything is changed, the current frozen
+pipeline is measured on T7 (`data/test-set/README.md`: an 18-minute window of a
+Solidity / Foundry course, code and terminal on screen). The result decides, by
+the rule below, whether a Web3 dictionary v2 (E1) is built at all.
+
+**What T7's reference is** (T7 reference, below): three engines, consensus,
+the blind Gemini audio judge on the disputed spans, two references (J: the judge
+everywhere; M: the engine majority where one exists) and the uncertain spans
+(split spans plus majority spans where J and M differ), exactly as for T6. No
+human and no Claude model decided anything. Glossary: `data/test-set/T7.glossary.md`
+(`ref-glossary-v2`, Gemini, from J; committed before this section).
+
+**T7 reference (built 2026-11-14; counts only, no transcript text).**
+
+- Engines, configured as for T6: faster-whisper large-v3 (local, int8, 8
+  threads, no prompt; the backbone; 175 segments, 63 min wall time), AssemblyAI
+  `universal-3-5-pro` without key terms (245 segments, 0.0631 USD), Gemini
+  `gemini-3.8-flash` without a glossary (316 segments, 0.0861 USD at list
+  price; on T6 this model answered 503 and the fallback `gemini-3.6-flash` made
+  the transcript, on T7 it answered on the first attempt).
+- Cut check: YouTube's automatic-caption word times, shifted by the window
+  start, against the backbone's words (835 of 1064 words of 5+ letters matched
+  once within 3 s): median offset +0.13 s, so the cut sits at 21:49:15 within
+  caption jitter.
+- `talk-autopsy adjudicate T7`: **3109 backbone words, 87.3% unanimous**
+  (accepted by engine agreement), **118 majority and 27 split spans** (145
+  clips, 15.1 min).
+- Blind audio judge (`audio-judge-v1` exactly as calibrated, `gemini-4-carbon`,
+  thinking `low`, default pace): **145 of 145 spans**, 0.3786 USD; the Gemini
+  engine's variant chosen in 86 (59.3%), `none` (own text) in 15 (10.3%),
+  `heard` contains the chosen text in 133 of 138 (96.4%), `heard` before
+  `choice` in 145 of 145; in 14 spans `final_text` differs from the chosen
+  option (J uses `final_text`).
+- `talk-autopsy judge-refs T7`: J 3087 words, M 3086 words, WER of M against J
+  1.52% (22 S, 13 D, 12 I). The judge overrode the majority in 43 of 118
+  majority spans, so **70 spans were decided by the judge alone** (27 split +
+  43 overridden): the uncertain spans.
+- Glossary (`talk-autopsy glossary-ref T7 --prompt v2`, 0.0341 USD): 80
+  proposed, 1 absent from J dropped, **79 terms**: identifier 24, CLI command
+  7, version or number 2, product or tool 19, Web3 jargon 20, general dev term
+  7. **217 term occurrences in J, 46 inside uncertain spans.**
+- **Known limit:** the glossary writes each term as the reference does, and the
+  reference writes what was heard; two identifiers are in their spoken form
+  (`message.sender`, `message.value` for Solidity's `msg.sender` and
+  `msg.value`; `Phony` for `.PHONY`). Nobody may adjudicate them (the method),
+  so a pipeline that writes the code form misses them; such misses are
+  classified as "spelling convention" when the results are read, not removed.
+
+**What 217 occurrences can show.** 46 of 217 occurrences (21%) sit inside
+spans decided by the judge alone, so the lower bound is at most 171 / 217 =
+78.8% even if every certain occurrence is in place: the range is wide by
+construction. The E1 rule uses the accuracy against J (as specified); the
+bounds are reported next to it and are not part of the rule.
+
+**Runs.** All from one clean `git worktree` of tag `pipeline-v3.5` (commit
+`0fd70a5024d8035f7ddc730411956ffd11907f42`; the frozen paths are identical at
+HEAD), the same repeat procedure as the T2 repeats (Freeze pipeline-v3,
+Repeats): `talk-autopsy run <main>/data/test-set/T7.wav --lang ru --output all
+--name <run>` with a fresh work folder per run (no cache), no context, no hand
+glossary, keys from the main checkout's `.env` (`uv run --env-file`), the
+`.env` settings that select a model or a version empty. Order: b1, b2, b3, a1.
+
+- **(b) with the current Web3 dictionary**, 3 runs (`T7-b-r1`..`T7-b-r3`):
+  `--domain web3` ("smart contracts" on the web page; `glossaries/web3.md` as in
+  the tag, no local additions exist). The dictionary is not edited.
+- **(a) without the Web3 dictionary**, 1 run (`T7-a-r1`): no `--domain`.
+- Profile "all" (`--output all`: srt, ass, bilingual, mp4-soft, mp4-burned).
+  T7 is an audio file; if a video output cannot be made from it, that is
+  recorded and the subtitle outputs are used; it does not touch any metric.
+- Cost estimated first (`--dry-run`) and recorded; a run whose estimate would
+  take a service past this session's limit (Claude 2.50, AssemblyAI 1.00,
+  Gemini 2.00 USD) is not started. Estimate (2026-11-14, from the worktree):
+  18.0 min, about 0.25 USD Claude + 0.14 USD AssemblyAI per run, so about
+  1.00 + 0.56 USD for the four runs.
+- Scored from the main checkout: `talk-autopsy eval T7 --hyp <run>/fixed.json
+  --raw <run>/raw2.json --bounds --record --engine <engine> --stage fix`, engine
+  `pipeline-v3.5 + web3` for (b) and `pipeline-v3.5` for (a). `--bounds` gives
+  the same J/M/bounds report as T6's sealed evaluation.
+- A bug seen in a run (like `0.8.26` or `/mcp`) is fixed under the bug rules
+  (failing test first, golden requests byte-identical, saved T2/T6 answers same
+  verdict, T2 from cache at 0 USD with 22 identical files, new tag
+  `pipeline-v3.x`, decisions entry); only what the fix affects is re-run, and the
+  fix does not count as an improvement.
+
+**Metrics** (Metrics above; per run, and for (b) the mean and the range of the
+three):
+
+- term accuracy v2 against J and against M (micro; macro, without the top term
+  and precision reported), and the **range over the judge-only spots**: lower
+  bound (occurrences inside uncertain spans counted as misses) and upper bound
+  (counted as hits), each with its Wilson 95% interval;
+- WER against J and against M;
+- false edits: the false-edit rate of correction (raw2 -> fixed) against J, and
+  the number of word edits;
+- reading speed of the Russian subtitles (`.ru.srt`, `metrics.reading_speed`):
+  the share of cues above 17 and above 20 characters per second, and the share
+  above 25 and the maximum as before;
+- cost per service (Claude, AssemblyAI) by the run's own counters, and time
+  (wall clock per step and in total).
+
+(b) against (a) is reported descriptively, with the spread of the three (b) runs
+as its scale; one (a) run supports no claim beyond that.
+
+**Blind evaluation of the translation (owner's change of 2026-11-14,
+received before this section was committed).** From (b) run 1: **20 sentence
+units** drawn by the existing tool (`translation_check.sample`: units with a
+translation and at least 6 English words, counted by `metrics.tokenize`), seed
+**20261114**, shown in an order shuffled with seed 20261115. Each item shows the
+English and **only the pipeline's translation**; the owner gives a score 1–5
+and ticks "scored lower because of a term" with the term
+(`scripts/translation_check.py sample-single` / `score-single`; rating file
+`work/T7/T7-rating.md`, key `work/T7/T7-key.json`). There is no second system:
+the E1 rule needs the absolute score and the term count, not a comparison, and
+this halves the owner's work (20 ratings instead of 40). **Limitation:** the
+evaluation is **not blind to the source**: the owner knows that every item is
+the pipeline's translation. The owner fills it in after the session.
+
+**E1 launch rule** (from the specification, fixed here): dictionary v2 is built
+**only if** at least one of these holds on T7 with the current dictionary:
+
+1. term accuracy < 90% (mean of the three (b) runs, reference J; the range is
+   reported);
+2. mean blind score < 4.0;
+3. more than 2 of the 20 replicas scored lower because of terms.
+
+Otherwise E1 is closed as **"not run: metrics in target zone"**. Until the owner
+has rated the 20 replicas, conditions 2 and 3 are open and E1 is undecided
+unless condition 1 already holds.
+
+**Reading speed note** (no change to subtitle assembly): D1 numbers on T7
+compared with T2, T6 and the real runs of 12–13 Nov, and the top three causes,
+with timecodes only.
+
 ## Baselines on one set (T2 and T6)
 
 The specification's comparison for v1.0: Talk Autopsy (`pipeline-v3`) against raw Whisper,
@@ -444,9 +587,10 @@ as an independent check of the Claude stages):
 | | | engine majority | the rest (about 45) |
 | T1 | 73 | assistant (Claude), without listening: product and model names 39, majority 26, meaning or convention 8 | 73 |
 | T6 | 86 | judge (Gemini, `audio-judge-v1`; failed its T2 calibration) in reference J; in reference M the engine majority for the 65 majority spans, the judge for the 21 split spans | 86 |
+| T7 | 145 | judge (Gemini, `audio-judge-v1`, as for T6) in reference J; in reference M the engine majority for the 118 majority spans, the judge for the 27 split spans (T7 baseline (v1.2)) | 145 |
 
 Words all three engines agreed on are accepted without a decision (engine
-agreement): T2 88.3%, T1 90.7%, T6 92.8% of the backbone words.
+agreement): T2 88.3%, T1 90.7%, T6 92.8%, T7 87.3% of the backbone words.
 
 The two references were not decided the same way, and that changes what their
 numbers can carry.
