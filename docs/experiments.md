@@ -305,6 +305,81 @@ work folders; nothing re-run.
   both); the course run (Part 4) re-sends the one translation block of lessons
   2 and 3 that (A) left partly in English, as every re-run does.
 
+## E1: Web3 dictionary v2 (v1.2)
+
+Pre-registered on 2026-11-14, **before any run with dictionary v2** (v2 itself is
+built from the owner's review of `work/web3-v2-selection.md` at STOP 2 of
+session C2-C4). After this commit the rule below does not change; a change would
+be a dated amendment written before the run it affects.
+
+**Why.** The T7 baseline's launch rule fired (term accuracy against J 88.02% <
+90%), so a dictionary v2 is built. The T7 term-miss breakdown showed that most
+misses are written forms (case, separators) and that the current dictionary
+did not help on T7; v2 is judged on two things: it must not make recognition
+worse (guard), and its translations must be preferred (decision).
+
+**What v2 is.** `glossaries/web3-v2.md` (domain `web3-v2`, `--domain web3-v2`),
+next to the current `glossaries/web3.md`, which stays the default until E1
+decides. Sources: the current dictionary, the owner's real runs, lessons 1-10 of
+the owner's course (Cyfrin's Foundry course playlist), ethereum.org's Russian
+glossary headings as a hint for Russian forms; the owner accepts or changes
+every row.
+
+**Caveat: same course family as T7.** T7 is cut from the long single-video
+version of the same Cyfrin course, same lecturer, so v2 includes terms from the
+same course family and lecturer as T7. E1 therefore measures **"v2 on this
+course family"**, not dictionaries in general. Leakage guards: the lessons used
+(playlist 1-10 = "Section 0 Welcome" and "Lesson 1 Blockchain Basics", 0:00-2:54:56
+of the long video by its description's curriculum) do not cover T7's window
+(21:49:15-22:07:15, inside "Section 11 NFTs"); the T7 reference and the T7
+reference glossary were not opened while v2 was built; terms known only from the
+committed T7 term-miss breakdown are not proposed unless another source has them.
+
+**Runs.** Three runs of T7 with v2 (`T7-v2-r1`..`r3`), the procedure of the
+(b) runs (T7 baseline, Runs) except the code: a clean `git worktree` of the
+newest bug-fix tag (`pipeline-v3.8` or later), whose frozen paths differ from
+`pipeline-v3.5` only in `translate.py` (the translation checks of
+`pipeline-v3.6`-`v3.8`; recognition, glossary and correction code unchanged, so
+`fixed.json` is made by the same code as in (b)); `--domain web3-v2`, fresh work
+folders, keys from the main checkout, profile `all`. Cost estimated first; the
+session's experiment limits apply (Claude 3.00, AssemblyAI 1.00 USD for Parts 1,
+3 and 6 together). Scored with `talk-autopsy eval T7 --hyp <run>/fixed.json
+--raw <run>/raw2.json --bounds --record --engine "pipeline-v3.8 + web3-v2"`.
+
+**Guard (recognition, not the decision).** Term accuracy on T7 against
+reference J **with form normalization** (`talk_autopsy/term_forms.py`:
+case-insensitive; hyphens, underscores and spaces between the parts of a term
+ignored; nothing else; otherwise the frozen `term_accuracy_v2`), plus the raw
+accuracy against J and M for continuity (`scripts/e1_terms.py`). The three (b)
+runs are recomputed offline with the normalization **first** (no new run). **The
+guard holds if the mean of the three v2 runs is not lower than the mean of the
+three (b) runs by more than 1 point** (normalized, against J).
+
+**Decision (translation): blind pairwise comparison** (`scripts/e1_pairs.py`).
+From v2 run 1 and (b) run 1: the sentence units whose English is the same in
+both (tokens as the metrics read them), that contain a term of either run's
+glossary (whole words, case-insensitive) and whose Russian differs (whitespace
+ignored), leaving out units either run left in English; up to **20** drawn at
+random with seed **20261116**; each item shows the English and the two Russian
+versions as A and B in an order drawn with seed **20261117**. The owner answers
+A, B or "=" in `work/T7/E1-pairs.md`.
+
+- **v2 becomes the default** if **wins - losses >= 3** (v2's wins minus its
+  losses; "=" counts for neither) **and** the guard holds.
+- Fewer than **6** differing units: **"no measurable difference"**; v2 is not
+  made the default, it stays an option.
+- Otherwise: **"not confirmed"**; v2 stays an option.
+
+**Known limits.** (b) run 1 was translated with the checks of `pipeline-v3.5`
+and the v2 runs with those of `pipeline-v3.8`; units either run left in English
+are excluded, so the check changes cannot decide an item, but a first answer
+refused by the old checks and accepted by the new ones may show a different
+wording. Translation varies between runs of the same dictionary (between (b)
+runs 1 and 2, 96 sentence units with a term have a different Russian), so a
+preference of a few items can be noise; the threshold of 3 is fixed before the
+answers. The owner knows which dictionaries are compared, not which side is
+which.
+
 ## T7 baseline (v1.2)
 
 Pre-registered on 2026-11-14, after the T7 reference and glossary were built and
