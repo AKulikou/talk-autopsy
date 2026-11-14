@@ -13,12 +13,20 @@ The baselines' rating (docs/experiments.md, Baselines on one set > Translation r
     uv run python scripts/translation_check.py rating-2         # -> C1-T6-rating-2.md + C1-T6-key-2.json
     uv run python scripts/translation_check.py rater            # Gemini rates all 38 items (paid; held back)
     uv run python scripts/translation_check.py score-baselines  # after the owner filled C1-T6-rating-2.md
+
+T7 (v1.2; docs/experiments.md, T7 baseline): one variant per replica, with the term question.
+
+    uv run python scripts/translation_check.py sample-single --fixed <run>/fixed.json \
+        --translated <run>/ru.json
+        # -> work/T7/T7-rating.md, work/T7/T7-key.json, work/T7/translation-check/sample.json
+    uv run python scripts/translation_check.py score-single --term-accuracy <mean of the (b) runs, J>
 """
 
 import argparse
 import dataclasses
 import datetime
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -33,6 +41,9 @@ DEFAULT_RATING_2 = config.WORK_DIR / "T6" / "C1-T6-rating-2.md"
 DEFAULT_KEY_2 = config.WORK_DIR / "T6" / "C1-T6-key-2.json"
 DEFAULT_GOOGLE = config.WORK_DIR / "baselines" / "google-translate" / "T6-units.json"
 DEFAULT_RATER = config.WORK_DIR / "T6" / "gemini-rater.json"
+DEFAULT_T7_OUT = config.WORK_DIR / "T7" / "translation-check"
+DEFAULT_T7_RATING = config.WORK_DIR / "T7" / "T7-rating.md"
+DEFAULT_T7_KEY = config.WORK_DIR / "T7" / "T7-key.json"
 DOCS = config.PROJECT_ROOT / "docs" / "experiments.md"
 README = config.PROJECT_ROOT / "README.md"
 
@@ -58,7 +69,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("step", choices=("sample", "baseline", "rating", "score", "rating-2", "rater",
-                                         "score-baselines"))
+                                         "score-baselines", "sample-single", "score-single"))
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--rating", type=Path, default=DEFAULT_RATING, help="the owner's rating file")
     parser.add_argument("--key", type=Path, default=DEFAULT_KEY, help="the key of the rating file")
@@ -72,7 +83,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--translated", type=Path)
     parser.add_argument("--lang", default="ru")
     parser.add_argument("--model", default=None, help="Gemini model of the baseline (default: JUDGE_MODEL)")
+    parser.add_argument("--term-accuracy", type=float, default=None,
+                        help="score-single: mean term accuracy of the three (b) runs against J (0-1)")
     args = parser.parse_args(argv)
+    if args.step in ("sample-single", "score-single"):
+        return _single(args, parser)
     out = args.out
     sample_path, baseline_path = out / "sample.json", out / "baseline.json"
     rating_path, key_path = args.rating, args.key
@@ -124,6 +139,45 @@ def main(argv: list[str]) -> int:
               f"{result.baseline_mean:.2f}, difference {result.difference:+.2f} (bootstrap 95% "
               f"[{low:+.2f}, {high:+.2f}]); C1 on this fragment (pipeline mean >= "
               f"{translation_check.C1_TARGET}): {'MET' if result.met else 'NOT MET'}")
+    return 0
+
+
+def _single(args, parser) -> int:
+    """T7: the single-variant rating file (sample-single) and its score with the E1 rule (score-single)."""
+    out = DEFAULT_T7_OUT if args.out == DEFAULT_OUT else args.out
+    rating = DEFAULT_T7_RATING if args.rating == DEFAULT_RATING else args.rating
+    key_path = DEFAULT_T7_KEY if args.key == DEFAULT_KEY else args.key
+    if args.step == "sample-single":
+        if not (args.fixed and args.translated):
+            parser.error("sample-single needs --fixed and --translated")
+        if rating.exists() and re.search(r"^Score \(1-5\):\s*\d", _read(rating), re.MULTILINE):
+            print(f"Error: {rating} may already hold scores; not overwritten", file=sys.stderr)
+            return 1
+        items = translation_check.paired_units(load_transcript(args.fixed), load_transcript(args.translated))
+        chosen = translation_check.sample(items, translation_check.T7_SAMPLE_SIZE, translation_check.T7_SEED)
+        out.mkdir(parents=True, exist_ok=True)
+        translation_check.write_json(out / "sample.json", {
+            "version": translation_check.SINGLE_VERSION, "seed": translation_check.T7_SEED,
+            "units_total": len(items), "items": [dataclasses.asdict(i) for i in chosen]})
+        text, key = translation_check.rating_file_single(chosen)
+        rating.parent.mkdir(parents=True, exist_ok=True)
+        _write(rating, text)
+        translation_check.write_json(key_path, key)
+        print(f"sampled {len(chosen)} of {len(items)} units (seed {translation_check.T7_SEED}, at least "
+              f"{translation_check.MIN_WORDS} words) -> {rating} (key: {key_path})")
+        return 0
+    if args.term_accuracy is None:
+        parser.error("score-single needs --term-accuracy")
+    result = translation_check.score_single(translation_check.parse_single(_read(rating)),
+                                            json.loads(_read(key_path)))
+    launch, reasons = translation_check.e1_launch(args.term_accuracy, result.mean, result.term_lowered)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    dist = " / ".join(str(result.distribution[v]) for v in range(5, 0, -1))
+    print(f"items {result.items}: mean {result.mean:.2f} (scores 5/4/3/2/1: {dist}); scored lower because "
+          f"of a term: {result.term_lowered} ({', '.join(result.terms) or 'none'})")
+    print(f"E1 (term accuracy {args.term_accuracy:.2%}): " + (
+        "LAUNCH dictionary v2: " + "; ".join(reasons) if launch else "not run: metrics in target zone"))
     return 0
 
 

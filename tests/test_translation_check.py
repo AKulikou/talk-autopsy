@@ -178,3 +178,68 @@ def test_missing_or_bad_scores_are_errors():
         tc.parse_scores(filled(text, lambda n: 7))
     with pytest.raises(tc.CheckError, match="scores for"):
         tc.score({1: 4}, key)
+
+
+# --- T7: one variant per replica, with the term question -------------------------------------------
+
+def test_t7_constants_are_the_registered_ones():
+    assert (tc.T7_SEED, tc.T7_SAMPLE_SIZE) == (20261114, 20)
+    assert (tc.E1_TERM_ACCURACY, tc.E1_BLIND_MEAN, tc.E1_TERM_LOWERED) == (0.90, 4.0, 2)
+
+
+def test_single_rating_file_shows_only_one_translation_per_unit_and_the_term_question():
+    chosen = tc.sample(items(), tc.T7_SAMPLE_SIZE, tc.T7_SEED)
+    text, key = tc.rating_file_single(chosen)
+    assert len(key["items"]) == 20 and key["seed"] == tc.T7_SEED + 1
+    assert sorted(v["unit"] for v in key["items"].values()) == [i.unit for i in chosen]
+    assert text.count("Score (1-5):") == 20 and text.count("Term: [ ]") == 20
+    assert text.count("Which term:") == 20 and "термин" in text
+    assert "baseline" not in text and "pipeline" not in text
+    assert tc.rating_file_single(chosen) == (text, key)  # seeded
+
+
+def fill(text, entries):
+    """entries: item number -> (score, term or None)."""
+    out, current = [], None
+    for line in text.splitlines():
+        if line.startswith("## "):
+            current = int(line[3:])
+        score, term = entries.get(current, (None, None))
+        if line == "Score (1-5):" and score is not None:
+            line = f"Score (1-5): {score}"
+        elif line == "Term: [ ]" and term:
+            line = "Term: [x]"
+        elif line == "Which term:" and term:
+            line = f"Which term: {term}"
+        out.append(line)
+    return "\n".join(out)
+
+
+def test_single_scores_are_parsed_and_scored_with_the_term_count():
+    chosen = tc.sample(items(), 20, tc.T7_SEED)
+    text, key = tc.rating_file_single(chosen)
+    entries = {n: (5, None) for n in range(1, 21)}
+    entries.update({3: (3, "forge"), 7: (2, "msg.sender"), 9: (4, None)})
+    result = tc.score_single(tc.parse_single(fill(text, entries)), key)
+    assert result.items == 20 and result.term_lowered == 2 and result.terms == ["forge", "msg.sender"]
+    assert result.mean == pytest.approx((17 * 5 + 3 + 2 + 4) / 20)
+    assert result.distribution == {5: 17, 4: 1, 3: 1, 2: 1, 1: 0}
+
+
+def test_cyrillic_x_counts_and_a_flag_without_a_term_is_an_error():
+    text, _ = tc.rating_file_single(tc.sample(items(), 20, tc.T7_SEED))
+    filled = fill(text, {n: (5, None) for n in range(1, 21)})
+    cyrillic = filled.replace("Term: [ ]", "Term: [х]", 1).replace("Which term:", "Which term: anvil", 1)
+    assert tc.parse_single(cyrillic)[1].term_lowered
+    with pytest.raises(tc.CheckError, match="no term written"):
+        tc.parse_single(filled.replace("Term: [ ]", "Term: [x]", 1))
+    with pytest.raises(tc.CheckError, match="score missing"):
+        tc.parse_single(text)
+
+
+def test_e1_rule_launches_on_any_one_condition():
+    assert tc.e1_launch(0.95, 4.5, 2) == (False, [])
+    assert tc.e1_launch(0.8999, 4.5, 0)[0]
+    assert tc.e1_launch(0.95, 3.99, 0)[0]
+    assert tc.e1_launch(0.95, 4.5, 3)[0]
+    assert not tc.e1_launch(0.90, 4.0, 2)[0]  # the thresholds themselves are in the target zone

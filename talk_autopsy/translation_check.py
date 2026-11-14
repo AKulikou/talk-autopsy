@@ -231,3 +231,115 @@ def load_sample(path: Path) -> list[Item]:
 
 def write_json(path: Path, data) -> None:
     Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+
+
+# --- T7 (v1.2): one variant per replica, with the term question ----------------------------------
+# docs/experiments.md, "T7 baseline (v1.2)", written before any T7 baseline run. Owner's change of
+# 2026-11-14 (before the pre-registration was committed): no second system; only the pipeline's
+# translation of 20 replicas, a score and "scored lower because of a term" with the term.
+
+SINGLE_VERSION = "translation-check-single-v1"
+T7_SEED = 20261114  # the sample uses it, the order T7_SEED + 1
+T7_SAMPLE_SIZE = 20
+E1_TERM_ACCURACY = 0.90  # E1 launch rule (specification), mean of the three (b) runs, reference J
+E1_BLIND_MEAN = 4.0
+E1_TERM_LOWERED = 2  # E1 launches if MORE than this many replicas were scored lower because of a term
+
+SINGLE_INSTRUCTIONS = [  # for the owner, who rates in Russian
+    "# Оценка перевода T7",
+    "",
+    "Оцените каждый из 20 субтитров отдельно, от 1 до 5: 5 — субтитр, который вы приняли бы как есть;",
+    "1 — неверно или непригодно. Оценку поставьте в строке Score. Если оценка снижена из-за термина",
+    "(название, команда, идентификатор, номер версии, термин Web3 переведён или записан неверно), поставьте",
+    "x в скобках строки Term — [x] — и напишите этот термин в строке Which term. Комментарий — по желанию.",
+    "Английский текст стоит над переводом для справки. Сохраните файл и сообщите в той же сессии.",
+    "",
+]
+_TERM = re.compile(r"^Term:\s*\[(.?)\]\s*$")
+_WHICH = re.compile(r"^Which term:\s*(.*)$")
+
+
+def rating_file_single(items: list[Item], seed: int = T7_SEED + 1) -> tuple[str, dict]:
+    """
+    One item per sampled unit (the pipeline's translation only), in an order shuffled with
+    `random.Random(seed)`, numbered 1..n, the English above each item. Returns (Markdown, key).
+    """
+    entries = list(items)
+    random.Random(seed).shuffle(entries)
+    lines = list(SINGLE_INSTRUCTIONS)
+    key = {"version": SINGLE_VERSION, "seed": seed, "items": {}}
+    for number, item in enumerate(entries, start=1):
+        lines += [f"## {number}", "", f"EN: {item.english}", "", f"{item.translation}", "",
+                  "Score (1-5):", "", "Term: [ ]", "", "Which term:", "", "Comment:", ""]
+        key["items"][str(number)] = {"unit": item.unit}
+    return "\n".join(lines), key
+
+
+@dataclass(frozen=True)
+class SingleScore:
+    score: int
+    term_lowered: bool
+    term: str
+
+
+def parse_single(text: str) -> dict[int, SingleScore]:
+    """Item number -> score, term flag and term; a missing score or a flag without a term is an error."""
+    found: dict[int, dict] = {}
+    current = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if match := _ITEM.match(line):
+            current = int(match.group(1))
+            found[current] = {"score": None, "flag": False, "term": ""}
+        elif current is None:
+            continue
+        elif match := _SCORE.match(line):
+            if match.group(1) is None or not 1 <= int(match.group(1)) <= 5:
+                raise CheckError(f"item {current}: score missing or not 1-5")
+            found[current]["score"] = int(match.group(1))
+        elif match := _TERM.match(line):
+            found[current]["flag"] = match.group(1).strip().lower() in ("x", "х")  # Latin or Cyrillic x
+        elif match := _WHICH.match(line):
+            found[current]["term"] = match.group(1).strip()
+    out = {}
+    for number, f in found.items():
+        if f["score"] is None:
+            raise CheckError(f"item {number}: score missing or not 1-5")
+        if f["flag"] and not f["term"]:
+            raise CheckError(f"item {number}: marked as lower because of a term, but no term written")
+        out[number] = SingleScore(f["score"], f["flag"], f["term"] if f["flag"] else "")
+    return out
+
+
+@dataclass(frozen=True)
+class SingleResult:
+    items: int
+    mean: float
+    distribution: dict[int, int]  # score -> count
+    term_lowered: int
+    terms: list[str]
+
+
+def score_single(scores: dict[int, SingleScore], key: dict) -> SingleResult:
+    if set(scores) != {int(n) for n in key["items"]}:
+        raise CheckError(f"{len(scores)} scored items for {len(key['items'])} items")
+    values = [s.score for s in scores.values()]
+    flagged = [scores[n] for n in sorted(scores) if scores[n].term_lowered]
+    return SingleResult(len(values), sum(values) / len(values), {v: values.count(v) for v in range(5, 0, -1)},
+                        len(flagged), [s.term for s in flagged])
+
+
+def e1_launch(term_accuracy_mean: float, blind_mean: float, term_lowered: int) -> tuple[bool, list[str]]:
+    """
+    The E1 rule, fixed before the T7 baseline: dictionary v2 is built only if at least one holds:
+    term accuracy (mean of the three (b) runs, reference J) < 90%; blind mean < 4.0; more than 2 of
+    the 20 replicas scored lower because of a term. Returns (launch, the conditions that hold).
+    """
+    reasons = []
+    if term_accuracy_mean < E1_TERM_ACCURACY:
+        reasons.append(f"term accuracy {term_accuracy_mean:.2%} < {E1_TERM_ACCURACY:.0%}")
+    if blind_mean < E1_BLIND_MEAN:
+        reasons.append(f"blind mean {blind_mean:.2f} < {E1_BLIND_MEAN}")
+    if term_lowered > E1_TERM_LOWERED:
+        reasons.append(f"{term_lowered} replicas scored lower because of a term > {E1_TERM_LOWERED}")
+    return bool(reasons), reasons
