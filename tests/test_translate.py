@@ -212,9 +212,19 @@ def test_commands_and_spoken_identifiers_are_not_left_in_english(source, target)
     "No such file or directory.",        # a terminal message is still English to translate
     "Open the vault now.",
     "Deploy The Vault Contract Right Now.",  # Title Case, but longer than a name
+    "Hi, Sam.",                          # a greeting with a person's name: no kept word
+    "I'm Sam.",                          # (found by the offline control: such lines must stay caught)
+    "Thank You Vault.",                  # one kept word, two others: not a name
 ])
 def test_english_sentences_are_still_left_in_english(text):
     assert left_in_english(text, text, CODE_GLOSSARY)
+
+
+def test_a_greeting_with_a_kept_person_name_is_still_left_in_english():
+    with_name = Glossary(entries=[*CODE_GLOSSARY.entries, GlossaryEntry(term="Sam", keep=True)])
+    assert left_in_english("Hi, Sam.", "Hi, Sam.", with_name)
+    assert left_in_english("I'm Sam.", "I'm Sam.", with_name)
+    assert not left_in_english("Deploy Vault NFT.", "Deploy Vault NFT.", with_name)
 
 
 def test_the_observed_shape_of_block_is_accepted_without_a_retry():

@@ -104,8 +104,20 @@ def _words(text: str) -> list[str]:
     return [w.casefold() for w in _WORD.findall(text)]
 
 
+_PARTS = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+")  # VaultNFT -> Vault, NFT; flipMood -> flip, Mood
+
+
 def _kept_words(glossary: Glossary) -> set[str]:
-    return {w for e in glossary.entries if e.keep for w in _words(e.term)}
+    """
+    The words of the kept glossary terms, and the parts of kept identifiers
+    (`VaultNFT` -> vault, nft), so a name read aloud word by word is a kept term too
+    (pipeline-v3.6).
+    """
+    words = set()
+    for entry in glossary.entries:
+        if entry.keep:
+            words |= set(_words(entry.term)) | {p.casefold() for p in _PARTS.findall(entry.term)}
+    return words
 
 
 _EDGE = "\"'“”‘’«»()[]{}<>.,;:!?…"
@@ -115,13 +127,17 @@ _JOINED = re.compile(r"[A-Za-z0-9][._:@#]+[A-Za-z0-9]")  # msg.sender, Counter.s
 _CAMEL = re.compile(r"[a-z][A-Z]")  # balanceOf, OpenZeppelin
 _LETTER = re.compile(r"[A-Za-z]")
 _DIGIT = re.compile(r"\d")
+_PATH = re.compile(r"[A-Za-z0-9_]/[A-Za-z0-9_]")  # script/deploy, src/main: a path without an extension
+_HYPHENED = re.compile(r"-{0,2}[a-z0-9]+(?:-[a-z0-9]+)+")  # deploy-vault, --rpc-url: a target name or a flag
 
 
 def _verbatim(token: str) -> bool:
     """
     A whitespace-separated token whose correct translation is the token itself:
     a URL or web address, a path or file name, a code identifier (member access,
-    snake_case, camelCase, letters joined with digits, a call).
+    snake_case, camelCase, letters joined with digits, a call), and since
+    pipeline-v3.6 a path without an extension and a lower-case hyphenated name or
+    flag (a make target, `--rpc-url`).
     """
     core = token.strip(_EDGE)
     if not core:
@@ -130,7 +146,67 @@ def _verbatim(token: str) -> bool:
         return True
     if "/" in core and ("." in core or core.startswith(("/", "~"))):
         return True
+    if _PATH.search(core) or _HYPHENED.fullmatch(core):
+        return True
     return bool(_LETTER.search(core) and _DIGIT.search(core))  # uint256, ERC20
+
+
+# Programs whose command lines are read aloud in tutorials; with the run glossary's kept one-word tool
+# names in lower case (forge, cast, ...) they start a command line (`_command_line`). General shell and
+# build tools only: domain tools come from the glossary, not from this list.
+PROGRAMS = frozenset({"make", "git", "npm", "npx", "yarn", "pnpm", "pip", "python", "node", "cd", "ls",
+                      "cat", "curl", "docker", "cargo", "brew", "sudo"})
+COMMAND_TOKENS = 6  # a command line read aloud is short
+NAME_WORDS = (2, 4)  # a name read off the screen: 2-4 capitalised words
+
+
+def _command_line(target: str, glossary: Glossary, kept: set[str]) -> bool:
+    """
+    A short segment that is a command line: it starts with a program (PROGRAMS, or a
+    kept glossary term that is one lower-case word) and another of its tokens is
+    code (a verbatim token or a kept word), as in `make anvil.` or
+    `forge script, script/deploy vault.`. "Make sure you save it." is not one.
+    """
+    tokens = [t for t in target.split() if t.strip(_EDGE)]
+    if not 2 <= len(tokens) <= COMMAND_TOKENS:
+        return False
+    tools = {e.term for e in glossary.entries if e.keep and re.fullmatch(r"[a-z][a-z0-9]*", e.term)}
+    if tokens[0].strip(_EDGE).casefold() not in PROGRAMS | tools:
+        return False
+    return any(_verbatim(t) or (_words(t) and set(_words(t)) <= kept) for t in tokens[1:])
+
+
+def _code_parts(glossary: Glossary) -> set[str]:
+    """Parts of the kept glossary terms that are code: identifiers (`VaultNFT`) and acronyms (`NFT`)."""
+    parts = set()
+    for entry in glossary.entries:
+        for token in entry.term.split() if entry.keep else []:
+            core = token.strip(_EDGE)
+            if _verbatim(core) or (len(core) > 1 and core.isupper()):
+                parts |= {p.casefold() for p in _PARTS.findall(core)}
+    return parts
+
+
+def _spoken_name(source: str, target: str, glossary: Glossary, kept: set[str]) -> bool:
+    """
+    A name read off the screen and kept as it is: the source is 2-4 words, every one
+    capitalised, at least one of them part of a kept identifier or acronym and at most
+    one not a kept word (`Deploy Vault NFT.` with the kept identifier `VaultNFT`), and
+    the target has the same letters and digits in the same order (`Deploy VaultNFT.`).
+    A greeting with a person's name ("Hi, Sam.") is not one, even when the name is a
+    kept term.
+    """
+    tokens = [t.strip(_EDGE) for t in source.split() if t.strip(_EDGE)]
+    if not NAME_WORDS[0] <= len(tokens) <= NAME_WORDS[1] or not all(t[0].isupper() for t in tokens):
+        return False
+    words = _words(" ".join(tokens))
+    if not set(words) & _code_parts(glossary) or sum(w not in kept for w in words) > 1:
+        return False
+
+    def letters(text: str) -> str:
+        return re.sub(r"[^0-9a-z]", "", text.casefold())
+
+    return letters(source) == letters(target)
 
 
 def _plain_words(text: str) -> list[str]:
@@ -153,15 +229,23 @@ def left_in_english(source: str, target: str, glossary: Glossary) -> bool:
     made only of them ("0.8.26.", "msg.sender") has nothing to leave in English.
     (pipeline-v3.3, 2026-11-12: before, digits counted as English words and a bare
     version number failed a whole block of a real video.)
+
+    A command line read aloud (`_command_line`) and a name read off the screen
+    (`_spoken_name`) are code, not English. (pipeline-v3.6, 2026-11-14: on the
+    Web3 tutorial T7 both answers of a block were refused for `make anvil.` and
+    similar segments in every run, and the segments stayed English anyway.)
     """
     target_words = _plain_words(target)
     if not target_words:
+        return False
+    kept = _kept_words(glossary)
+    if _spoken_name(source, target, glossary, kept) or _command_line(target, glossary, kept):
         return False
     source_words = set(_words(source))
     shared = [w for w in target_words if w in source_words]
     if len(shared) / len(target_words) < ENGLISH_OVERLAP:
         return False
-    return not set(shared) <= _kept_words(glossary)
+    return not set(shared) <= kept
 
 
 def _stem_present(translation: str, target: str) -> bool:
