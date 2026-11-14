@@ -8,6 +8,12 @@
   did every paid step and then failed in ffmpeg, because an audio file has no
   picture. The video formats are now skipped for an audio file, with a note
   in the plan, as the web page already did.
+- The translation check no longer takes a command line read aloud (`make
+  anvil`, `forge script ...`), a path or a script name read off the screen
+  for English left untranslated (`pipeline-v3.6`). On a Web3 tutorial it had
+  refused both answers of a block for such lines, so a third of the
+  translation requests changed nothing. What is sent to the model is
+  unchanged.
 
 **Evaluation**
 

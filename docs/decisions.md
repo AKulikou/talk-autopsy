@@ -6,6 +6,70 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-14 — Commands and spoken names are not English left untranslated; `pipeline-v3.6`
+
+Decision (owner, after the T7 baseline): the T7 rejections of `make anvil.`
+and similar segments are a **bug** of the `pipeline-v3.3` class (the check
+"left in English" counts code as untranslated words), not an improvement as
+first classified (entry below). Fixed under the bug rules.
+
+**Measured first, from the saved T7 runs** (logs and `meta.translation`,
+no new request):
+
+| | (b) run 1 | (b) run 2 | (b) run 3 | (a) |
+|---|---|---|---|---|
+| segments flagged "left in English" (any attempt) | 7 | 3 | 5 | 6 |
+| of them code (a command line, a path, a name read off the screen) | 6 | 1 | 5 | 5 |
+| blocks sent twice (of 4); requests | 2; 6 | 2; 6 | 2; 6 | 2; 6 |
+| segments in `reverted_segments` | 8 | 3 | 6 | 4 |
+| of them: code / a printed string / a real sentence | 6 / 1 / 1 | 1 / 1 / 1 | 5 / 0 / 1 | 3 / 1 / 0 |
+
+The real sentence in each (b) run stayed English because of a *different*
+check, the agreed translation of `gas price` from the Web3 dictionary, not this
+one; the printed string is a short phrase the tutorial's code outputs (left
+flagged: it is English text); one first answer was also refused for a terminal
+message (left flagged). No segment with real content was kept in English by the
+"left in English" check except that printed string.
+
+**The rule** (`translate.left_in_english`, written down in its docstring):
+not counted as English words are, in addition to the verbatim tokens of
+`pipeline-v3.3`, (1) a path without an extension (`script/deploy`), (2) a
+lower-case hyphenated name or flag (`deploy-vault`, `--rpc-url`); (3) the parts
+of kept identifiers count as kept words (`VaultNFT` -> vault, nft); a segment is
+not left in English if it is (4) a command line: at most 6 tokens, starting with
+a general shell or build program (`make`, `git`, `npm`, ... a fixed list; no
+domain tool) or a kept one-word lower-case tool of the run glossary (`forge`),
+followed by at least one code token; or (5) a name read off the screen: 2-4
+capitalised source words, at least one a part of a kept identifier or acronym,
+at most one outside the kept words, and the same letters and digits in the
+target. Still caught (tests): an English sentence that starts with a program's
+name, a kept tool's name with plain words, a terminal message, a short
+lower-case phrase, a greeting with a person's name even when the name is a kept
+term (found by the offline control on an old T2 experiment's glossary; the first
+version of rule 5 let it through and was narrowed before the commit).
+
+Proofs:
+
+| | result |
+|---|---|
+| (a) failing test committed first | `9c9cfd1` (8 failures before the fix) |
+| (b) golden requests | `pipeline_requests` and `direct_requests` byte-identical; `pipeline_outputs` differs only in `ru.json.stamp.json` (the translate step's code key); with the old key substituted the old golden files pass |
+| (c) saved answers, offline | 22 work folders, 82 blocks: 78 the same verdict, 4 different = block 1 of the four T7 runs (now accepted); every T1, T2, T6 and real-run answer the same. Control (each unit's English as its own answer): 4622 of 4638 flagged before, 4605 after; the 17 no longer flagged are all T7 command lines or names |
+| (d) T2 from cache | after a one-off carry-over of 19 translation stamps (`269ac790` -> `e5c5568f`, backups kept): every model step skipped, 0 USD, the 22 files of `work/T2-v3-cache/` byte-identical before and after the run; the stamp differs from its backup only in `code` |
+| requests | not changed: the check decides whether a second attempt is sent, never what any request contains |
+
+Expected effect on the stored T7 answers (offline): block 1 is accepted at the
+first answer in (b) runs 1 and 3 and in (a); (b) run 2's first answer of block 1
+also had the terminal message, so it would still be sent twice; block 3 is
+still sent twice where the printed string or `gas price` is refused. So 3 of the
+8 repeated requests of the four runs would not be sent.
+
+Found, not fixed (not this class): the agreed-translation check accepts
+inflected forms by a stem of `len - 2` letters but at least 4, so a 4-letter
+word of an agreed translation (`цена`) must appear whole and its accusative
+(`цену`) fails. Whether the model wrote that form on T7 is not known (rejected
+answers are not stored). Backlog.
+
 ## 2026-11-14 — T7 (v1.2): how its reference, glossary and evaluation are made; two run findings
 
 Decisions made while adding T7, the Web3 tutorial fragment of v1.2
@@ -34,7 +98,7 @@ Decisions made while adding T7, the Web3 tutorial fragment of v1.2
   audio file has no picture for `mp4-soft`, `mp4-burned`). Fixed in the CLI
   only (`cli/runs.py`, the web page's own rule), failing test first; no
   frozen path, no request or cache key changed, so no new pipeline tag.
-- **Not a bug: commands left in English rejected by the translation check.**
+- **(Superseded the same day: reclassified as a bug by the owner and fixed in `pipeline-v3.6`, entry above.)** First classified as not a bug: commands left in English rejected by the translation check.
   On T7 the check "left in English" rejected segments that are shell commands
   or spoken identifiers (`make anvil.`, `forge script, script/deploy mood.`,
   `Deploy Mood NFT.`): both attempts of a block were refused for them, and

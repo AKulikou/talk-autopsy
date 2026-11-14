@@ -387,12 +387,15 @@ and no metric depends on it.
   the aligned place). Most of the gap to 90% is how identifiers are written,
   not what was heard. A dictionary v2 can carry the exact written forms of the
   identifiers the owner's courses use; it cannot fix the reference doubts.
-- **Translation check and commands** (not a bug, decisions 2026-11-14): in
-  every run the check "left in English" refused both answers of block 1 for
-  segments that are shell commands or spoken identifiers (a `make` target, a
-  `forge script` line), and they stayed English. 4–5 of 8–9 translation
-  requests per run were rejected answers: about a third of the translation
-  step (0.18–0.19 USD per run) went to repeats that changed nothing.
+- **Translation check and commands** (a bug, fixed afterwards in
+  `pipeline-v3.6`, decisions 2026-11-14): in every run the check "left in
+  English" refused both answers of block 1 for segments that are shell
+  commands or names read off the screen (a `make` target, a `forge script`
+  line), and they stayed English. 2 of the 4 blocks of every run were sent
+  twice (6 requests instead of 4): a third of the translation requests
+  changed nothing. The numbers above are those of `pipeline-v3.5`; with
+  `pipeline-v3.6` block 1 is accepted at the first answer in (b) runs 1 and 3
+  and in (a) (offline, on the stored answers). No metric above depends on it.
 - **Reading speed:** T7 has fewer fast cues than T2 and T6 (note below).
 
 ### T7 reading speed note (2026-11-14; no change to subtitle assembly)
@@ -2785,13 +2788,14 @@ Ideas that come up during a stage and wait for a later one.
   (file names, functions, constants, Makefile targets), so v2 should carry
   exact identifier spellings, not more jargon; the current dictionary showed
   no gain on T7 (90.32% without it, 86.18–88.94% with it).
-- **Translation check and commands:** "left in English" refuses segments that
-  are shell commands or spoken identifiers (`make anvil.`, a `forge script`
-  line); both answers of a block are rejected and the segments stay English
-  anyway. On T7 that was 4–5 of 8–9 translation requests per run, about a
-  third of the translation step. Telling a command from English needs new
-  knowledge (command-line programs, keep-terms of the run glossary at the
-  start of a segment, or the code on screen); frozen path, a new version.
+- **Translation check and commands:** fixed in `pipeline-v3.6` (decisions
+  2026-11-14). Left open: a short string the code prints, a terminal message
+  and a spoken name not in the glossary are still refused once.
+- **Agreed translations of 4-letter words:** the inflection allowance keeps at
+  least 4 letters, so `цена` must appear whole and `цену` fails the agreed-term
+  check (decisions 2026-11-14); on T7 one sentence per (b) run stayed English
+  through that check. Not confirmed on a stored answer (rejected answers are
+  not kept).
 - **Reference spoken forms:** the judge writes identifiers as heard
   (`message.sender` for `msg.sender`, `Phony` for `.PHONY`), so a correct code
   form counts as a miss. A writing rule for code identifiers would be a new

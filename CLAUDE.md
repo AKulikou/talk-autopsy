@@ -95,6 +95,9 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
   segments keeps the rest and reverts those segments (`reverted_segments`).
   `pipeline-v3.5` (2026-11-13): a Claude request failing on the service's
   side is retried after 5, 15, 30 s (`core/transient.py`); `spend_observer`.
+  `pipeline-v3.6` (2026-11-14): the "left in English" check does not count
+  command lines, paths, hyphenated names or names read off the screen
+  (`translate.left_in_english`); requests unchanged, stamps carried over.
 - **Keys:** never printed, logged or committed; importing a module reads
   neither `.env` nor a secret. A new pipeline key goes into
   `config.SECRET_ENV_VARS`, an evaluation key into `secret_registry`, both
