@@ -332,3 +332,24 @@ def test_a_folder_and_a_download_made_before_keep_their_names(tmp_path):
     assert youtube.video_file_stem(video, folder) == legacy_stem  # the download is reused, names kept
     course = "Course " * 20
     assert youtube.playlist_folder_name(course, tmp_path) == youtube.safe_name(course, words=True)
+
+
+def test_a_long_local_file_name_is_cut_at_a_word(tmp_path):
+    """Backlog bug (v1.1 session 4): a local file's result folder was cut in the middle of a word."""
+    from talk_autopsy.web import jobs
+    stem = "Lesson 07 " + "Deploying an upgradeable contract with Foundry scripts and verifying it"
+    source = tmp_path / f"{stem}.mp4"
+    source.write_bytes(b"x")
+    request = jobs.JobRequest(mode="file", path=str(source), target_lang="ru")
+    _, _, dest, file_stem, _ = jobs.run_target(request, None, tmp_path / "out")
+    assert file_stem == youtube.safe_name(stem, words=True)
+    assert stem[len(file_stem)] == " " and dest.name == file_stem
+    assert youtube.local_result_name(stem) == file_stem
+
+
+def test_a_local_result_folder_made_before_keeps_its_name(tmp_path):
+    stem = "A" * 30 + " " + "B" * 60
+    legacy = youtube.safe_name(stem)
+    assert youtube.local_result_name(stem, tmp_path) == youtube.safe_name(stem, words=True)
+    (tmp_path / legacy).mkdir()
+    assert youtube.local_result_name(stem, tmp_path) == legacy
