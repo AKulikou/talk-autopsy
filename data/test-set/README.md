@@ -1,8 +1,9 @@
 # Test set
 
-Six planned fragments of English technical speech, 5–10 minutes each. T1 and
-T2 are scored; T6, the hold-out, was run once (2026-11-11); T3–T5
-are not selected. Every stage of the pipeline is measured on the same
+Six planned fragments of English technical speech, 5–10 minutes each, plus T7
+(v1.2, 18 minutes). T1 and T2 are scored; T6, the hold-out, was run once
+(2026-11-11); T3–T5 are not selected; T7 is the Web3 tutorial fragment of v1.2
+(2026-11-14). Every stage of the pipeline is measured on the same
 fragments, so results stay comparable from one experiment to the next.
 
 | ID | Type | Speech | Duration | Topic | Glossary terms |
@@ -13,6 +14,7 @@ fragments, so results stay comparable from one experiment to the next.
 | T4 | screen demo / tutorial | fast speech, code identifiers, shell commands | TBD | TBD | TBD |
 | T5 | university lecture | slow pace, long sentences | TBD | TBD | TBD |
 | T6 | workshop with live demo (hold-out, run once) | non-native speaker | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | AI-assisted software development | 51 (drafted by Gemini from the reference; tracked since the run) |
+| T7 | Web3 tutorial with code on screen (v1.2) | not determined | 18:00 (cut 21:49:15–22:07:15 from 38:10:24) | Solidity and Foundry | built from the reference (below) |
 
 ## Sources
 
@@ -33,6 +35,7 @@ media and the reference transcripts are not published. Links checked on
 | T2 | "Mastering Claude Code in 30 minutes", Code with Claude 2025 (channel Anthropic, 2025-05-22) | Boris Cherny; non-native speaker | <https://www.youtube.com/watch?v=6eBSHbLKuN0> (28:07) | a repost, 15 s shorter (27:52 vs 28:07); fragment 0:00–10:00 of our copy |
 | T6 | a workshop on AI-assisted software development: an "agent skills" package, with a live demo in a code editor | two presenters, not identified; non-native speaker plus a second presenter | official recording not identified | a 41-minute repost (41:24); fragment cut blind at 25:46–35:46 of our copy (below) |
 | real-01 | "Stanford CS153 Frontier Systems \| Scale, AGI, and the Future of Everything" (channel Stanford Online, 2026-06-15) | Sam Altman (guest) and the course host | <https://www.youtube.com/watch?v=F_7M4Hc-usM> (41:10) | a shortened repost (38:30 vs 41:10); the whole copy; operational run, not scored |
+| T7 | "Learn Solidity Smart Contract Development \| Full 2024 Cyfrin Updraft Course" (channel Patrick Collins, 2024-07-31) | not determined | <https://www.youtube.com/watch?v=-1GB6m39-rM> (38:10:24) | not a repost: only the window was fetched from the original (below); fragment 21:49:15–22:07:15 of the original's timeline |
 | stress-01 | "Andrej Karpathy: From Vibe Coding to Agentic Engineering w/ Stephanie Zhan" (channel Sequoia Capital, AI Ascent 2026, 2026-04-29) | Andrej Karpathy, Stephanie Zhan; two speakers, fast conversational speech | <https://www.youtube.com/watch?v=96jN2OCOfLs> (29:49) | the same length (29:50); the whole copy; operational run, not scored |
 
 The names above are the only speaker names in the repository: this section is
@@ -65,6 +68,13 @@ them.
   reference, T6's included. It ran once, with `pipeline-v3`,
   on 2026-11-11 (`docs/experiments.md`, T6 protocol and T6 result).
 
+- **T7 (v1.2):** a Solidity / Foundry tutorial with code and a terminal on
+  screen, the kind of video the tool is mainly used on: identifiers, CLI
+  commands (`forge`, `cast`, `anvil`), version numbers and Web3 jargon in fast
+  speech. It measures the frozen pipeline on this domain before any Web3
+  dictionary v2 is built (`docs/experiments.md`, T7 baseline). Nobody had
+  watched it when it was chosen.
+
 T3–T5 are not chosen yet; they will be selected deliberately to cover the cases
 above, not taken from whatever files are at hand.
 
@@ -76,6 +86,22 @@ share of non-silent audio taken, the earliest on a tie. Result: 25:46–35:46,
 93.8% non-silent (the whole file: 92.5%, 245 silences). Its content stays out
 of everything outside `data/test-set/` and `work/T6/`; only counts are recorded
 (`docs/experiments.md`, T6 protocol).
+
+**How T7 was chosen and cut (2026-11-14).** Six candidates from six channels
+(English, public, 2024 or later, Solidity / Foundry with code or a terminal on
+screen; videos already processed with the tool and the sources above
+excluded) were ranked by a neutral density estimate on YouTube's automatic
+captions: regex counts of identifiers, CLI commands, version numbers, `0x`
+addresses, Solidity keywords and words rare in general English, over 18-minute
+windows in 15-second steps; no Web3 dictionary was used. The owner chose this
+course and the window with the most distinct technical tokens (87 by that
+estimate; 68 without Solidity keywords) and confirmed that he had not watched
+the course. Only the window was fetched, not the 38-hour video: `yt-dlp -f 234
+--download-sections "*21:49:00-22:07:30"` (the HLS audio stream, 15 s of margin
+on each side; a first attempt on the direct m4a stream stalled and was
+stopped), then cut exactly with `talk-autopsy cut T7.source.mp4 --start 15
+--end 1095` to 16 kHz mono (1080.0 s). Speaker: not determined (nobody has
+listened to it).
 
 ## Reference conventions
 
@@ -100,7 +126,7 @@ leaves out.
 
 | File | Content | In the repository |
 |---|---|---|
-| `T<n>.source.mp4` | the original video or audio | no |
+| `T<n>.source.mp4` | the original video or audio (T7: only the window plus 15 s on each side, audio only) | no |
 | `T<n>.wav` | 16 kHz mono audio of the fragment (`talk-autopsy cut`) | no |
 | `T<n>.draft.txt` | speech recognition draft of 2026-11-09; superseded by the adjudication, not proofread | no |
 | `T<n>.adjudication.md` | the spans where the three engines disagree, with clips, for the owner to decide (`talk-autopsy adjudicate`) | no |
