@@ -36,7 +36,8 @@ Decisions of v1.2 session C2 (Parts 2-3; `docs/web.md`, Courses; `docs/experimen
   lesson keeps the exact file it ran with, so a re-run hits the cache.
   Limitation: a rendering the lesson used that was not the suggestion is not
   carried (nothing maps a term to its Russian words). Off by default until C2b
-  decides.
+  decides. **C2b decided (2026-11-14): default OFF**, the option stays (2 inconsistent
+  terms in both conditions on lessons 1-3 of the owner's course; `docs/experiments.md`, C2b result).
 
 ## 2026-11-14 — Agreed terms accept Russian case endings of short words; `pipeline-v3.7`
 

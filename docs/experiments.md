@@ -264,6 +264,40 @@ Course: Cyfrin Audits, "Solidity Blockchain Developer Foundry Full Course 2023"
 (A) (2026-11-14): 3 of 3 lessons finished, Claude 0.6150 USD, AssemblyAI
 0.3005 USD.
 
+### C2b result (2026-11-14)
+
+Runs as pre-registered and amended above (`pipeline-v3.7`; lessons 1-3 of the
+owner's course: 835 s, 628 s, 839 s; profile "all" in (A), "laptop" in (B); Web3
+dictionary on). Scored by `talk_autopsy/course_consistency.py` on the copied
+work folders; nothing re-run.
+
+| | (A) without | (B) with |
+|---|---|---|
+| terms on the shared list | 189 | 189 |
+| terms in two or more of lessons 1-3 | 15 | 15 |
+| **inconsistent terms** | **2** | **2** |
+| of them with an `other` rendering | 2 | 1 |
+| check failures, lessons 2-3 (left in English / uncorrected) | 3 (2 + 1 / 0) | 1 (0 + 1 / 0) |
+| Claude per lesson, lessons 2-3 | 0.2096 USD | 0.2025 USD (0.97x) |
+| Claude / AssemblyAI, whole condition | 0.6150 / 0.3005 USD | 0.4050 / 0.1060 USD (lesson 1 from the cache) |
+| course glossary after lesson 3 | | 61 terms |
+
+- **Decision: default OFF; the option stays.** (A) has 2 inconsistent terms, so
+  the rule asks (B) to reach 0; it has 2. Conditions 2 (check failures 1 <= 3)
+  and 3 (cost 0.97x <= 1.15x) hold.
+- What changed (descriptive, one run each): the term fixed by the course
+  glossary is a Web3 phrase (`decentralized oracle network`, two renderings in
+  (A), one in (B)); still inconsistent in (B): an adjective phrase
+  (`trust-minimized`: two different Russian participles) and a person's name
+  (Cyrillic in one lesson, Latin in another; the name is not written here). In
+  (A) the second inconsistent term had a rendering outside the candidates.
+- One run per condition and 15 shared terms: the difference is within what
+  translation noise can give; the measurement says the course glossary is not
+  needed on these three lessons, not that it never helps.
+- Lessons 1-3 of the owner's course keep (A)'s version (lesson 1 is the same in
+  both); the course run (Part 4) re-sends the one translation block of lessons
+  2 and 3 that (A) left partly in English, as every re-run does.
+
 **Limits known before the run.** One run per condition: translation varies from
 run to run, so part of any difference is noise (the T2 repeats give the scale);
 three lessons of one course; a rendering a lesson used that is not its
