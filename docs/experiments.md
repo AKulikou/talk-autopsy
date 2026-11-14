@@ -180,6 +180,82 @@ original run's `.srt` files. Wall time from start to exit, including `uv run` an
 re-encodes the video on every run (about 0.27x the video's length; rendering, not a model call), so a
 launcher re-run with the TV file takes minutes, not seconds (Backlog).
 
+## C2b: course glossary (v1.2)
+
+Pre-registered on 2026-11-14, **before any run with the course glossary** and
+before the course is chosen (the owner picks it at STOP 1 of session C2-C4).
+After this commit the rule below does not change; a change would be a dated
+amendment written before the run it affects.
+
+**Why.** Each lesson of a course builds its own auto-glossary, so a term can be
+translated one way in lesson 1 and another way in lesson 2. The course
+glossary (`web/course_glossary.py`, `docs/web.md`, Courses) gives lessons 2..N
+the terms of the finished lessons, with the Russian rendering a lesson used
+where it used its auto-glossary's suggestion, through the user-glossary input
+only (no frozen module changes). It also costs something: more key terms, a
+longer glossary in every Claude request, and agreed renderings the translation
+check enforces. This measures whether it is worth turning on by default.
+
+**Runs** (`pipeline-v3.7`; one run per condition; no repeats):
+
+- Course: the playlist the owner chooses at STOP 1, **lessons 1-3**; profile
+  "all", Web3 dictionary on ("about smart contracts"), target `ru` (the
+  settings of the owner's course run, Part 4).
+- Both conditions through the page's own orchestration
+  (`scripts/course_run.py`: `CourseRunner` -> `JobRunner` -> pipeline), each
+  with its own output root (`work/C2b/<condition>/output`, local); the cost is
+  estimated first (`--dry-run`) and recorded.
+- **(A) without** the course glossary (`--course-glossary off`), first; the
+  three lessons' work folders are then copied to `work/C2b/without/work/`.
+- **(B) with** it (`--course-glossary on`): lesson 1 has no course glossary yet,
+  so its requests are those of (A) and it comes from the cache (0 USD); lessons
+  2 and 3 get the course glossary built after lesson 1 (and after 1-2) and run
+  again from the auto-glossary step on. Their work folders are copied to
+  `work/C2b/with/work/`. Afterwards the work folders of the decided default are
+  put back in `work/`, so the course run (Part 4) reuses them.
+- Money: within the session's experiment limits (Claude 3.00, AssemblyAI 1.00
+  USD for Parts 1, 3 and 6 together); a run whose estimate would cross them is
+  not started.
+
+**Metric** (`talk_autopsy/course_consistency.py`, from the saved run files, no
+model call; the module's docstring is the definition):
+
+- the term list: every term of the run glossaries (`glossary.md`) of the six
+  lesson runs, case-insensitive, the same list for both conditions;
+- a term occurs in a lesson when it is a whole word in the English of at least
+  one translated sentence unit;
+- its candidates: the term in Latin script, every agreed rendering (`ru`
+  column) and every auto-glossary suggestion of it in any of the six run
+  glossaries; a unit's label is the set of candidates in its Russian (the
+  translation check's inflection rule for Russian candidates), `other` when
+  none; the term's rendering in a lesson is the label most of its units have;
+- **inconsistent term**: occurs in at least two of lessons 1-3 and its renderings
+  differ. **Primary number: inconsistent terms** of each condition.
+- Also reported: terms in two or more lessons; terms with `other` in some
+  lesson (two different renderings outside the candidates count as the same: a
+  known limit); **check failures** = segments left in English or uncorrected by
+  the checks (`reverted_segments` and failed blocks of translation and
+  correction), summed over lessons 2-3; **Claude cost per lesson** = the mean of
+  lessons 2-3 by the runs' own counters (`course.json`; lesson 1 is identical
+  in both).
+
+**Decision** (the default of the option "shared course glossary"):
+
+- baseline (A) has **0** inconsistent terms: default **OFF**, recorded as "not
+  needed on this course"; the option stays;
+- otherwise default **ON** only if all three hold: (1) inconsistent terms in (B)
+  are at most half of (A) (for an (A) of 1 or 2: (B) is 0); (2) check failures
+  of lessons 2-3 in (B) are not more than in (A); (3) Claude cost per lesson of
+  lessons 2-3 in (B) is at most 1.15 times (A);
+- otherwise default **OFF**; the option stays.
+
+**Limits known before the run.** One run per condition: translation varies from
+run to run, so part of any difference is noise (the T2 repeats give the scale);
+three lessons of one course; a rendering a lesson used that is not its
+auto-glossary's suggestion is not carried (F5 has no column for it, and nothing
+maps a term to the words that render it); the measure cannot tell two
+renderings outside the candidates apart.
+
 ## T7 baseline (v1.2)
 
 Pre-registered on 2026-11-14, after the T7 reference and glossary were built and

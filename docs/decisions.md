@@ -6,6 +6,38 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-14 — Courses in the web page; a course glossary through the user glossary only
+
+Decisions of v1.2 session C2 (Parts 2-3; `docs/web.md`, Courses; `docs/experiments.md`, C2b):
+
+- **A course runs in the existing single-job worker**, each lesson an ordinary
+  job: the course holds the one-job lock from the first lesson to the last, so
+  nothing else starts in between, and every lesson has the usual waiting
+  screen, files and cache. A failed lesson is marked and the course goes on.
+- **The cost gate is on the selected lessons' total** (above 3 USD the usual
+  confirmation, server-side); each lesson then runs with the pipeline's usual
+  ceiling. The page shows totals computed by the server, so the confirmed
+  amount is exactly the gate's.
+- **Folders** `<date> <course>/NN <lesson>/` with the course's `course.json`; the
+  same playlist finds its folder again by the playlist id (resume), and a
+  course left `running` or `stopped` with lessons left is offered as
+  "Continue" (restart safety). A lesson's result id is `<course>|<lesson>`.
+- **"Already done"** counts a lesson whose folder has its done marker or whose
+  every paid step is cached; the estimate reads the context the earlier run
+  stored, because a flat playlist entry has none (else the cache would look
+  stale). A video downloaded for a single run is hard-linked into its lesson
+  folder.
+- **Course glossary**: only through the user glossary (F5), as its last file
+  (the owner's own and the Web3 dictionary win). Terms of the finished lessons'
+  auto-glossaries; an agreed `ru` only where the lesson's translation used the
+  auto-glossary's suggestion (an agreed rendering the lesson itself did not
+  follow would only add refusals); at most 150 terms, the most frequent first
+  (summed occurrences in the corrected English; ties in first-seen order); each
+  lesson keeps the exact file it ran with, so a re-run hits the cache.
+  Limitation: a rendering the lesson used that was not the suggestion is not
+  carried (nothing maps a term to its Russian words). Off by default until C2b
+  decides.
+
 ## 2026-11-14 — Agreed terms accept Russian case endings of short words; `pipeline-v3.7`
 
 Decision (v1.2 session C2, Part 1): the agreed-translation check rejecting
