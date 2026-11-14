@@ -9,7 +9,10 @@ Usage: root glossary-ref [OPTIONS] {fragment}
 │ *    fragment      <str>  Test-set fragment ID with a reference, e.g. T6. [required]             │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌─ Options ────────────────────────────────────────────────────────────────────────────────────────┐
-│ --model        <str>  Gemini model. Default: JUDGE_MODEL (gemini-4-carbon).                      │
-│ --force               Overwrite OUT if it exists.                                                │
-│ --help                Show this message and exit.                                                │
+│ --model         <str>  Gemini model. Default: JUDGE_MODEL (gemini-4-carbon).                     │
+│ --prompt        <str>  Prompt version: v1 (T6: 30-60 terms, free category) or v2 (T7: 60-90      │
+│                        terms, one of six categories, no names of people).                        │
+│                        [default: v1]                                                             │
+│ --force                Overwrite OUT if it exists.                                               │
+│ --help                 Show this message and exit.                                               │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

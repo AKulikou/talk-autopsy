@@ -15,7 +15,7 @@ from typer.testing import CliRunner
 from talk_autopsy import adjudicate as adj
 from talk_autopsy import cli, config, judge, ref_glossary
 from talk_autopsy.adjudicate import Choice, Option, Span, build_consensus, parse_choices, resolve
-from talk_autopsy.glossary import load_glossary
+from talk_autopsy.glossary import Glossary, load_glossary
 from talk_autopsy.segments import Segment, Transcript, Word
 
 runner = CliRunner()
@@ -579,6 +579,57 @@ def test_cli_glossary_ref_writes_the_glossary_and_prints_counts(fake_genai, tmp_
     assert [(e.term, e.keep) for e in glossary.entries] == [("npm", True)]
     assert REFERENCE in fake_genai.calls[0].contents[0]
     assert runner.invoke(cli.app, ["glossary-ref", "T9"]).exit_code == 1  # no silent overwrite
+
+
+V1_PROMPT_SHA16 = "5035b3b45e6f9aa4"  # ref-glossary-v1 as used for T6 (2026-11-11)
+
+
+def test_glossary_v1_prompt_and_file_header_are_unchanged():
+    """T6's glossary was made with v1; adding v2 must not change what v1 sends or writes."""
+    import hashlib
+
+    assert ref_glossary.PROMPT_VERSION == "ref-glossary-v1"
+    assert (ref_glossary.MIN_TERMS, ref_glossary.MAX_TERMS) == (20, 60)
+    assert hashlib.sha256(ref_glossary.PROMPT.encode()).hexdigest()[:16] == V1_PROMPT_SHA16
+    extraction = ref_glossary.Extraction(Glossary(entries=[]), 0, 0, 0, "m", {}, 0.0)
+    assert ref_glossary.glossary_file("T9", extraction, "2026-11-11").startswith(
+        "# T9 glossary\n\nTerms of T9 extracted from the reference transcript by m (ref-glossary-v1) on "
+        "2026-11-11;\nevery term occurs in the reference. Not reviewed by a person. Translations are empty. "
+        "Format: `talk_autopsy/glossary.py`.\n\n| term |")
+
+
+def test_cli_glossary_ref_v2_asks_for_categories_and_keeps_up_to_90(fake_genai, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "TEST_SET_DIR", tmp_path)
+    (tmp_path / "T9.ref.txt").write_text(REFERENCE, encoding="utf-8")
+    terms = [{"term": "npm", "keep": True, "category": "CLI command"},
+             {"term": "GitHub Actions", "keep": True, "category": "product or tool"},
+             {"term": "Docker", "keep": True, "category": "product or tool"}]
+    fake_genai.answers = [SimpleNamespace(text=json.dumps({"terms": terms}), candidates=[
+        SimpleNamespace(finish_reason=FinishReason.STOP)], usage_metadata=SimpleNamespace(
+        prompt_token_count=100, candidates_token_count=10, thoughts_token_count=0))]
+    result = runner.invoke(cli.app, ["glossary-ref", "T9", "--prompt", "v2"])
+    assert result.exit_code == 0, result.output
+    assert "2 terms (3 proposed" in result.output and "limit of 90; ref-glossary-v2" in result.output
+    assert "CLI command 1, version or number 0, product or tool 1" in result.output
+    assert "fewer than 60 terms" in result.output
+    sent = fake_genai.calls[0]
+    assert "Do not include names of people" in sent.contents[0] and REFERENCE in sent.contents[0]
+    assert "Web3 jargon" in sent.contents[0]
+    item = sent.config["response_json_schema"]["properties"]["terms"]["items"]
+    enum = item["properties"]["category"]["enum"]
+    assert enum == list(ref_glossary.CATEGORIES)
+    text = (tmp_path / "T9.glossary.md").read_text(encoding="utf-8")
+    assert "(ref-glossary-v2)" in text and "`notes` holds the term's category" in text
+    glossary = load_glossary(tmp_path / "T9.glossary.md")
+    assert [(e.term, e.notes) for e in glossary.entries] == [("npm", "CLI command"),
+                                                            ("GitHub Actions", "product or tool")]
+
+
+def test_glossary_v2_select_caps_at_its_own_limit():
+    proposed = [{"term": "npm", "keep": True, "category": "CLI command"},
+                {"term": "GitHub", "keep": True, "category": "product or tool"}]
+    entries, _, over = ref_glossary.select_terms(REFERENCE, proposed, 1, notes_key="category")
+    assert [(e.term, e.notes) for e in entries] == [("npm", "CLI command")] and over == 1
 
 
 def test_gemini_caller_sends_temperature_only_when_set(fake_genai):

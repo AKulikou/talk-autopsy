@@ -311,3 +311,24 @@ def test_cli_eval_refuses_ranges_built_for_other_references(sealed_project, tmp_
     hypothesis.write_text("anything", encoding="utf-8")
     result = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(hypothesis)])
     assert result.exit_code == 1 and "rebuild" in result.output
+
+
+def test_cli_eval_bounds_scores_an_unsealed_fragment_like_t6_and_lists_misses(sealed_project, tmp_path,
+                                                                                monkeypatch):
+    """T7 (v1.2) is not sealed but is scored against J and M with the bounds: `eval --bounds`."""
+    test_set, _ = sealed_project
+    monkeypatch.setattr(config, "SEALED_FRAGMENTS", frozenset())
+    assert runner.invoke(cli.app, ["judge-refs", "T9"]).exit_code == 0
+    glossary = Glossary(entries=[GlossaryEntry(term="Claude Code", keep=True),
+                                 GlossaryEntry(term="GitHub", keep=True)])
+    (test_set / "T9.glossary.md").write_text(to_markdown(glossary, languages=["ru"]), encoding="utf-8")
+    hypothesis = tmp_path / "hyp.txt"
+    hypothesis.write_text(A, encoding="utf-8")  # "cloud code": the term is missed
+    plain = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(hypothesis)])
+    assert plain.exit_code == 0 and "lower bound" not in plain.output  # without --bounds: J only
+    result = runner.invoke(cli.app, ["eval", "T9", "--hyp", str(hypothesis), "--bounds"])
+    assert result.exit_code == 0, result.output
+    out = result.output
+    assert "two references and bounds" in out and "sealed" not in out
+    assert "term accuracy against M" in out and "lower bound" in out and "upper bound" in out
+    assert "missed against J: Claude Code 0/1" in out

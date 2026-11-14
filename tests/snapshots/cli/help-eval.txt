@@ -16,5 +16,8 @@ Usage: root eval [OPTIONS] {fragment}
 │    --stage         <str>   Pipeline stage for the benchmark row, e.g. stt or fix (with           │
 │                            --record).                                                            │
 │    --notes         <str>   Free text for the notes column (with --record).                       │
+│    --bounds                Score against both judge references (J and M) with the term-accuracy  │
+│                            bounds, as for T6 (needs judge-refs); a fragment that is not sealed   │
+│                            also lists missed terms.                                              │
 │    --help                  Show this message and exit.                                           │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

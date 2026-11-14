@@ -22,6 +22,10 @@ def eval_command(
     stage: Annotated[str | None, typer.Option(
         help="Pipeline stage for the benchmark row, e.g. stt or fix (with --record).")] = None,
     notes: Annotated[str, typer.Option(help="Free text for the notes column (with --record).")] = "",
+    bounds: Annotated[bool, typer.Option(
+        "--bounds", help="Score against both judge references (J and M) with the term-accuracy bounds, as "
+                         "for T6 (needs judge-refs); a fragment that is not sealed also lists missed terms.")]
+    = False,
 ) -> None:
     """Score HYP against data/test-set/<FRAGMENT>.ref.txt: WER, term accuracy, false-edit rate."""
     if not FRAGMENT_ID.match(fragment):
@@ -34,8 +38,9 @@ def eval_command(
               f"..., decide the spans in data/test-set/{fragment}.adjudication.md, then run "
               f"talk-autopsy resolve {fragment}")
     glossary_path = config.TEST_SET_DIR / f"{fragment}.glossary.md"
-    if fragment in config.SEALED_FRAGMENTS:
-        _eval_sealed(fragment, ref_path, glossary_path, hyp, raw, record, engine, stage, notes)
+    if fragment in config.SEALED_FRAGMENTS or bounds:
+        _eval_sealed(fragment, ref_path, glossary_path, hyp, raw, record, engine, stage, notes,
+                     sealed=fragment in config.SEALED_FRAGMENTS)
         return
     try:
         reference = ref_path.read_text(encoding="utf-8")
@@ -96,11 +101,13 @@ def eval_command(
 
 
 def _eval_sealed(fragment: str, ref_path: Path, glossary_path: Path, hyp: Path, raw: Path | None,
-                 record: bool, engine: str | None, stage: str | None, notes: str) -> None:
+                 record: bool, engine: str | None, stage: str | None, notes: str,
+                 sealed: bool = True) -> None:
     """
-    The sealed hold-out (T6): WER and term accuracy against both references (J: the judge's text,
-    M: the engines' majority where one exists), the bounds from the uncertain spans and the gate
-    verdict (metrics.bounded_term_accuracy). Counts only: no term, no transcript text.
+    The sealed hold-out (T6), or any fragment with `--bounds` (T7): WER and term accuracy against both
+    references (J: the judge's text, M: the engines' majority where one exists), the bounds from the
+    uncertain spans and the gate verdict (metrics.bounded_term_accuracy). Sealed: counts only, no term,
+    no transcript text; not sealed: the missed terms are listed too.
     """
     from talk_autopsy import ref_bounds
 
@@ -124,7 +131,8 @@ def _eval_sealed(fragment: str, ref_path: Path, glossary_path: Path, hyp: Path, 
     except (FileNotFoundError, ValueError, KeyError, GlossaryError) as e:
         fail(str(e))
 
-    typer.echo(f"Fragment {fragment} (sealed: counts only): {hyp}")
+    typer.echo(f"Fragment {fragment} ({'sealed: counts only' if sealed else 'two references and bounds'}): "
+               f"{hyp}")
     if hypothesis.meta:
         typer.echo(f"Run: {evaluation.describe_meta(hypothesis.meta)}")
     for name, w in (("WER against J", report.wer), ("WER against M", wer_m)):
@@ -157,6 +165,10 @@ def _eval_sealed(fragment: str, ref_path: Path, glossary_path: Path, hyp: Path, 
         f = report.false_edits
         typer.echo(f"  {'false-edit rate (J)':<26} {percent(f.rate):>8}   "
                    f"({f.false_edits} of {f.edits} word edits move the text away from J)")
+    if not sealed:
+        for name, t in (("J", bounds.against_j), ("M", bounds.against_m)):
+            missed = [f"{row.term} {row.found}/{row.expected}" for row in t.rows if row.found < row.expected]
+            typer.echo(f"  missed against {name}: {', '.join(missed) if missed else 'none'}")
     if record:
         m_terms = bounds.against_m.accuracy
         summary = (f"reference J; M: WER {wer_m.wer:.4f}, terms v2 "

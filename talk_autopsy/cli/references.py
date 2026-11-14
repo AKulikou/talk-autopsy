@@ -326,12 +326,17 @@ def glossary_ref_command(
     fragment: Annotated[str, typer.Argument(help="Test-set fragment ID with a reference, e.g. T6.")],
     model: Annotated[str | None, typer.Option(
         help="Gemini model. Default: JUDGE_MODEL (gemini-4-carbon).")] = None,
+    prompt: Annotated[str, typer.Option(
+        help="Prompt version: v1 (T6: 30-60 terms, free category) or v2 (T7: 60-90 terms, one of six "
+             "categories, no names of people).")] = "v1",
     force: ForceOption = False,
 ) -> None:
     """
     Reference glossary drafted by Gemini (not Claude) from data/test-set/<FRAGMENT>.ref.txt:
     terms that do not occur in the reference are dropped. Writes <FRAGMENT>.glossary.md. Counts only.
     """
+    if prompt not in ("v1", "v2"):
+        raise typer.BadParameter("use v1 or v2", param_hint="--prompt")
     import datetime
 
     from talk_autopsy import ref_glossary
@@ -346,16 +351,22 @@ def glossary_ref_command(
     try:
         extraction = ref_glossary.extract(reference.read_text(encoding="utf-8"),
                                           model or config.judge_model(),
-                                          thinking_level=config.judge_thinking_level())
+                                          thinking_level=config.judge_thinking_level(), version=prompt)
     except (ValueError, RuntimeError, ConfigurationError) as e:
         fail(str(e))
     out.write_text(ref_glossary.glossary_file(fragment, extraction, datetime.date.today().isoformat()),
                    encoding="utf-8", newline=chr(10))
+    fewest, most = ref_glossary.limits(prompt)
     kept = len(extraction.glossary.entries)
     typer.echo(f"Wrote {out}: {kept} terms ({extraction.proposed} proposed by {extraction.model}, "
                f"{extraction.dropped_absent} not in the reference, {extraction.dropped_over_limit} over "
-               f"the limit of {ref_glossary.MAX_TERMS})")
+               f"the limit of {most}; {extraction.prompt_version})")
     typer.echo(f"  cost ${extraction.cost_usd:.4f} ({extraction.tokens['prompt']} input, "
                f"{extraction.tokens['output']} output, {extraction.tokens['thinking']} thinking tokens)")
-    if kept < ref_glossary.MIN_TERMS:
-        typer.echo(f"  fewer than {ref_glossary.MIN_TERMS} terms")
+    if prompt == "v2":
+        counts = {c: 0 for c in ref_glossary.CATEGORIES}
+        for entry in extraction.glossary.entries:
+            counts[entry.notes] = counts.get(entry.notes, 0) + 1
+        typer.echo("  categories: " + ", ".join(f"{c} {n}" for c, n in counts.items()))
+    if kept < fewest:
+        typer.echo(f"  fewer than {fewest} terms")
