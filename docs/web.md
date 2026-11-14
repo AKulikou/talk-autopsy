@@ -141,7 +141,9 @@ GET  /api/course/glossary/{id}-> the course glossary file as text
   auto-glossary go into `<course>/course-glossary.md` (with the Russian
   rendering the lesson used, where it used the auto-glossary's suggestion), and
   the next lessons get it as the last part of their user glossary. Each lesson
-  keeps the exact glossary it ran with, so a re-run hits the cache.
+  keeps the exact glossary it ran with, so a re-run hits the cache. **Off by
+  default** since C2b (2026-11-14: 2 inconsistent terms on lessons 1-3 of a
+  real course without it and 2 with it; the pre-registered rule asked for 0).
 
 Tests: `tests/test_web_courses.py` (fake yt-dlp and pipeline: links, lessons
 and unavailable ones, folder names, more than 100, the gate on the total,
@@ -463,7 +465,14 @@ left in English); regenerate with
 uv run python scripts/web_screenshots.py                    # English -> docs/img/
 uv run python scripts/web_screenshots.py --ui lt --out work/screenshots-lt
 uv run python scripts/web_screenshots.py --ui ru --set all --out work/screenshots-ru   # + warning, collapsed
+uv run python scripts/web_screenshots.py --set course          # only the four course pictures
 ```
+
+The README set includes the course screens (`web-course*.png`): the replay's
+invented demo course of six lessons (one private), the course header while
+lesson 2 runs, the course Done screen and a lesson with "previous / next
+lesson". The course folder is a temporary local path, so the course screen's
+picture shows only its last part.
 
 The script needs Edge or Chrome (driven headless over the DevTools protocol,
 with the `websockets` package already in the environment) and ffmpeg. It runs

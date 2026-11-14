@@ -1,9 +1,49 @@
 # Changelog
 
-## Unreleased (1.2, Web3 track)
+## 1.2.0 — {{RELEASE_DATE}} (Web3 track)
+
+Courses from YouTube playlists in the web page, a Web3 test fragment (T7), a
+Web3 dictionary v2 tested by a pre-registered experiment (E1), and fixes in how
+translations are checked (`pipeline-v3.6`-`v3.9`: what is sent to the models is
+unchanged; every cached answer keeps its verdict except the cases each fix is
+about).
+
+**Added**
+
+- **Courses in the web page.** A playlist link (or "the whole playlist" for a
+  video link with `&list=`) opens a course screen: the lessons with checkboxes
+  and ranges, "already done" for lessons finished before or fully cached,
+  unavailable ones greyed with the reason, the total estimate with the usual
+  confirmation above 3 USD. Lessons run one after another into
+  `<date> <course>/NN <lesson>/`; a failed lesson does not stop the course;
+  "stop after the current lesson", "retry the failed ones", "continue" after
+  a restart; the course as one entry in the recent results; "previous / next
+  lesson" in the player, which keeps the subtitle choice.
+- **Shared course glossary** (an option): terms and Russian renderings of the
+  finished lessons go to the next lessons through the user glossary. Measured
+  on the owner's course (C2b): no fewer inconsistent terms on lessons 1-3 (2
+  and 2), so it is off by default.
+- **Web3 dictionary v2** (`glossaries/web3-v2.md`, 312 terms, `--domain
+  web3-v2`), reviewed row by row by the owner; {{DEFAULT_DICTIONARY}}.
+- `scripts/course_run.py` (a course through the page's own code, without a
+  browser), `scripts/left_english_report.py` (lines a run left in English),
+  `scripts/e1_terms.py` and `talk_autopsy/term_forms.py` (term accuracy with
+  case and separators normalized), `scripts/e1_pairs.py` (blind pairwise
+  translation comparison).
 
 **Fixed**
 
+- An agreed glossary translation is accepted in its Russian case and number
+  forms (`цену` for `цена`; `pipeline-v3.7`).
+- A kept longer term (`hybrid smart contract`) no longer demands its part's
+  agreed translation (`смарт-контракт`; `pipeline-v3.8`).
+- A sentence refused only because an agreed term had another form keeps the
+  model's Russian with a warning instead of falling back to English
+  (`pipeline-v3.9`).
+- A local file's result folder was still named with a word cut in the middle;
+  the estimate's "not counting: <Step>" put a capitalised step name in
+  mid-sentence.
+- A course could be refused as busy when re-submitted right at its end.
 - `talk-autopsy run <audio file> --output all` (or `mp4-soft`, `mp4-burned`)
   did every paid step and then failed in ffmpeg, because an audio file has no
   picture. The video formats are now skipped for an audio file, with a note
@@ -20,7 +60,17 @@
 - T7, an 18-minute Solidity / Foundry tutorial fragment, with a reference
   built like T6's and a reference glossary of 79 terms in six categories
   (`glossary-ref --prompt v2`); `eval --bounds` scores any fragment against
-  both judge references with the bounds.
+  both judge references with the bounds. Baseline (pre-registered, three
+  runs with the current Web3 dictionary): term accuracy against J 88.02%
+  (96.25% with case and separators normalized), WER 3.11-3.34%, the owner's
+  rating of 20 units 4.75 (not blind to the source).
+- C2b, the shared course glossary, on lessons 1-3 of a real course: 2
+  inconsistent terms without it and 2 with it; off by default.
+- E1, Web3 dictionary v2 on T7 (three runs): the recognition guard holds
+  (96.25% normalized, equal to the current dictionary); v2 left 23-26 lines in
+  English per run under `pipeline-v3.8` (8, 3, 6 with the current one), which
+  `pipeline-v3.9` turns into Russian with another term form.
+  {{E1_OUTCOME}}
 
 ## 1.1.0 — 2026-11-13
 

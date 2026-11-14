@@ -256,9 +256,9 @@ YouTube's terms of service.
 On Windows the desktop shortcut "Talk Autopsy" (made by
 `scripts\windows\create-shortcut.ps1`) does the same; closing its console
 window stops the page, and starting it again while it runs opens the running
-page. The page handles one video at a time; playlists stay with the command
-line and the shortcut "Talk Autopsy (console)". Interface in English, Russian
-and Lithuanian.
+page. The page handles one video at a time, and a whole YouTube playlist as a
+course, lesson after lesson (below). Interface in English, Russian and
+Lithuanian.
 
 Four screens (every picture here is a replayed recording of an invented talk,
 not a real video):
@@ -298,6 +298,38 @@ history of runs; on a first run it uses built-in values measured on the
 project's runs and says that it is rough.
 
 <img src="docs/img/web-running-spinner.png" width="49%" alt="A step without a position: a spinner and the elapsed time">
+
+**Courses (v1.2).** A playlist link opens a course screen (a video link with
+`&list=` asks first: only this video, or the whole playlist): the lessons in
+playlist order with checkboxes, "select all / clear all", "from lesson N to
+lesson M", each lesson's length, "already done" for lessons finished before or
+fully in the cache, and private or deleted videos greyed out with the reason
+(up to 100 lessons). The profile, the language and the Web3 dictionary are set
+once for the course; the total cost and time count the cache, and above 3 USD
+in total the page asks to confirm that amount. The lessons then run one after
+another: a course header (lesson 3 of 12, an overall bar, the money so far,
+the time left, every lesson's status) sits above the usual waiting screen; a
+failed lesson is marked with the reason and the course goes on; "Stop after
+the current lesson" leaves the rest queued. Results go to `output/<date>
+<course>/NN <lesson>/` with the usual files; submitting the same playlist again
+resumes (finished lessons come from the cache in seconds), and a course left
+unfinished when the window was closed is offered as "Continue" on the start
+page. The course Done screen has "Retry the failed ones"; the player has
+"← previous lesson / next lesson →" and keeps the subtitle choice between
+lessons; the start page shows a course as one entry.
+
+<img src="docs/img/web-course.png" width="49%" alt="Course screen: the lessons of a playlist with checkboxes, a private lesson greyed out, the total estimate"> <img src="docs/img/web-course-running.png" width="49%" alt="A course running: the course header with lesson 2 of 5 and the lesson statuses above the usual steps">
+
+<img src="docs/img/web-course-done.png" width="49%" alt="Course done: every lesson with its status and a Watch button"> <img src="docs/img/web-course-lesson.png" width="49%" alt="A lesson in the player with previous and next lesson buttons">
+
+**Shared course glossary** (an option on the course screen): after each
+finished lesson, the terms of its automatic glossary, with the Russian
+rendering the lesson used, go into `course-glossary.md` in the course folder and
+into the next lessons' user glossary (the Web3 dictionary wins on a conflict).
+Measured before it could become the default (C2b, pre-registered; lessons 1-3
+of a real course, one run each way): 2 terms rendered differently between
+lessons without it and 2 with it, so it is **off by default**; the option
+stays ([C2b](docs/experiments.md#c2b-result-2026-11-14)).
 
 Design, events and security model: [docs/web.md](docs/web.md). The pictures
 are regenerated with `uv run python scripts/web_screenshots.py` (Edge or
@@ -542,10 +574,39 @@ speed target (at most 5% of cues above 17 cps) is not: nothing is cut for
 reading speed (owner's decision, meaning first); cues hold up to three lines
 and every `.srt` has an `.ass` twin with a smaller font.
 
+### Web3 tutorial fragment T7 (v1.2)
+
+T7 is an 18-minute window of a Solidity / Foundry course (code and terminal on
+screen), with a reference built like T6's (three engines, the audio judge on
+the disputed spans; references J and M) and a 79-term reference glossary
+([T7 baseline](docs/experiments.md#t7-baseline-v12)). `pipeline-v3.5` with the
+current Web3 dictionary, three runs, pre-registered:
+
+| T7 | (b) with the current Web3 dictionary, 3 runs | (a) without it, 1 run |
+|---|---|---|
+| term accuracy (v2) against J | 86.18-88.94% (mean **88.02%**) | 90.32% |
+| term accuracy (v2) against M | 89.34-91.88% | 92.39% |
+| term accuracy against J with case and separators normalized (E1 guard) | 95.50-96.85% (mean **96.25%**) | |
+| WER against J | 3.11-3.34% | 3.27% |
+| translation rating, 20 random sentence units of run 1 (owner, 1-5) | **4.75** (15 fives, 5 fours); 1 lowered because of a term | |
+
+- **Most "misses" are forms, not words:** 80-86% of the missed term
+  occurrences in every run are the same identifier in another written form
+  (case, a space or underscore between parts) or a reference that writes code
+  as heard ([term-miss breakdown](docs/experiments.md#t7-term-miss-breakdown-2026-11-14-diagnostic-no-criterion-changed));
+  the raw 88.02% fired the pre-registered rule (< 90%) that started E1.
+- **The rating is not blind:** one rater who knew every item was the
+  pipeline's translation, on 20 units.
+- **E1, Web3 dictionary v2** ([E1](docs/experiments.md#e1-web3-dictionary-v2-v12)):
+  {{E1_RESULT}}
+
 ## Status and roadmap
 
-Status: **v1.1, a local web UI over the CLI tool of stage 3** (version 1.1.0;
-[CHANGELOG](CHANGELOG.md)). Stage 2 closed on 2026-11-11 (owner's
+Status: **v1.2, the Web3 track** (version 1.2.0; [CHANGELOG](CHANGELOG.md)):
+courses from YouTube playlists in the local web UI, the Web3 test fragment T7,
+and a Web3 dictionary v2 tested by E1; the default "about smart contracts"
+dictionary is {{DEFAULT_DICTIONARY}}. v1.1 added the local web UI over the CLI
+tool of stage 3. Stage 2 closed on 2026-11-11 (owner's
 decision, [Gate 2 -> 3](docs/experiments.md#gate-2---3-2026-11-11)): the
 hold-out passed on term accuracy (not demonstrated), the absolute translation
 score on T6 is 4.42, and
@@ -649,15 +710,32 @@ language as a parameter.
 - **A speech-recognition outage is not retried:** when AssemblyAI is
   unavailable, the run does not wait for it; it switches to the fallback
   engine (and the key-term pass keeps the first pass).
-- **Reading speed** is above the usual guideline on fast speakers; nothing is cut.
+- **Reading speed on fast speakers:** subtitles follow the speech and nothing
+  is cut, so a fast lecturer gives fast subtitles: on T7, 34.7% of the Russian
+  lines are above 17 characters per second (mean of three runs; 2 of 3 of the
+  fast lines are fast already in English). Watching at 0.75x speed helps.
+- **References write identifiers by ear:** T7's reference was decided by an
+  audio judge that writes what it hears (`message.sender` for `msg.sender`,
+  `Phony` for `.PHONY`), and term accuracy counts case and separator
+  differences (`encoding.sol` / `Encoding.sol`) as misses: 80-86% of the T7
+  misses are such form differences. The form-normalized accuracy is reported
+  next to the raw one.
+- **T7 and the owner's course are one course family:** T7 is cut from the long
+  version of the Cyfrin Foundry course, and dictionary v2 includes terms from
+  that course's first lessons (not the part T7 is cut from), so E1 measures v2
+  on this course family, not dictionaries in general.
+- **An agreed term may appear in another form:** when the model's Russian
+  sentence uses another form of an agreed term (a verb for an agreed noun, a
+  word read off the screen), the sentence is kept with a warning in the run's
+  data (`pipeline-v3.9`); before, it fell back to English.
 - **Timing** of subtitles is not validated against hand-labelled onsets.
 - **Next-video failure modes** not handled: several speakers (no
   diarization), music, videos much longer than 40 minutes (untested).
 - **Costs** are list prices; AssemblyAI ran on its free credit.
-- **Web UI: single videos only** (playlists through the command line), and
-  **no stop button**: a run started from the page goes to the end (the core has
-  no cooperative cancellation; closing the server's window stops it, and a
-  re-run continues from the finished steps).
+- **No stop button inside a video:** a video started from the page goes to the
+  end (the core has no cooperative cancellation; closing the server's window
+  stops it, and a re-run continues from the finished steps). A course can stop
+  after the current lesson.
 - **Languages other than Russian are not measured:** the page and the command
   line take any target language, but every quality number here is for Russian.
 - **The Lithuanian interface strings** have not been checked by a native

@@ -378,6 +378,9 @@ def course_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) 
          "document.getElementById('course-glossary').dispatchEvent(new Event('change'))")
     time.sleep(1.0)
     assert b.js("document.querySelectorAll('#course-list li[data-available=\"false\"]').length === 1")
+    # the course folder is a temporary local path (it names this machine's user): only its last part
+    b.js(r"""(() => { const dd = document.getElementById('course-folder');
+        dd.textContent = '…\\output\\' + dd.textContent.split(/[\\/]/).slice(-1)[0]; })()""")
     take(b, out, "web-course", shots, "view-course")
 
     # lesson 2, translation block 1: the course header above the usual view

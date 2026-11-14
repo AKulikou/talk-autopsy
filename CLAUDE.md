@@ -130,16 +130,21 @@ Keys live in `.env` (never committed): `ANTHROPIC_API_KEY`,
 
 ## State
 
-Version 1.1.0 tagged `v1.1` (2026-11-13), on a history rewritten once to
-remove identifying details from every earlier version (all tags re-created on
-the rewritten commits); the repository is private until the owner publishes it.
-Gate 2 -> 3 passed on 2026-11-11 (T6 run once: pass, not demonstrated).
-Independent LLM reviews #1 and #2 done and answered (`docs/review-*.md`). The
-web UI is built (`docs/web.md`) and the owner accepted it. Never rewrite
-history or force-push again. VideoLingo is out of scope; dubbing is stage 4. v1.2 (Web3 track): T7, an 18-minute Solidity /
-Foundry tutorial fragment, has a T6-style reference and a 79-term glossary (`ref-glossary-v2`); its
-pre-registered baseline (2026-11-14) put term accuracy at 88.02% < 90%, so Web3 dictionary v2 (E1)
-is to be built (`docs/experiments.md`, T7 baseline).
+Version 1.2.0 (v1.2, Web3 track; tag `v1.2` once the owner says so): courses
+from YouTube playlists in the web page (`web/courses.py`, `docs/web.md`), the
+shared course glossary (off by default after C2b), T7 (an 18-minute Solidity /
+Foundry fragment with a T6-style reference, `ref-glossary-v2`), dictionary v2
+(`glossaries/web3-v2.md`, domain `web3-v2`) under E1, whose decision waits for
+the owner's pairwise answers (`work/T7/E1-pairs.md`, `scripts/e1_pairs.py
+score`); the current `web3.md` stays the default until E1 decides. v1.1.0
+(`v1.1`, 2026-11-13) was the web UI, on a history rewritten once to remove
+identifying details (all tags re-created). Gate 2 -> 3 passed on 2026-11-11 (T6
+run once: pass, not demonstrated). Independent LLM reviews #1 and #2 done and
+answered (`docs/review-*.md`). Never rewrite history or force-push again.
+VideoLingo is out of scope; dubbing is stage 4. The owner's course is run with
+`scripts/course_run.py` (the page's own code) into `output/<date> <course>/`;
+every final lesson is checked with `scripts/left_english_report.py` before its
+TV file is copied.
 
 ## Pitfalls
 
