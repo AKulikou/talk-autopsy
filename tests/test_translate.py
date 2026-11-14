@@ -178,3 +178,51 @@ def test_an_english_sentence_is_still_rejected(text):
 ])
 def test_numbers_and_identifiers_do_not_count_as_english_words(source, target):
     assert not left_in_english(source, target, GLOSSARY)
+
+
+# --- pipeline-v3.6: commands and spoken identifiers are not English left untranslated ----------------
+# T7 (2026-11-14): every run's translation check refused both answers of a block for segments that are
+# a shell command or a spoken identifier read off the screen; the block was sent twice and the segments
+# stayed English anyway. Synthetic examples of the same shapes (no test-set text).
+
+CODE_GLOSSARY = Glossary(entries=[GlossaryEntry(term="forge", keep=True),
+                                  GlossaryEntry(term="anvil", keep=True),
+                                  GlossaryEntry(term="VaultNFT", keep=True),
+                                  GlossaryEntry(term="NFT", keep=True)])
+
+
+@pytest.mark.parametrize("source, target", [
+    ("Make anvil.", "make anvil."),                                  # a make target that is a kept tool
+    ("Forge script, script/deploy vault.", "forge script, script/deploy vault."),  # a command with a path
+    ("Make deploy vault.", "make deploy vault."),                    # a target named after a kept identifier
+    ("Make deploy-vault.", "make deploy-vault."),                    # a hyphenated target name
+    ("Deploy Vault.", "Deploy Vault."),                              # a script name read aloud
+    ("Deploy Vault NFT.", "Deploy Vault NFT."),
+    ("Deploy Vault NFT.", "Deploy VaultNFT."),                       # written as the identifier
+    ("Run it with deploy-vault.", "Запустите это с deploy-vault."),  # a translated sentence stays accepted
+])
+def test_commands_and_spoken_identifiers_are_not_left_in_english(source, target):
+    assert not left_in_english(source, target, CODE_GLOSSARY)
+
+
+@pytest.mark.parametrize("text", [
+    "Make sure you save the file.",      # an English sentence that starts with a program's name
+    "Forge ahead.",                      # a kept tool's name, but nothing else of code
+    "Hello there, see you soon.",        # a short sentence, not Title Case
+    "No such file or directory.",        # a terminal message is still English to translate
+    "Open the vault now.",
+    "Deploy The Vault Contract Right Now.",  # Title Case, but longer than a name
+])
+def test_english_sentences_are_still_left_in_english(text):
+    assert left_in_english(text, text, CODE_GLOSSARY)
+
+
+def test_the_observed_shape_of_block_is_accepted_without_a_retry():
+    sources = [seg(17, "So we're going to use this anvil target here."), seg(18, "Make anvil."),
+               seg(19, "Forge script, script/deploy vault."), seg(20, "Deploy Vault NFT.")]
+    answer = TranslationAnswer(segments=[
+        SegmentText(id=17, text="Итак, используем вот эту цель anvil."),
+        SegmentText(id=18, text="make anvil."),
+        SegmentText(id=19, text="forge script, script/deploy vault."),
+        SegmentText(id=20, text="Deploy Vault NFT.")])
+    assert validate_block(sources, CODE_GLOSSARY, "ru", answer) == []
