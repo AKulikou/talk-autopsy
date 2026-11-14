@@ -193,3 +193,44 @@ def test_a_term_written_as_a_command_is_not_removed():
         assert correct.validate_block(segments, glossary, answer) == []
     dropped = CorrectionAnswer(segments=[FixSegment(id=1, text=said.replace("MCP", "it"))], edits=[])
     assert correct.validate_block(segments, glossary, dropped) == ["glossary terms removed: MCP"]
+
+
+def _translation_other_term_form(kwargs):
+    """Every translation answer renders the agreed "сетка флинтера" as "сеть флинтера" (correct Russian)."""
+    answer = synthetic_talk.handler(kwargs)
+    if kwargs["output_format"] is TranslationAnswer:
+        parsed = answer.parsed_output
+        parsed.segments = [SegmentText(id=s.id, text=s.text.replace("сетка флинтера", "сеть флинтера"))
+                           for s in parsed.segments]
+    return answer
+
+
+def test_an_agreed_term_in_another_form_keeps_the_russian_sentence(talk, fake_claude):
+    """
+    pipeline-v3.9 (owner's course, 14 Nov: "audit" as a verb, "blockchains", "finding"): both answers
+    refused only for the agreed term -> the segment was reverted to English. Now the model's Russian
+    is kept with a warning; the requests and the retry are as before.
+    """
+    fake = fake_claude(_translation_other_term_form)
+    pipeline.run(talk)
+    assert _first_ids(fake, TranslationAnswer, "translate")[:2] == [1, 1]  # retried as before
+    ru = load_transcript(talk.work_dir / "ru.json")
+    meta = ru.meta["translation"]
+    assert meta["failed_blocks"] == [] and "reverted_segments" not in meta
+    texts = [s.text for s in ru.segments]
+    assert all("перевод" in t for t in texts)  # nothing in English
+    other_form = sum("сеть флинтера" in t for t in texts)
+    kept = meta["agreed_term_kept"]
+    assert other_form > 0 and sum(len(k["ids"]) for k in kept) == other_form
+    problem = "glossary translation 'сетка флинтера' of 'flinter mesh' not used"
+    assert sum(problem in w for w in meta["warnings"]) == other_form
+
+
+def test_a_segment_also_left_in_english_is_still_reverted():
+    glossary = parse_glossary(synthetic_talk.GLOSSARY_MD)
+    segments = synthetic_talk.segments()[:4]
+    texts = ["1. перевод", "2. перевод и Brindle queue", "3. перевод", segments[3].text]
+    answer = TranslationAnswer(segments=[SegmentText(id=s.id, text=t)
+                                         for s, t in zip(segments, texts, strict=True)])
+    found = translate.revert_segments(segments, glossary, "ru", answer)
+    assert found is not None and sorted(found[1]) == [4]  # left in English (and the term): reverted as before
