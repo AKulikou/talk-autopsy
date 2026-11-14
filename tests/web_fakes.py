@@ -112,7 +112,7 @@ class FakeCore:
             raise RuntimeError("ffprobe returned no duration")
         return self.duration
 
-    def user_glossary(self, domain: str, work_dir: Path):
+    def user_glossary(self, domain: str, work_dir: Path, extra=None):
         self.calls.append(f"glossary:{domain}")
         return None
 

@@ -8,7 +8,7 @@
 // off only, with one line saying the translation is already in the picture.
 import { api } from "./api.js";
 import { t } from "./i18n.js";
-import { SubtitleChoice } from "./subs.js";
+import { SubtitleChoice, initialTrack, preferenceOf } from "./subs.js";
 
 const enc = encodeURIComponent;
 
@@ -47,7 +47,9 @@ export function clear(els) {
   els.none.hidden = true;
 }
 
-export function show(els, info) {
+// opts.preferred: the subtitle choice to start with ("target" / "en" / "off"; a course keeps it from one
+// lesson to the next); opts.onChoice(preference) hears every choice.
+export function show(els, info, opts = {}) {
   clear(els);
   if (!info || !info.media) {
     els.none.hidden = false;
@@ -77,17 +79,17 @@ export function show(els, info) {
     els.note.hidden = false;
   }
   if (info.kind === "audio" && trackElements.length) followText(els, media, trackElements[0]);
-  else if (trackElements.length) subtitleButtons(els, media, info, trackElements);
+  else if (trackElements.length) subtitleButtons(els, media, info, trackElements, opts);
 }
 
 // Subtitle choice under a video: one button per track and "off". A button sets the tracks' modes;
 // the browser's own menu sets them too, so the buttons and the words next to them follow the modes
 // whoever changed them (bug: the page said "off" while the browser's menu showed English).
-function subtitleButtons(els, media, info, trackElements) {
+function subtitleButtons(els, media, info, trackElements, opts = {}) {
   const names = info.tracks.map((tr) => (tr.srclang === "en" ? t("subs_english") : tr.label || tr.srclang));
   const choices = [...names.map((name, index) => ({ name, index })), { name: t("subs_off"), index: -1 }];
   // the target language by default (the server marks it), off when the translation is burned in
-  const choice = new SubtitleChoice(info.burned ? -1 : Math.max(0, info.tracks.findIndex((tr) => tr.default)));
+  const choice = new SubtitleChoice(initialTrack(info.tracks, info.burned, opts.preferred || null));
   const buttons = choices.map((c) => {
     const b = node("button", "secondary", c.name);
     b.type = "button";
@@ -101,6 +103,7 @@ function subtitleButtons(els, media, info, trackElements) {
     const chosen = choice.chosen;
     buttons.forEach((b, k) => b.setAttribute("aria-pressed", String(choices[k].index === chosen)));
     els.subsState.textContent = chosen < 0 ? t("subs_state_off") : t("subs_state_on", { name: names[chosen] });
+    opts.onChoice?.(preferenceOf(info.tracks, chosen));
   };
   const apply = () => {
     trackElements.forEach((el, k) => { el.track.mode = k === choice.chosen ? "showing" : "disabled"; });

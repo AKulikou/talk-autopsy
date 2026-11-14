@@ -8,6 +8,13 @@ The local web application: one page and a small JSON API (docs/web.md).
     POST /api/settings              remember the default target / interface language
     POST /api/estimate              metadata, cost and time of a link or a file
     POST /api/jobs                  start a job (cost gate in the runner)
+    POST /api/link                  what a YouTube link names: video, playlist, video_in_playlist
+    POST /api/course/preview        a playlist's lessons, "already done", estimate (web/courses.py)
+    POST /api/course/start          start a course (cost gate on the selected lessons' total)
+    GET  /api/course/current        the running or last course, for the course header and a reload
+    POST /api/course/stop           stop after the current lesson
+    GET  /api/course/unfinished     courses left running (server closed) or stopped with lessons left
+    GET  /api/course/glossary/{id}  a course's glossary file, as text
     GET  /api/jobs/current          the running or last job, for a page reload
     GET  /api/jobs/{id}/events      Server-Sent Events, replay after ?after=<id> or Last-Event-ID
     GET  /api/jobs/{id}/transcript  a window of the waiting screen's rows (web/transcript.py);
@@ -45,10 +52,11 @@ from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from talk_autopsy import youtube
-from talk_autopsy.web import dialogs, jobs, results
+from talk_autopsy.web import course_glossary, courses, dialogs, jobs, results
 from talk_autopsy.web import settings as web_settings
+from talk_autopsy.web.courses import CourseRequest, CourseRunner
 from talk_autopsy.web.jobs import BusyError, GateError, JobRequest, JobRunner
-from talk_autopsy.web.sources import InputError
+from talk_autopsy.web.sources import InputError, link_kind
 from talk_autopsy.web.transcript import TYPES as TEXT_TYPES
 
 logger = logging.getLogger(__name__)
@@ -150,16 +158,33 @@ def _validate(payload) -> JobRequest | JSONResponse:
         return error(422, "bad_request", "The request is not valid.")
 
 
+def _validate_course(payload) -> CourseRequest | JSONResponse:
+    if not isinstance(payload, dict):
+        return error(422, "bad_request", "The request is not valid.")
+    try:
+        return CourseRequest.model_validate(payload)
+    except (ValidationError, InputError) as e:
+        problem = jobs.input_error(e)
+        if problem is not None:
+            return error(422, problem.code, str(problem))
+        return error(422, "bad_request", "The request is not valid.")
+
+
 def create_app(port: int, runner: JobRunner | None = None, token: str | None = None,
                picker: Callable[..., dialogs.PickResult] = dialogs.pick_file,
                opener: Callable[[Path], None] = dialogs.open_folder,
                doctor: Callable[[], list] = youtube.doctor, local_settings: Path | None = None,
-               heartbeat_s: float = HEARTBEAT_S) -> FastAPI:
+               heartbeat_s: float = HEARTBEAT_S, course_runner: CourseRunner | None = None) -> FastAPI:
     runner = runner or JobRunner()
+    course_runner = course_runner or CourseRunner(runner)
     token = token or secrets.token_urlsafe(32)
     app = FastAPI(title="Talk Autopsy", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.token = token
     app.state.runner = runner
+    app.state.courses = course_runner
+
+    def busy_now() -> bool:
+        return runner.active_id is not None or course_runner.active is not None
 
     @app.exception_handler(RequestValidationError)
     async def bad_request(request: Request, exc: RequestValidationError):
@@ -224,8 +249,75 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
             return error(502, "youtube", jobs.short(str(e).splitlines()[0], 300))
         result = preview.as_dict(runner.limit_usd)
         result["steps"] = jobs.job_steps(request.mode, preview.formats)
-        result["busy"] = runner.active_id is not None
+        result["busy"] = busy_now()
         return result
+
+    @app.post("/api/link")
+    def link(payload=Body(...)):  # noqa: B008
+        url = payload.get("url") if isinstance(payload, dict) else None
+        if not isinstance(url, str):
+            return error(422, "bad_request", "The request is not valid.")
+        try:
+            return {"kind": link_kind(url)}
+        except InputError as e:
+            return error(422, e.code, str(e))
+
+    @app.post("/api/course/preview")
+    def course_preview(payload=Body(...)):  # noqa: B008
+        request = _validate_course(payload)
+        if isinstance(request, JSONResponse):
+            return request
+        try:
+            preview = course_runner.preview(request)
+        except InputError as e:
+            return error(422, e.code, str(e))
+        except youtube.YouTubeError as e:
+            return error(502, "youtube", jobs.short(str(e).splitlines()[0], 300))
+        return {**preview.as_dict(request.selected, runner.limit_usd), "busy": busy_now()}
+
+    @app.post("/api/course/start", status_code=202)
+    def course_start(payload=Body(...)):  # noqa: B008
+        request = _validate_course(payload)
+        if isinstance(request, JSONResponse):
+            return request
+        try:
+            course = course_runner.start(request)
+        except BusyError as e:
+            return error(409, "busy", str(e), active_id=e.active_id)
+        except GateError as e:
+            return error(409, e.code, str(e), amount_usd=e.amount_usd)
+        except InputError as e:
+            return error(422, e.code, str(e))
+        except youtube.YouTubeError as e:
+            return error(502, "youtube", jobs.short(str(e).splitlines()[0], 300))
+        return {"course": course.summary(runner.limit_usd)}
+
+    @app.get("/api/course/current")
+    def course_current():
+        course = course_runner.current()
+        return {"course": course.summary(runner.limit_usd) if course else None}
+
+    @app.post("/api/course/stop")
+    def course_stop(payload=Body(...)):  # noqa: B008
+        course_id = payload.get("id") if isinstance(payload, dict) else None
+        if not isinstance(course_id, str) or not course_runner.stop_after_current(course_id):
+            return error(409, "no_course", "No course is running.")
+        return {"ok": True}
+
+    @app.get("/api/course/unfinished")
+    def course_unfinished():
+        active = course_runner.active
+        return {"courses": courses.unfinished(Path(runner.core.output_root()),
+                                              active.folder if active else None)}
+
+    @app.get("/api/course/glossary/{folder_id}")
+    def course_glossary_text(folder_id: str):
+        folder = results.course_folder_of(Path(runner.core.output_root()), folder_id)
+        path = course_glossary.course_file(folder) if folder is not None else None
+        if path is None or not path.is_file() or path.stat().st_size > 2_000_000:
+            return error(404, "no_glossary", "This course has no glossary yet.")
+        return Response(path.read_text(encoding="utf-8", errors="replace"),
+                        media_type="text/plain; charset=utf-8", headers=media_headers)
 
     @app.post("/api/jobs", status_code=202)
     def start(payload=Body(...)):  # noqa: B008
@@ -243,6 +335,9 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
         except youtube.YouTubeError as e:
             return error(502, "youtube", jobs.short(str(e).splitlines()[0], 300))
         return {"job": job.summary(runner.limit_usd)}
+
+    media_headers = {"Cross-Origin-Resource-Policy": "same-origin", "X-Content-Type-Options": "nosniff",
+                     "Cache-Control": "no-store"}
 
     @app.get("/api/jobs/current")
     def current():
@@ -288,9 +383,6 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
         if not rows:  # the text panel is collapsed: the summary line and the warning only
             return {"summary": job.view.summary()}
         return job.view.window(start, count, follow=follow or start is None)
-
-    media_headers = {"Cross-Origin-Resource-Policy": "same-origin", "X-Content-Type-Options": "nosniff",
-                     "Cache-Control": "no-store"}
 
     def result_folder(result_id: str) -> Path | None:
         return results.folder_of(Path(runner.core.output_root()), result_id)

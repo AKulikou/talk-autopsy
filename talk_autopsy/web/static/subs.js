@@ -39,3 +39,23 @@ export class SubtitleChoice {
     return "follow";
   }
 }
+
+/**
+ * The track to show first when the reader chose before (a course: the choice is kept from one
+ * lesson to the next). preferred: "target" | "en" | "off" | null. tracks: [{srclang, default}].
+ * Without a preference: the target language (the default track), off when burned in.
+ */
+export function initialTrack(tracks, burned, preferred) {
+  const target = tracks.findIndex((tr) => tr.default);
+  const english = tracks.findIndex((tr) => tr.srclang === "en");
+  if (preferred === "off") return -1;
+  if (preferred === "en" && english >= 0) return english;
+  if (preferred === "target" && !burned && target >= 0) return target;
+  return burned ? -1 : Math.max(0, target);
+}
+
+/** The preference to remember for a chosen track index. */
+export function preferenceOf(tracks, index) {
+  if (index < 0) return "off";
+  return tracks[index]?.srclang === "en" ? "en" : "target";
+}

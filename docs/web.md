@@ -1,4 +1,4 @@
-# Web UI (v1.1) — design note
+# Web UI (v1.1, courses v1.2) — design note
 
 A local web page that replaces the console launcher: paste a YouTube link or
 pick a file, see the estimate, start, watch the text appear step by step, watch
@@ -14,7 +14,8 @@ job at a time. This note describes the code as built (v1.1).
   running page (it asks `/api/hello` on the usual ports) instead of failing on
   the busy port.
 - Desktop shortcut **Talk Autopsy (console)**: the console launcher
-  (`Talk Autopsy.bat`), still the way to run a playlist or drop a file onto it.
+  (`Talk Autopsy.bat`), to drop a file onto it. Since v1.2 a playlist runs in
+  the page too (Courses, below).
 - By hand: `uv run talk-autopsy web [--port N] [--no-browser]`.
 
 ## Architecture
@@ -66,6 +67,87 @@ burn-in positions feed it too. Output steps are kept apart in the history
 (`outputs_burn`, `outputs_soft`, `outputs_subs`). Cached steps, a reused
 download, runs with an engine fallback and replays are not recorded. Any
 failure gives "no estimate", never an error.
+
+## Courses: a playlist in the page (v1.2)
+
+The owner learns from YouTube courses of many short lessons and uses only the
+page. A playlist link opens a course screen; the lessons then run one after
+another through the same single-job worker, each an ordinary job with its usual
+waiting screen and result files (`web/courses.py`).
+
+```
+POST /api/link {url}          -> video | playlist | video_in_playlist
+   video_in_playlist: the form asks "only this video / the whole playlist"
+POST /api/course/preview      -> CourseRunner.preview: yt-dlp flat extraction (one request; titles,
+                                 durations, availability), up to 100 lessons; per lesson "already done"
+                                 and the estimate counting the cache (JobRunner.preview with the lesson
+                                 folder); the totals of the selection
+POST /api/course/start        -> cost gate on the selected lessons' total -> a course thread that holds
+                                 the one-job lock from the first lesson to the last:
+     for each selected lesson:  full metadata (the context, as for a single video) -> a lesson job
+                                 (JobRunner.run_lesson, the usual events) -> its status -> course glossary
+GET  /api/course/current      -> the course header (polled every 1.5 s) and a page reload
+POST /api/course/stop         -> stop after the current lesson
+GET  /api/course/unfinished   -> courses to continue on the start page
+GET  /api/course/glossary/{id}-> the course glossary file as text
+```
+
+- **Course screen.** The lessons in playlist order with a checkbox each (all
+  available ones checked; "Select all", "Clear all", "from lesson N to lesson
+  M"), the length, "already done" for a lesson whose folder has its done marker
+  or whose every paid step is in the cache (the estimate reads the context the
+  earlier run stored in `work/yt-<id>/meta.json`; a flat playlist entry has no
+  description, so its own context would look stale), and greyed lessons that
+  cannot run with the reason (private, deleted, unavailable, no length). More
+  than 100 entries: the first 100, with a note. The profile, the language and
+  "about smart contracts" are those of the form, set once for the course; the
+  course screen states them. The totals (count, money, time) come from the
+  server for every selection change (it keeps the playlist it read for an hour),
+  so the page and the gate use the same amount. Above the per-video limit
+  (3 USD) **in total** the usual confirmation is needed, server-side; each
+  lesson then runs with the pipeline's usual ceiling (`JobRunner.allowance`).
+- **Waiting screen.** A course header above the usual one-video view: the
+  course title, "lesson 3 of 12", an overall bar (finished lessons), the money
+  of the course so far (the running lesson included), the time left (the queued
+  lessons' estimates plus the running lesson's own remaining time), the lessons
+  with their status (queued / in progress / done / error / skipped; an error
+  with its reason in words, the same sentences as the Failed screen) and "Stop
+  after the current lesson" (the lesson finishes; the rest stay queued). A
+  failed lesson does not stop the course.
+- **Folders.** `<output>/<date> <course title>/NN <lesson title>/`, NN the
+  playlist position zero-padded to the playlist's size, names cut at a word.
+  The course's service folder holds `course.json` (the request, every lesson's
+  folder, status, money and error, the state). Re-submitting the same playlist
+  finds the folder by the playlist id and reuses the lesson folders, so a
+  finished lesson comes from the cache in seconds. A video downloaded before
+  for a single run is hard-linked into the lesson folder (same drive), so it is
+  not downloaded again and its cached steps stay valid.
+- **Done.** The course's Done screen lists the lessons with their status and
+  "Watch", "Retry the failed ones" (the course screen again with only those
+  checked: the same estimate and gate), "Continue" (lessons left queued after a
+  stop) and "Open the course folder". A lesson in the player has "← previous
+  lesson / next lesson →", its place in the course and "Open the course
+  folder"; the subtitle choice (target language / English / off) is kept from
+  one lesson to the next (`subs.initialTrack`, tested in Node). The start
+  page's recent results show a course as one entry with its lessons inside; a
+  lesson's result id is `<course folder>|<lesson folder>` (`|` is in no Windows
+  file name; both parts are resolved and checked like a single folder).
+- **Restart safety.** A course whose `course.json` still says `running` (the
+  server window was closed mid-course) or `stopped` with lessons left is listed
+  on the start page under "Unfinished courses" with "Continue": the course
+  screen with the remaining lessons checked.
+- **Course glossary** (`web/course_glossary.py`, C2b in `docs/experiments.md`):
+  an option on the course screen; after every finished lesson the terms of its
+  auto-glossary go into `<course>/course-glossary.md` (with the Russian
+  rendering the lesson used, where it used the auto-glossary's suggestion), and
+  the next lessons get it as the last part of their user glossary. Each lesson
+  keeps the exact glossary it ran with, so a re-run hits the cache.
+
+Tests: `tests/test_web_courses.py` (fake yt-dlp and pipeline: links, lessons
+and unavailable ones, folder names, more than 100, the gate on the total,
+order, a failure in the middle, selection, stop after current, one job at a
+time, resume in the same folders, restart safety, reuse of a download, the
+course group and previous / next, the API end to end) and `tests/js/course.test.mjs`.
 
 ## Events the server streams
 
@@ -312,8 +394,11 @@ start page.
 Requests: `mode` = `url` or `file` with exactly one of `url` / `path`;
 `profile` = `tv` (burned-in `.<lang>.mp4` + `.srt`), `laptop` (`.srt`, `.ass`,
 `.bilingual.ass`, `.subs.mp4`) or `all`; `domain` = `none` / `web3`;
-`target_lang` from the offered list. Playlists are refused (use the console
-launcher or `talk-autopsy run`).
+`target_lang` from the offered list. A playlist link is refused by
+`/api/estimate` with the code `playlist` (the page opens the course screen
+instead); courses have their own requests (Courses, above): the same `profile`,
+`domain` and `target_lang`, plus `url` (the playlist), `selected` (playlist
+positions), `course_glossary` and the confirmation of the total.
 
 ## Security model
 
@@ -360,6 +445,9 @@ over-limit confirmation); "Start" plays the recording whatever the form says;
 the result is a demo folder in a temporary directory with the subtitles rebuilt
 from the recorded text and, if ffmpeg is installed, a test-pattern video of the
 talk's length. A replay never starts the real page instead (no reuse check).
+A playlist link (`list=` without `v=`) gives a synthetic course of six
+invented lessons, one of them private; each lesson plays the recording into
+its lesson folder.
 Committed recordings (an invented talk, no real text):
 `tests/fixtures/replay/synthetic-talk.jsonl` (finished),
 `synthetic-talk-failed.jsonl` (fails in translation) and
@@ -401,9 +489,10 @@ try: the README picture, with "Run again") or `synthetic-talk-failed.jsonl`
 (an unexpected error). The Done screen then plays a test pattern and
 shows the demo folder's path below the player: keep it out of the picture.
 
-## Not in v1.1
+## Not in v1.2
 
-No cancel / stop button (the core has no cooperative cancellation); no
-playlists in the page (use the console launcher or `talk-autopsy run`); target
-languages other than Russian work but their quality is not measured; the
-Lithuanian interface strings are not yet checked by a native speaker.
+No cancel / stop button inside a video (the core has no cooperative
+cancellation; a course can stop after the current lesson); target languages
+other than Russian work but their quality is not measured; the Lithuanian
+interface strings are not yet checked by a native speaker
+(`work/lt-strings-review.md`, local).

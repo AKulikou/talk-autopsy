@@ -24,8 +24,11 @@ by default, and the rows are the best picture of what the pipeline does).
 `--set untranslated` (or `all`) adds the run whose first translation block was
 left in English: the waiting screen right after that block, and the Done screen
 with the warning; `--set collapsed` (or `all`) the waiting screen as it opens,
-text panel collapsed, in translation block 1. `--zoom 1.5` renders as the browser does at 150% (fewer CSS
-pixels across, each drawn bigger).
+text panel collapsed, in translation block 1. `--set course` (also in `readme`
+and `all`): a playlist link gives the replay's invented demo course (web/replay.py): the course screen
+with its lessons (one private, skipped), the waiting screen with the course header in lesson 2, the
+course's Done screen, and a lesson in the player with "previous / next lesson". `--zoom 1.5` renders as
+the browser does at 150% (fewer CSS pixels across, each drawn bigger).
 Each PNG is reduced to a palette with ffmpeg when that keeps it smaller.
 """
 
@@ -52,6 +55,7 @@ UNAVAILABLE = FIXTURES / "synthetic-talk-unavailable.jsonl"  # the README pictur
 UNTRANSLATED = FIXTURES / "synthetic-talk-untranslated.jsonl"
 LINK = "https://www.youtube.com/watch?v=Synthetic01"
 LONG_LINK = "https://www.youtube.com/watch?v=longSynth01"  # "long" in a replay link: four hours
+COURSE_LINK = "https://www.youtube.com/playlist?list=PLsyntheticDemo01"  # the replay's demo course
 WIDTH, HEIGHT = 1280, 860
 BROWSERS = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -195,13 +199,17 @@ class Server:
             names = [f.get("name", "") for f in final.get("files") or []]
             stem = next((n[:-4] for n in names if n.endswith(".srt") and not n.endswith(".en.srt")), "replay")
             title_card(root / "output" / folder / f"{stem}.mp4", recording.duration_s or 60.0)
+        # lessons of the demo course play a title card too, not a test pattern
+        replay.make_test_video = lambda path, seconds: (path.is_file() or title_card(path, seconds)) or True
         self.runner = replay.ReplayRunner(recording, speed=speed, root=root)
+        self.jobs: list = []
         self.pause_when = None  # event -> bool
         self.paused, self.resume = threading.Event(), threading.Event()
         register = self.runner._register
 
         def register_pausable(job):
             register(job)
+            self.jobs.append(job)
             add = job.add_recorded
 
             def add_and_maybe_pause(event):
@@ -357,6 +365,48 @@ def failed_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) 
         b.wait("!document.getElementById('view-estimate').hidden", 30)
 
 
+def course_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) -> None:
+    """The demo course: lessons, the course header while lesson 2 runs, the course done, a lesson."""
+    b.go(f"{srv.url}/?ui={ui}")
+    b.wait("document.getElementById('estimate')?.textContent.length > 0")
+    b.js("document.getElementById('tab-url').click()")
+    b.js(f"document.getElementById('url').value = {json.dumps(COURSE_LINK)}")
+    b.js("document.getElementById('estimate').click()")
+    b.wait("!document.getElementById('view-course').hidden && "
+           "document.querySelectorAll('#course-list li').length > 0", 30)
+    b.js("document.getElementById('course-glossary').checked = true;"
+         "document.getElementById('course-glossary').dispatchEvent(new Event('change'))")
+    time.sleep(1.0)
+    assert b.js("document.querySelectorAll('#course-list li[data-available=\"false\"]').length === 1")
+    take(b, out, "web-course", shots, "view-course")
+
+    # lesson 2, translation block 1: the course header above the usual view
+    srv.pause_when = lambda e: len(srv.jobs) >= 2 and e["type"] == "translated" and e.get("position") == 1
+    b.js("document.getElementById('course-start').click()")
+    b.wait("!document.getElementById('view-run').hidden && "
+           "!document.getElementById('course-head').hidden", 30)
+    srv.paused.wait(180)
+    srv.paused.clear()
+    time.sleep(2.5)  # the course poll and the steps catch up
+    b.js("document.getElementById('course-head-details').open = true")
+    time.sleep(0.5)
+    take(b, out, "web-course-running", shots, "steps")
+
+    srv.resume.set()
+    b.wait("!document.getElementById('view-course-done').hidden", 300)
+    time.sleep(0.8)
+    assert top(b, "course-done-folder") > bottom(b, "course-done-list"), "the folder would be in the shot"
+    take(b, out, "web-course-done", shots, "course-done-list", margin=16)
+
+    b.js("document.querySelectorAll('#course-done-list .actions-inline button')[1].click()")  # lesson 2
+    b.wait("!document.getElementById('view-done').hidden && "
+           "!document.getElementById('lesson-nav').hidden", 30)
+    b.wait("document.querySelector('#player-media video') && "
+           "document.querySelector('#player-media video').readyState >= 1", 30)
+    time.sleep(3.0)
+    take(b, out, "web-course-lesson", shots, "player-box", margin=16)
+
+
 def untranslated_flow(b: Browser, srv: Server, ui: str, out: Path, shots: list[Path]) -> None:
     """The run whose first translation block stayed English: the warning while running and when done."""
     start_estimate(b, srv.url, ui, LINK)
@@ -399,7 +449,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=ROOT / "docs" / "img")
     parser.add_argument("--speed", type=float, default=1.0,
                         help="Replay speed; 1 (natural) keeps the elapsed time in line with the step times.")
-    parser.add_argument("--set", choices=("readme", "untranslated", "collapsed", "all"), default="readme",
+    parser.add_argument("--set", choices=("readme", "untranslated", "collapsed", "course", "all"),
+                        default="readme",
                         help="readme: the README pictures; untranslated: the warning screens; "
                              "collapsed: the waiting screen with the text panel collapsed; all: every one.")
     parser.add_argument("--zoom", type=float, default=1.0, help="Browser zoom, e.g. 1.5 for 150%%.")
@@ -414,13 +465,16 @@ def main() -> None:
         flows = []
         if args.set in ("readme", "all"):
             flows += [(FINISHED, finished_flow), (UNAVAILABLE, failed_flow)]
+        if args.set in ("readme", "course", "all"):
+            flows += [(FINISHED, course_flow)]
         if args.set in ("untranslated", "all"):
             flows += [(UNTRANSLATED, untranslated_flow)]
         if args.set in ("collapsed", "all"):
             flows += [(FINISHED, collapsed_flow)]
         try:
             for recording, flow in flows:
-                srv = Server(recording, tmp / recording.stem, args.speed)
+                speed = max(args.speed, 6.0) if flow is course_flow else args.speed  # six lessons
+                srv = Server(recording, tmp / f"{recording.stem}-{flow.__name__}", speed)
                 try:
                     flow(browser, srv, args.ui, args.out, shots)
                 finally:

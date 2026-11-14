@@ -219,6 +219,7 @@ class VideoInfo:
     upload_date: str = ""  # YYYY-MM-DD
     author_captions: list[str] = field(default_factory=list)  # languages the author provided
     automatic_captions: bool = False
+    availability: str = ""  # yt-dlp's word (public, unlisted, private, needs_auth, ...); flat entries too
 
     def context(self) -> str:
         """Title, description and chapter titles: the auto-glossary's --context."""
@@ -262,7 +263,8 @@ def video_from_info(info: dict) -> VideoInfo:
                      description=str(info.get("description") or ""), chapters=chapters,
                      upload_date=_date(info.get("upload_date")),
                      author_captions=sorted((info.get("subtitles") or {}).keys()),
-                     automatic_captions=bool(info.get("automatic_captions")))
+                     automatic_captions=bool(info.get("automatic_captions")),
+                     availability=str(info.get("availability") or ""))
 
 
 def _default_factory(params: dict):

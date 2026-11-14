@@ -279,7 +279,7 @@ class GenCore(Core):
     def check_keys(self, settings) -> None:
         pass
 
-    def user_glossary(self, domain, work_dir):
+    def user_glossary(self, domain, work_dir, extra=None):
         return None
 
     def run_pipeline(self, settings, progress):

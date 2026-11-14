@@ -14,6 +14,10 @@ and for screenshots: `talk-autopsy web --replay <file> [--speed N]`.
   talk's length, so the player has something to play.
 - The time-estimate history is a throwaway file: replays never teach this
   machine's history anything.
+- A playlist link (`list=`) gives a synthetic course of DEMO_LESSONS invented
+  lessons (one of them private, to show a skipped lesson); each lesson plays
+  the same recording into its own lesson folder (web/courses.py), so the course
+  screens can be checked and photographed without network.
 
 A recording is JSON lines: a header (`{"type": "header", "format": 1,
 "summary": <job summary>}`) and then the job's events as they were stored.
@@ -40,6 +44,10 @@ logger = logging.getLogger(__name__)
 
 LONG_SECONDS = 4 * 3600.0
 END_TYPES = ("finished", "failed")
+DEMO_COURSE = "Smart Contracts with Foundry: a Demo Course"
+DEMO_LESSONS = ["Setting up Foundry", "Your first contract", "Storage and mappings", "Members only",
+                "Writing tests with forge", "Deploying to a test network"]
+DEMO_PRIVATE = 4  # the private lesson (1-based)
 
 
 class RecordingError(ValueError):
@@ -99,9 +107,26 @@ class ReplayCore(Core):
     def _duration(self, name: str) -> float | None:
         return LONG_SECONDS if "long" in name.lower() else self.recording.duration_s
 
-    def fetch(self, url: str, runtimes: list[str]) -> youtube.VideoInfo:
+    def fetch(self, url: str, runtimes: list[str]) -> youtube.VideoInfo | youtube.PlaylistInfo:
+        if "list=" in url and "v=" not in url:
+            return youtube.PlaylistInfo(id="replay-course", title=DEMO_COURSE,
+                                        entries=[self._lesson(k) for k in range(1, len(DEMO_LESSONS) + 1)])
+        if "v=replay-l" in url:
+            return self._lesson(int(url.rsplit("replay-l", 1)[1][:2]))
         return youtube.VideoInfo(id="replay", url=url, title=self.recording.title,
                                  duration=self._duration(url), upload_date="")
+
+    def _lesson(self, k: int) -> youtube.VideoInfo:
+        vid = f"replay-l{k:02d}"
+        url = f"https://www.youtube.com/watch?v={vid}"
+        if k == DEMO_PRIVATE:
+            return youtube.VideoInfo(id=vid, url=url, title="[Private video]", availability="private")
+        return youtube.VideoInfo(id=vid, url=url, title=f"Lesson {k}: {DEMO_LESSONS[k - 1]}",
+                                 duration=self.recording.duration_s, description="A demo lesson.",
+                                 upload_date="2026-11-01")
+
+    def plan_rerun(self, *args, **kwargs):
+        return None  # replays never read the real cache
 
     def probe(self, path: Path) -> float:
         duration = self._duration(Path(path).name)
@@ -153,7 +178,19 @@ class ReplayRunner(JobRunner):
             self._busy.release()
             raise
 
-    def _play(self, job: Job) -> None:
+    def run_lesson(self, request: JobRequest, preview, on_job=None) -> Job:
+        """A course lesson (web/courses.py): the recording, played in the course's thread."""
+        job = Job(id=uuid.uuid4().hex[:12], request=request, preview=preview,
+                  steps=self.recording.steps or jobs.job_steps(request.mode, preview.formats),
+                  started_wall=time.strftime("%Y-%m-%dT%H:%M:%S"), clock=self.clock)
+        job.replay = True
+        self._register(job)
+        if on_job is not None:
+            on_job(job)
+        self._play(job, release=False)
+        return job
+
+    def _play(self, job: Job, release: bool = True) -> None:
         final = self.recording.events[-1]
         try:
             started = time.monotonic()
@@ -173,6 +210,11 @@ class ReplayRunner(JobRunner):
             if final["type"] == "finished":
                 folder = self._demo_folder(job, payload)
                 payload["folder"], payload["result"] = str(folder), folder.name
+                if job.preview.folder is not None:  # a course lesson
+                    payload["result"] = f"{folder.parent.name}|{folder.name}"
+                    youtube.mark_done(folder, [p.name for p in folder.iterdir() if p.is_file()], {})
+                job.cost_usd = float(payload.get("cost_usd") or 0.0)
+                job.stt_cost_usd = float(payload.get("stt_cost_usd") or 0.0)
             state = final["type"]
         except Exception:
             logger.exception("replay %s failed", job.id)
@@ -180,7 +222,8 @@ class ReplayRunner(JobRunner):
                                         "step": None, "cost_usd": 0.0, "stt_cost_usd": 0.0}
         finally:
             self._active = None
-            self._busy.release()
+            if release:
+                self._busy.release()
         job.end(state, state, **payload)
 
     # --- the demo result folder ---------------------------------------------------------
@@ -188,7 +231,7 @@ class ReplayRunner(JobRunner):
     def _demo_folder(self, job: Job, payload: dict) -> Path:
         """The recorded file names in a temporary folder: subtitles from the recorded text, a test video."""
         name = Path(str(payload.get("folder") or "replay")).name or "replay"
-        folder = self.core.output_root() / name
+        folder = job.preview.folder or self.core.output_root() / name
         folder.mkdir(parents=True, exist_ok=True)
         lang = job.request.target_lang
         target, english = subtitle_texts(job.view)
@@ -198,7 +241,7 @@ class ReplayRunner(JobRunner):
         (folder / f"{stem}.en.srt").write_text(english, encoding="utf-8")
         if self.make_video:
             make_test_video(folder / f"{stem}.mp4", self.recording.duration_s or 60.0)
-        marker = {"title": self.recording.title, "target_lang": lang, "replay": True,
+        marker = {"title": job.preview.title or self.recording.title, "target_lang": lang, "replay": True,
                   "untranslated": payload.get("untranslated") or [],
                   "uncorrected": payload.get("uncorrected") or []}
         (youtube.service_dir(folder, create=True) / jobs.RESULT_MARKER).write_text(

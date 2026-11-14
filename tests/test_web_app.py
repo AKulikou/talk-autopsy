@@ -228,11 +228,12 @@ def test_both_or_neither_source(setup, media):
     assert client.post("/api/estimate", json=["not", "an", "object"]).status_code == 422
 
 
-def test_playlist_url_is_refused(setup):
+def test_playlist_url_goes_to_the_course_screen(setup):
+    """v1.2: the single-video estimate refuses a playlist with the code that opens the course screen."""
     client = setup[0]
     response = client.post("/api/estimate", json=body("url", url="https://www.youtube.com/playlist?list=PL1"))
     assert response.status_code == 422 and response.json()["error"] == "playlist"
-    assert "launcher" in response.json()["message"]
+    assert "course" in response.json()["message"]
 
 
 def test_playlist_found_by_the_metadata_is_refused(setup):

@@ -7,9 +7,10 @@ import { followJob } from "./events.js";
 import * as steps from "./steps.js";
 import * as transcript from "./transcript.js";
 import * as player from "./player.js";
+import { allSelection, courseFraction, failedPositions, lessonPlace, leftPositions, rangeSelection } from "./course.js";
 
 const $ = (id) => document.getElementById(id);
-const VIEWS = ["view-form", "view-estimate", "view-run", "view-done", "view-failed"];
+const VIEWS = ["view-form", "view-estimate", "view-course", "view-run", "view-course-done", "view-done", "view-failed"];
 const FORMAT_PURPOSE = { srt: "purpose_subtitles", ass: "purpose_subtitles_styled", bilingual: "purpose_bilingual",
   "mp4-soft": "purpose_video_tracks", "mp4-burned": "purpose_tv" };
 const DOCTOR_HINTS = new Set(["doctor", "youtube", "outputs"]);
@@ -26,6 +27,11 @@ const state = {
   stop: null,
   timer: null,
   doneFolder: "",
+  course: null, // the course screen: { request, preview, selected: Set of positions }
+  courseRun: null, // the running (or last) course's summary
+  coursePoll: null,
+  courseFolder: "", // the Done screen of a lesson: its course folder
+  subsChoice: null, // the subtitle choice kept from one lesson to the next
 };
 
 // --- helpers --------------------------------------------------------------------------------
@@ -161,6 +167,27 @@ function currentRequest() {
 async function estimate(event) {
   event.preventDefault();
   setError("form-error", "");
+  $("link-choice").hidden = true;
+  if (state.mode === "url") {
+    const url = $("url").value.trim();
+    const { ok, data } = await api("POST", "/api/link", { url });
+    if (!ok) {
+      setError("form-error", errorText(data));
+      return;
+    }
+    if (data.kind === "playlist") return openCourse(url);
+    if (data.kind === "video_in_playlist") {
+      $("link-choice").hidden = false; // "only this video" or "the whole playlist"
+      $("choice-course").focus();
+      return;
+    }
+  }
+  return estimateVideo();
+}
+
+async function estimateVideo() {
+  setError("form-error", "");
+  $("link-choice").hidden = true;
   const button = $("estimate");
   busy(button, true, "estimating");
   const request = currentRequest();
@@ -324,6 +351,11 @@ function onEnd(event) {
   transcript.changed(); // the last text
   setTimeout(transcript.stop, 1000);
   state.stop = null;
+  if (state.courseRun && state.coursePoll) {
+    $("course-head-between").hidden = false; // the next lesson starts, or the course ends (pollCourse)
+    pollCourse();
+    return;
+  }
   if (event.type === "finished") showDone(event);
   else showFailed(event);
 }
@@ -379,9 +411,25 @@ async function showDone(event) {
   $("done-folder").textContent = event.folder;
   setWarning("done-warning", gapsWarning(event.untranslated, event.uncorrected));
   setError("done-error", "");
+  lessonNav(null);
   show("view-done");
   if (event.result) player.show(playerElements(), await player.fetchResult(event.result));
   else player.show(playerElements(), null);
+}
+
+// A lesson of a course: "← previous lesson / next lesson →", its place, "Open the course folder".
+function lessonNav(info) {
+  const nav = info?.course;
+  $("lesson-nav").hidden = !nav;
+  $("open-course-folder").hidden = !nav;
+  state.courseFolder = nav?.folder || "";
+  if (!nav) return;
+  $("lesson-nav").setAttribute("aria-label", nav.title);
+  $("lesson-place").textContent = t("lesson_place", { n: nav.number, count: nav.count, title: nav.title });
+  $("lesson-prev").disabled = !nav.prev;
+  $("lesson-next").disabled = !nav.next;
+  $("lesson-prev").onclick = () => nav.prev && watch(nav.prev);
+  $("lesson-next").onclick = () => nav.next && watch(nav.next);
 }
 
 // A result from the start page's list: the same Done screen, read from the folder.
@@ -398,19 +446,85 @@ async function watch(id) {
   $("done-folder").textContent = info.folder;
   setWarning("done-warning", gapsWarning(info.untranslated, info.uncorrected));
   setError("done-error", "");
+  lessonNav(info);
   show("view-done");
-  player.show(playerElements(), info);
+  // in a course the subtitle choice goes with the reader from one lesson to the next
+  player.show(playerElements(), info, info.course
+    ? { preferred: state.subsChoice, onChoice: (choice) => { state.subsChoice = choice; } } : {});
 }
 
 function shortDate(iso) {
   return iso ? iso.replace("T", " ").slice(0, 16) : "";
 }
 
+function recentButton(label, onClick, disabled = false) {
+  const b = Object.assign(document.createElement("button"), { type: "button", className: "secondary",
+    textContent: label, disabled });
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+async function openPath(path, errorId) {
+  const { ok, data } = await api("POST", "/api/open-folder", { path });
+  setError(errorId, ok ? "" : errorText(data));
+}
+
+function courseItem(r) {
+  const li = document.createElement("li");
+  const text = document.createElement("div");
+  const lang = state.config?.languages.target.find((l) => l.code === r.target_lang)?.name || r.target_lang;
+  const meta = [shortDate(r.finished), t("recent_course", { count: r.lessons.length }),
+    lang ? t("recent_lang", { lang }) : ""].filter(Boolean).join(" · ");
+  text.append(Object.assign(document.createElement("strong"), { textContent: r.title }),
+    Object.assign(document.createElement("span"), { className: "meta", textContent: meta }));
+  const actions = document.createElement("div");
+  actions.className = "recent-actions";
+  const first = r.lessons.find((x) => x.media);
+  actions.append(recentButton(t("recent_watch"), () => first && watch(first.id), !first),
+    recentButton(t("course_open_folder"), () => openPath(r.folder, "recent-error")));
+  const list = document.createElement("ul");
+  list.className = "course-lessons";
+  for (const lesson of r.lessons) {
+    const item = document.createElement("li");
+    item.append(Object.assign(document.createElement("span"), { textContent: lesson.title }), " ",
+      recentButton(t("recent_watch"), () => watch(lesson.id), !lesson.media));
+    list.append(item);
+  }
+  const details = document.createElement("details");
+  details.append(Object.assign(document.createElement("summary"), { textContent: t("course_lessons") }), list);
+  li.append(text, actions, details);
+  details.style.flexBasis = "100%";
+  return li;
+}
+
+async function loadUnfinished() {
+  const { ok, data } = await api("GET", "/api/course/unfinished");
+  const items = ok ? data.courses : [];
+  $("unfinished").hidden = !items.length;
+  $("unfinished-list").replaceChildren(...items.map((c) => {
+    const li = document.createElement("li");
+    const text = document.createElement("div");
+    text.append(Object.assign(document.createElement("strong"), { textContent: c.title }),
+      Object.assign(document.createElement("span"), { className: "meta",
+        textContent: t("unfinished_meta", { done: c.done, count: c.count, left: c.left.length }) }));
+    const actions = document.createElement("div");
+    actions.className = "recent-actions";
+    actions.append(recentButton(t("course_continue"), () => openCourse(c.url, {
+      selected: c.left, profile: c.profile, domain: c.domain, target_lang: c.target_lang,
+      course_glossary: c.course_glossary })),
+    recentButton(t("course_open_folder"), () => openPath(c.folder, "recent-error")));
+    li.append(text, actions);
+    return li;
+  }));
+}
+
 async function loadRecent() {
+  loadUnfinished();
   const items = await player.fetchRecent();
   setError("recent-error", "");
   $("recent").hidden = !items.length;
   $("recent-list").replaceChildren(...items.map((r) => {
+    if (r.group === "course") return courseItem(r);
     const li = document.createElement("li");
     const text = document.createElement("div");
     const title = Object.assign(document.createElement("strong"), { textContent: r.title });
@@ -434,6 +548,15 @@ async function loadRecent() {
   }));
 }
 
+// A failure in words in the interface language (the Failed screen and a course's failed lesson).
+function failureText(event) {
+  const hint = event?.hint || "log";
+  return hint === "service"
+    ? t(`fail_service_${event.kind || "unavailable"}`, { service: t(`service_${event.service || "network"}`),
+      status: event.status ?? "" })
+    : t(`fail_${hint}`);
+}
+
 async function showFailed(event) {
   if (state.job && event.step) steps.fail(event.step);
   // a sentence in the interface language for the kind of failure; the core's own line (English, for
@@ -441,10 +564,7 @@ async function showFailed(event) {
   // no exception class in the main text (owner, 2026-11-13): it is in the technical details
   const hint = event.hint || "log";
   const service = hint === "service";
-  $("failed-reason").textContent = service
-    ? t(`fail_service_${event.kind || "unavailable"}`, { service: t(`service_${event.service || "network"}`),
-      status: event.status ?? "" })
-    : t(`fail_${hint}`);
+  $("failed-reason").textContent = failureText(event);
   $("failed-tech-text").textContent = event.reason || "";
   $("failed-tech").hidden = !event.reason;
   $("failed-hint").textContent = hint === "network" ? "" : t(`hint_${hint}`);
@@ -513,6 +633,9 @@ async function runAgain() {
 function backToForm() {
   state.stop?.();
   clearInterval(state.timer);
+  clearInterval(state.coursePoll);
+  state.coursePoll = null;
+  $("course-head").hidden = true;
   player.clear(playerElements());
   show("view-form");
   loadRecent();
@@ -548,6 +671,294 @@ function wire() {
   $("failed-back").addEventListener("click", backToForm);
   $("failed-again").addEventListener("click", runAgain);
   $("open-folder").addEventListener("click", openFolder);
+  $("choice-video").addEventListener("click", estimateVideo);
+  $("choice-course").addEventListener("click", () => openCourse($("url").value.trim()));
+  $("course-all").addEventListener("click", () => setSelection(allSelection(state.course.preview.lessons)));
+  $("course-none").addEventListener("click", () => setSelection([]));
+  $("course-range").addEventListener("click", () => setSelection(
+    rangeSelection(state.course.preview.lessons, $("course-from").value, $("course-to").value)));
+  $("course-glossary").addEventListener("change", () => refreshCourse(true));
+  $("course-confirm").addEventListener("change", updateCourseStart);
+  $("course-start").addEventListener("click", startCourse);
+  $("course-back").addEventListener("click", () => show("view-form"));
+  $("course-stop").addEventListener("click", stopCourse);
+  $("course-retry").addEventListener("click", () => reopenCourse(failedPositions(state.courseRun)));
+  $("course-continue").addEventListener("click", () => reopenCourse(leftPositions(state.courseRun)));
+  $("course-done-open").addEventListener("click", () => openPath(state.courseRun?.folder, "course-done-error"));
+  $("course-done-another").addEventListener("click", backToForm);
+  $("open-course-folder").addEventListener("click", () => openPath(state.courseFolder, "done-error"));
+}
+
+// --- courses (a playlist) ---------------------------------------------------------------------------
+
+function courseOptions(overrides = {}) {
+  const base = currentRequest();
+  return { profile: overrides.profile || base.profile, domain: overrides.domain || base.domain,
+    target_lang: overrides.target_lang || base.target_lang };
+}
+
+// The course screen for a playlist link; `opts` (Continue): the earlier run's options and lessons.
+async function openCourse(url, opts = {}) {
+  setError("form-error", "");
+  $("link-choice").hidden = true;
+  if (opts.profile) {
+    const radio = document.querySelector(`input[name="profile"][value="${opts.profile}"]`);
+    if (radio) radio.checked = true;
+  }
+  if (opts.domain) $("web3").checked = opts.domain === "web3";
+  if (opts.target_lang) $("target-lang").value = opts.target_lang;
+  const request = { url, ...courseOptions(opts) };
+  if (opts.course_glossary !== undefined) request.course_glossary = opts.course_glossary;
+  if (opts.selected) request.selected = opts.selected;
+  const button = $("estimate");
+  busy(button, true, "estimating");
+  const { ok, data } = await api("POST", "/api/course/preview", request);
+  busy(button, false, "estimating");
+  if (!ok) {
+    setError(opts.errorId || "form-error", errorText(data));
+    return false;
+  }
+  request.course_glossary = data.course_glossary;
+  state.course = { request, preview: data, selected: new Set(data.selected) };
+  renderCourse();
+  show("view-course");
+  return true;
+}
+
+function reopenCourse(positions) {
+  const r = state.courseRun?.request;
+  if (!r) return backToForm();
+  return openCourse(r.url, { ...r, selected: positions, errorId: "course-done-error" });
+}
+
+function lessonMark(lesson) {
+  if (!lesson.available) return { text: t(`course_reason_${lesson.reason}`), cls: "bad" };
+  if (lesson.ready) return { text: t("course_ready"), cls: "ready" };
+  return null;
+}
+
+function renderCourse() {
+  const { preview, request } = state.course;
+  $("course-title").textContent = preview.title;
+  const profile = t(`profile_${request.profile}`);
+  const lang = state.config?.languages.target.find((l) => l.code === request.target_lang)?.name || request.target_lang;
+  $("course-options").textContent = t("course_options_text", { profile, lang,
+    web3: t(request.domain === "web3" ? "yes" : "no") });
+  $("course-folder").textContent = preview.folder + (preview.folder_exists ? "" : ` ${t("course_folder_new")}`);
+  $("course-more").hidden = !preview.more;
+  $("course-list").replaceChildren(...preview.lessons.map((lesson) => {
+    const li = document.createElement("li");
+    li.dataset.available = String(lesson.available);
+    const id = `lesson-${lesson.position}`;
+    const box = Object.assign(document.createElement("input"), { type: "checkbox", id,
+      checked: state.course.selected.has(lesson.position), disabled: !lesson.available });
+    box.addEventListener("change", () => {
+      if (box.checked) state.course.selected.add(lesson.position);
+      else state.course.selected.delete(lesson.position);
+      refreshCourse(false);
+    });
+    const label = Object.assign(document.createElement("label"), { htmlFor: id });
+    label.append(Object.assign(document.createElement("span"), { className: "num", textContent: lesson.position }),
+      Object.assign(document.createElement("span"), { className: "title", textContent: lesson.title }),
+      Object.assign(document.createElement("span"), { className: "len",
+        textContent: lesson.duration_s ? clock(lesson.duration_s) : "—" }));
+    li.append(box, label);
+    const mark = lessonMark(lesson);
+    if (mark) li.append(Object.assign(document.createElement("span"), { className: `mark ${mark.cls}`,
+      textContent: mark.text }));
+    return li;
+  }));
+  $("course-from").max = $("course-to").max = String(preview.lessons.length);
+  $("course-glossary").checked = Boolean(request.course_glossary);
+  renderCourseTotals(preview);
+}
+
+function renderCourseTotals(p) {
+  const totals = p.totals;
+  const available = p.lessons.filter((l) => l.available).length;
+  $("course-selected").textContent = t("course_selected", { count: totals.count, total: available })
+    + (totals.ready ? `. ${t("course_ready_count", { count: totals.ready })}` : "");
+  $("course-cost").textContent = totals.known
+    ? money({ claude: totals.claude_usd, stt: totals.stt_usd }, { prefix: "" }) : t("est_cost_none");
+  $("course-time").textContent = totals.time_s === null ? t("est_time_none") : `≈ ${duration(totals.time_s)}`;
+  const glossary = state.courseRun?.glossary;
+  $("course-glossary-state").textContent = p.folder_exists && glossary?.file
+    ? t("course_glossary_terms", { count: glossary.terms }) : t("course_glossary_later");
+  const link = $("course-glossary-link");
+  link.hidden = !p.folder_exists;
+  link.href = `/api/course/glossary/${encodeURIComponent(p.folder.split(/[\\/]/).pop())}`;
+  const notes = [];
+  if (p.notes.includes("quality_not_measured")) notes.push(t("lang_not_measured"));
+  if (p.busy) notes.push(t("est_busy"));
+  $("course-notes").replaceChildren(...notes.map((n) => Object.assign(document.createElement("li"), { textContent: n })));
+  const limit = amount(p.limit_usd);
+  $("course-confirm").checked = false;
+  $("course-confirm-box").hidden = !p.needs_confirmation;
+  if (p.needs_confirmation) {
+    $("course-confirm-text").textContent = totals.known ? t("course_over_limit", { limit }) : t("est_cost_none");
+    $("course-confirm-label").textContent = totals.known
+      ? t("course_confirm", { amount: amount(totals.total_usd) }) : t("course_confirm_none", { limit });
+  }
+  setError("course-error", "");
+  updateCourseStart();
+}
+
+function updateCourseStart() {
+  const p = state.course?.preview;
+  $("course-start").disabled = !p || !p.totals.count || (p.needs_confirmation && !$("course-confirm").checked);
+}
+
+function setSelection(positions) {
+  state.course.selected = new Set(positions);
+  for (const lesson of state.course.preview.lessons) {
+    const box = $(`lesson-${lesson.position}`);
+    if (box) box.checked = state.course.selected.has(lesson.position);
+  }
+  refreshCourse(false);
+}
+
+// The totals of the selection (and, with `full`, the lessons again: the glossary option changes them)
+// come from the server, which keeps the playlist it read; the gate uses the same numbers.
+let refreshToken = 0;
+async function refreshCourse(full) {
+  const mine = ++refreshToken;
+  const request = { ...state.course.request, selected: [...state.course.selected].sort((a, b) => a - b),
+    course_glossary: $("course-glossary").checked };
+  $("course-start").disabled = true;
+  const { ok, data } = await api("POST", "/api/course/preview", request);
+  if (mine !== refreshToken) return;
+  if (!ok) {
+    setError("course-error", errorText(data));
+    return;
+  }
+  state.course.request = request;
+  state.course.preview = data;
+  if (full) renderCourse();
+  else renderCourseTotals(data);
+}
+
+async function startCourse() {
+  const p = state.course.preview;
+  const request = { ...state.course.request, selected: [...state.course.selected].sort((a, b) => a - b),
+    course_glossary: $("course-glossary").checked };
+  if (p.needs_confirmation && $("course-confirm").checked) {
+    if (p.totals.known) request.confirmed_cost_usd = p.totals.total_usd;
+    else request.confirmed_no_estimate = true;
+  }
+  $("course-start").disabled = true;
+  const { ok, data } = await api("POST", "/api/course/start", request);
+  if (!ok) {
+    updateCourseStart();
+    setError("course-error", errorText(data));
+    return;
+  }
+  api("POST", "/api/settings", { target_lang: request.target_lang });
+  attachCourse(data.course);
+}
+
+function attachCourse(course) {
+  state.courseRun = course;
+  state.attachedJob = null;
+  $("course-head").hidden = false;
+  $("course-head-stopping").hidden = !course.stop_requested;
+  $("course-stop").disabled = Boolean(course.stop_requested);
+  renderCourseHead(course);
+  show("view-run");
+  clearInterval(state.coursePoll);
+  state.coursePoll = setInterval(pollCourse, 1500);
+  pollCourse();
+}
+
+function statusLine(lesson) {
+  const parts = [t(`status_${lesson.status}`)];
+  if (lesson.status === "failed" && lesson.error) parts.push(failureText(lesson.error));
+  return parts.join(": ");
+}
+
+function renderCourseHead(c) {
+  $("course-head-title").textContent = `${t("course_title")}: ${c.title}`;
+  const place = lessonPlace(c);
+  $("course-head-lesson").textContent = t("course_lesson_of", place);
+  $("course-bar").value = courseFraction(c, state.lessonShare || 0);
+  $("course-head-cost").textContent = money({ claude: c.cost_usd, stt: c.stt_cost_usd }, { prefix: "" });
+  $("course-head-left").textContent = c.time_left_s === null ? t("run_left_none") : `≈ ${duration(c.time_left_s)}`;
+  $("course-head-progress").textContent = t("course_progress", { done: c.done, count: c.count });
+  $("course-head-list").replaceChildren(...c.lessons.map((lesson) => {
+    const li = document.createElement("li");
+    li.dataset.status = lesson.status;
+    li.append(Object.assign(document.createElement("span"), { className: "num", textContent: lesson.position }),
+      Object.assign(document.createElement("span"), { className: "title", textContent: lesson.title }),
+      Object.assign(document.createElement("span"), { className: `mark ${lesson.status === "failed" ? "bad"
+        : lesson.status === "finished" ? "ready" : ""}`, textContent: statusLine(lesson) }));
+    return li;
+  }));
+}
+
+async function pollCourse() {
+  const { ok, data } = await api("GET", "/api/course/current");
+  if (!ok || !data.course) return;
+  const c = data.course;
+  state.courseRun = c;
+  renderCourseHead(c);
+  $("course-head-stopping").hidden = !c.stop_requested || c.state !== "running";
+  if (c.state !== "running") {
+    clearInterval(state.coursePoll);
+    state.coursePoll = null;
+    state.stop?.();
+    showCourseDone(c);
+    return;
+  }
+  if (c.current_job && c.current_job !== state.attachedJob) {
+    const job = await api("GET", "/api/jobs/current");
+    if (job.ok && job.data.job && job.data.job.id === c.current_job) {
+      state.attachedJob = c.current_job;
+      $("course-head-between").hidden = true;
+      attach(job.data.job);
+    }
+  }
+}
+
+async function stopCourse() {
+  const id = state.courseRun?.id;
+  if (!id) return;
+  $("course-stop").disabled = true;
+  const { ok } = await api("POST", "/api/course/stop", { id });
+  if (ok) $("course-head-stopping").hidden = false;
+  else $("course-stop").disabled = false;
+}
+
+function showCourseDone(c) {
+  clearInterval(state.timer);
+  $("course-head").hidden = true;
+  $("course-done-heading").textContent = t(c.state === "finished" ? "course_done_heading" : "course_stopped_heading");
+  $("course-done-title").textContent = c.title;
+  const left = leftPositions(c).length;
+  $("course-done-summary").textContent = t("course_done_summary", { finished: c.finished, count: c.count,
+    failed: c.failed, left });
+  $("course-done-cost").textContent = money({ claude: c.cost_usd, stt: c.stt_cost_usd });
+  $("course-done-glossary").hidden = !c.glossary?.file;
+  if (c.glossary?.file) $("course-done-glossary").textContent = t("course_glossary_terms", { count: c.glossary.terms });
+  $("course-done-folder").textContent = c.folder;
+  $("course-done-list").replaceChildren(...c.lessons.map((lesson) => {
+    const li = document.createElement("li");
+    li.dataset.status = lesson.status;
+    li.append(Object.assign(document.createElement("span"), { className: "num", textContent: lesson.position }),
+      Object.assign(document.createElement("span"), { className: "title", textContent: lesson.title }),
+      Object.assign(document.createElement("span"), { className: "len",
+        textContent: lesson.duration_s ? clock(lesson.duration_s) : "" }),
+      Object.assign(document.createElement("span"), { className: `mark ${lesson.status === "failed" ? "bad"
+        : lesson.status === "finished" ? "ready" : ""}`, textContent: statusLine(lesson) }));
+    if (lesson.result) {
+      const actions = Object.assign(document.createElement("span"), { className: "actions-inline" });
+      actions.append(recentButton(t("course_watch"), () => watch(lesson.result)));
+      li.append(actions);
+    }
+    return li;
+  }));
+  $("course-retry").hidden = !c.failed;
+  $("course-continue").hidden = !left;
+  setError("course-done-error", "");
+  show("view-course-done");
 }
 
 async function main() {
@@ -556,6 +967,8 @@ async function main() {
   const ui = new URLSearchParams(window.location.search).get("ui"); // e.g. ?ui=lt, without saving it
   if (!(await loadConfig(ui))) return;
   setMode("url");
+  const course = await api("GET", "/api/course/current");
+  if (course.ok && course.data.course?.state === "running") return attachCourse(course.data.course);
   const { ok, data } = await api("GET", "/api/jobs/current");
   if (ok && data.job && data.job.state === "running") attach(data.job); // a reload reattaches
   else loadRecent(); // the last results stay reachable after a reload

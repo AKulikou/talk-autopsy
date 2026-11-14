@@ -28,8 +28,7 @@ class InputError(ValueError):
         self.code = code
 
 
-PLAYLIST_MESSAGE = ("Playlists are not supported in the web page yet: use the desktop launcher "
-                    "or `talk-autopsy run <playlist link>`.")
+PLAYLIST_MESSAGE = "This is a playlist link: it opens the course screen (/api/course/preview)."
 
 
 def normalize_youtube_url(text: str) -> str:
@@ -60,6 +59,48 @@ def normalize_youtube_url(text: str) -> str:
     if not video_id or not all(c.isalnum() or c in "-_" for c in video_id) or len(video_id) > 20:
         raise InputError("bad_url", "The link does not name a YouTube video.")
     return "https://www.youtube.com/watch?" + urlencode({"v": video_id})
+
+
+def _parse(text: str):
+    value = text.strip()
+    if not value:
+        raise InputError("neither_given", "Paste a YouTube link.")
+    if len(value) > MAX_URL_CHARS:
+        raise InputError("bad_url", "The link is too long.")
+    parsed = urlparse(value if "://" in value else "https://" + value)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in ("http", "https") or host not in YOUTUBE_HOSTS:
+        raise InputError("bad_url", "This is not a YouTube link.")
+    return parsed, parse_qs(parsed.query)
+
+
+def playlist_id(text: str) -> str:
+    """The `list=` id of a YouTube link (a playlist, or a video inside one), or ""."""
+    _, query = _parse(text)
+    value = (query.get("list") or [""])[0]
+    if value and (len(value) > 64 or not all(c.isalnum() or c in "-_" for c in value)):
+        raise InputError("bad_url", "The link does not name a YouTube playlist.")
+    return value
+
+
+def link_kind(text: str) -> str:
+    """"video", "playlist" (a playlist alone) or "video_in_playlist" (asks: this video or the course)."""
+    has_list = bool(playlist_id(text))
+    try:
+        normalize_youtube_url(text)
+    except InputError as e:
+        if e.code == "playlist" and has_list:
+            return "playlist"
+        raise
+    return "video_in_playlist" if has_list else "video"
+
+
+def normalize_playlist_url(text: str) -> str:
+    """A YouTube playlist link, or a video link with `&list=` -> https://www.youtube.com/playlist?list=<id>."""
+    value = playlist_id(text)
+    if not value:
+        raise InputError("not_playlist", "The link does not name a YouTube playlist.")
+    return "https://www.youtube.com/playlist?" + urlencode({"list": value})
 
 
 def check_media_path(text: str) -> Path:

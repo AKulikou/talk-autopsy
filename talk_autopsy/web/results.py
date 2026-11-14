@@ -6,6 +6,9 @@ in-browser player (docs/web.md).
   page's `talk-autopsy-result.json` (title, target language, files) or the
   CLI's `done.json` (YouTube runs). The scan is read-only and bounded
   (MAX_SCAN folders, newest first, MAX_LIST listed).
+- A course (web/courses.py, its `course.json`) is one entry of the list with its
+  lessons inside; a lesson's id is `<course folder>|<lesson folder>` (`|` is in
+  no Windows file name), and it knows the previous and the next finished lesson.
 - A result and a file are named by one path component each, resolved and
   checked to sit directly inside the output root (or the result folder); the
   client never gives a path that is used as it is.
@@ -24,7 +27,7 @@ import re
 from pathlib import Path
 
 from talk_autopsy import youtube
-from talk_autopsy.web import labels
+from talk_autopsy.web import course_glossary, courses, labels
 from talk_autopsy.web import settings as web_settings
 from talk_autopsy.web.jobs import RESULT_MARKER
 
@@ -44,18 +47,66 @@ def _one_component(name: str) -> bool:
     return not any(c in name for c in ("/", "\\", "\x00"))
 
 
-def folder_of(root: Path, result_id: str) -> Path | None:
-    """The result folder `result_id` directly inside `root`, or None."""
-    if not _one_component(result_id):
+def _child(parent: Path, name: str) -> Path | None:
+    if not _one_component(name):
         return None
     try:
-        base = Path(root).resolve()
-        folder = (base / result_id).resolve()
+        folder = (parent / name).resolve()
     except (OSError, RuntimeError):
         return None
-    if folder.parent != base or not folder.is_dir() or not _marker(folder):
+    return folder if folder.parent == parent and folder.is_dir() else None
+
+
+def folder_of(root: Path, result_id: str) -> Path | None:
+    """The result folder `result_id` (a folder in `root`, or `<course>|<lesson>`), or None."""
+    parts = result_id.split("|") if isinstance(result_id, str) else []
+    if not 1 <= len(parts) <= 2:
         return None
-    return folder
+    try:
+        folder = Path(root).resolve()
+    except (OSError, RuntimeError):
+        return None
+    for part in parts:
+        folder = _child(folder, part)
+        if folder is None:
+            return None
+    if len(parts) == 2 and courses.read_marker(folder.parent) is None:
+        return None
+    return folder if _marker(folder) else None
+
+
+def course_folder_of(root: Path, folder_id: str) -> Path | None:
+    """A course folder directly inside `root` (it has course.json), or None."""
+    try:
+        folder = _child(Path(root).resolve(), folder_id)
+    except (OSError, RuntimeError):
+        return None
+    return folder if folder is not None and courses.read_marker(folder) is not None else None
+
+
+def lesson_folders(course_folder: Path) -> list[Path]:
+    """The finished lessons of a course (a result marker), in folder-name order (= playlist order)."""
+    try:
+        return sorted((p for p in course_folder.iterdir() if p.is_dir() and _marker(p) is not None),
+                      key=lambda p: p.name)
+    except OSError:
+        return []
+
+
+def _course_nav(folder: Path) -> dict | None:
+    """For a lesson: its course, the previous and the next finished lesson (ids), its place."""
+    course = folder.parent
+    marker = courses.read_marker(course)
+    if marker is None:
+        return None
+    lessons = lesson_folders(course)
+    names = [p.name for p in lessons]
+    k = names.index(folder.name) if folder.name in names else -1
+    return {"id": course.name, "title": str(marker.get("title") or course.name), "folder": str(course),
+            "prev": f"{course.name}|{names[k - 1]}" if k > 0 else None,
+            "next": f"{course.name}|{names[k + 1]}" if 0 <= k < len(names) - 1 else None,
+            "number": k + 1, "count": len(names),
+            "glossary": (course / course_glossary.FILE_NAME).is_file()}
 
 
 def file_in(folder: Path, name: str) -> Path | None:
@@ -122,7 +173,9 @@ def describe(folder: Path) -> dict:
             finished = _mtime_text(folder)
         except OSError:
             finished = ""
-    return {"id": folder.name, "folder": str(folder), "title": str(marker.get("title") or folder.name),
+    nav = _course_nav(folder)
+    return {"id": f"{folder.parent.name}|{folder.name}" if nav else folder.name,
+            "course": nav, "folder": str(folder), "title": str(marker.get("title") or folder.name),
             "finished": finished, "target_lang": lang,
             "files": [{"name": f, "kind": labels.file_kind(f, stem, lang)} for f in files
                       if f not in (RESULT_MARKER, youtube.DONE_MARKER, "meta.json")],
@@ -160,6 +213,21 @@ def recent(root: Path, limit: int = MAX_LIST) -> list[dict]:
         return []
     found = []
     for folder in folders[:MAX_SCAN]:
+        course = courses.read_marker(folder)
+        if course is not None:
+            try:
+                lessons = [describe(p) for p in lesson_folders(folder)]
+            except OSError:
+                continue
+            if lessons:
+                found.append({"group": "course", "id": folder.name, "folder": str(folder),
+                              "title": str(course.get("title") or folder.name),
+                              "target_lang": str(course.get("target_lang") or ""),
+                              "finished": max(r["finished"] for r in lessons), "lessons": lessons,
+                              "media": any(r["media"] for r in lessons)})
+                if len(found) >= limit:
+                    break
+            continue
         if _marker(folder) is None:
             continue
         try:

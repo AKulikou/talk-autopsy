@@ -165,7 +165,7 @@ def test_a_playlist_found_at_estimate_time_is_refused(tmp_path):
     r, _ = runner(tmp_path, playlist=True)
     with pytest.raises(InputError) as e:
         r.preview(request())
-    assert e.value.code == "playlist" and "launcher" in str(e.value)
+    assert e.value.code == "playlist" and "course" in str(e.value)
 
 
 def test_audio_only_file_gets_no_video_outputs(tmp_path):

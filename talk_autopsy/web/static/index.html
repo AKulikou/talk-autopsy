@@ -38,6 +38,13 @@
         <label for="url" data-i18n="url_label"></label>
         <input id="url" name="url" type="text" inputmode="url" autocomplete="off" spellcheck="false"
                data-i18n-placeholder="url_placeholder">
+        <div id="link-choice" class="confirm" role="group" aria-labelledby="link-choice-text" hidden>
+          <p id="link-choice-text" data-i18n="link_choice_text"></p>
+          <div class="actions">
+            <button type="button" id="choice-video" class="secondary" data-i18n="link_choice_video"></button>
+            <button type="button" id="choice-course" class="primary" data-i18n="link_choice_course"></button>
+          </div>
+        </div>
       </div>
 
       <div role="tabpanel" id="panel-file" aria-labelledby="tab-file" class="panel" hidden>
@@ -80,6 +87,10 @@
         <button type="submit" id="estimate" class="primary" data-i18n="estimate_button"></button>
       </div>
     </form>
+    <section id="unfinished" class="recent" aria-labelledby="unfinished-heading" hidden>
+      <h2 id="unfinished-heading" data-i18n="unfinished_heading"></h2>
+      <ul id="unfinished-list" class="recent-list"></ul>
+    </section>
     <section id="recent" class="recent" aria-labelledby="recent-heading" hidden>
       <h2 id="recent-heading" data-i18n="recent_heading"></h2>
       <ul id="recent-list" class="recent-list"></ul>
@@ -109,9 +120,70 @@
     </div>
   </section>
 
+  <!-- 2b. A course (playlist): lessons, selection, estimate -->
+  <section id="view-course" class="view" hidden aria-labelledby="course-heading">
+    <h2 id="course-heading" data-i18n="course_heading"></h2>
+    <dl class="facts">
+      <dt data-i18n="course_title"></dt><dd id="course-title"></dd>
+      <dt data-i18n="course_options"></dt><dd id="course-options"></dd>
+      <dt data-i18n="course_folder"></dt><dd id="course-folder"></dd>
+    </dl>
+    <h3 id="course-lessons-heading" data-i18n="course_lessons"></h3>
+    <div class="course-tools">
+      <button type="button" id="course-all" class="secondary" data-i18n="course_select_all"></button>
+      <button type="button" id="course-none" class="secondary" data-i18n="course_select_none"></button>
+      <span class="range">
+        <label for="course-from" data-i18n="course_range_from"></label>
+        <input id="course-from" type="number" min="1" inputmode="numeric">
+        <label for="course-to" data-i18n="course_range_to"></label>
+        <input id="course-to" type="number" min="1" inputmode="numeric">
+        <button type="button" id="course-range" class="secondary" data-i18n="course_range_apply"></button>
+      </span>
+    </div>
+    <p id="course-more" class="note" data-i18n="course_more" hidden></p>
+    <ul id="course-list" class="lessons" aria-labelledby="course-lessons-heading"></ul>
+    <dl class="facts">
+      <dt data-i18n="course_lessons"></dt><dd id="course-selected"></dd>
+      <dt data-i18n="est_cost"></dt><dd id="course-cost"></dd>
+      <dt data-i18n="est_time"></dt><dd id="course-time"></dd>
+    </dl>
+    <label class="check"><input type="checkbox" id="course-glossary"> <span data-i18n="course_glossary_label"></span></label>
+    <p class="muted"><span id="course-glossary-state"></span>
+      <a id="course-glossary-link" href="#" target="_blank" rel="noopener" data-i18n="course_glossary_view" hidden></a></p>
+    <ul id="course-notes" class="notes"></ul>
+    <div id="course-confirm-box" class="confirm" hidden>
+      <p id="course-confirm-text"></p>
+      <label class="check"><input type="checkbox" id="course-confirm"> <span id="course-confirm-label"></span></label>
+    </div>
+    <p id="course-error" class="error" role="alert" hidden></p>
+    <div class="actions">
+      <button type="button" id="course-start" class="primary" data-i18n="course_start"></button>
+      <button type="button" id="course-back" class="secondary" data-i18n="back_button"></button>
+    </div>
+  </section>
+
   <!-- 3. Running -->
   <section id="view-run" class="view" hidden aria-labelledby="run-heading">
     <h2 id="run-heading" data-i18n="run_heading"></h2>
+    <!-- A course: the header above the usual one-video view -->
+    <section id="course-head" class="course-head" aria-labelledby="course-head-title" hidden>
+      <p id="course-head-title" class="run-title"></p>
+      <p id="course-head-lesson" class="lesson-of"></p>
+      <progress id="course-bar" max="1" value="0"></progress>
+      <dl class="facts compact">
+        <dt data-i18n="run_cost"></dt><dd id="course-head-cost"></dd>
+        <dt data-i18n="run_left"></dt><dd id="course-head-left"></dd>
+      </dl>
+      <p id="course-head-stopping" class="note" data-i18n="course_stopping" hidden></p>
+      <details id="course-head-details">
+        <summary id="course-head-progress"></summary>
+        <ul id="course-head-list" class="lessons compact"></ul>
+      </details>
+      <div class="actions">
+        <button type="button" id="course-stop" class="secondary" data-i18n="course_stop"></button>
+      </div>
+      <p id="course-head-between" class="muted" data-i18n="course_between" hidden></p>
+    </section>
     <p id="run-title" class="run-title"></p>
     <p id="run-warning" class="warning" role="alert" hidden></p>
     <dl class="facts compact">
@@ -148,9 +220,31 @@
   </section>
 
   <!-- 4. Done / failed -->
+  <section id="view-course-done" class="view" hidden aria-labelledby="course-done-heading">
+    <h2 id="course-done-heading"></h2>
+    <p id="course-done-title" class="run-title"></p>
+    <p id="course-done-summary"></p>
+    <p id="course-done-cost"></p>
+    <p id="course-done-glossary" class="muted" hidden></p>
+    <ul id="course-done-list" class="lessons compact"></ul>
+    <p class="muted"><code id="course-done-folder"></code></p>
+    <p id="course-done-error" class="error" role="alert" hidden></p>
+    <div class="actions">
+      <button type="button" id="course-retry" class="primary" data-i18n="course_retry" hidden></button>
+      <button type="button" id="course-continue" class="primary" data-i18n="course_continue" hidden></button>
+      <button type="button" id="course-done-open" class="secondary" data-i18n="course_open_folder"></button>
+      <button type="button" id="course-done-another" class="secondary" data-i18n="another"></button>
+    </div>
+  </section>
+
   <section id="view-done" class="view" hidden aria-labelledby="done-heading">
     <h2 id="done-heading" data-i18n="done_heading"></h2>
     <p id="done-title" class="run-title"></p>
+    <nav id="lesson-nav" class="lesson-nav" aria-label="" hidden>
+      <button type="button" id="lesson-prev" class="secondary" data-i18n="lesson_prev"></button>
+      <span id="lesson-place" class="lesson-of"></span>
+      <button type="button" id="lesson-next" class="secondary" data-i18n="lesson_next"></button>
+    </nav>
     <p id="done-warning" class="warning" role="alert" hidden></p>
     <div id="player-box" class="player" hidden>
       <div id="player-media" class="player-media"></div>
@@ -171,6 +265,7 @@
     <p id="done-error" class="error" role="alert" hidden></p>
     <div class="actions">
       <button type="button" id="open-folder" class="primary" data-i18n="open_folder"></button>
+      <button type="button" id="open-course-folder" class="secondary" data-i18n="course_open_folder" hidden></button>
       <button type="button" id="another" class="secondary" data-i18n="another"></button>
     </div>
   </section>

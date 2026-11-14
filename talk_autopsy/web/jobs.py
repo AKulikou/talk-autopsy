@@ -170,10 +170,10 @@ class Core:
     def probe(self, path: Path) -> float:
         return ingest.probe(path)
 
-    def user_glossary(self, domain: str, work_dir: Path) -> Path | None:
-        if domain == "none":
-            return None
-        return user_glossary.run_glossary(user_glossary.user_glossary_paths(None, domain), work_dir)
+    def user_glossary(self, domain: str, work_dir: Path, extra: list[Path] | None = None) -> Path | None:
+        """The run's user glossary: the domain dictionary (if any), then `extra` (a course's glossary)."""
+        paths = user_glossary.user_glossary_paths(None, None if domain == "none" else domain)
+        return user_glossary.run_glossary(paths + [p for p in extra or [] if Path(p).is_file()], work_dir)
 
     def check_keys(self, settings: pipeline.RunSettings) -> None:
         pipeline.check_keys(settings)
@@ -228,6 +228,8 @@ class Preview:
     made: float = field(default_factory=time.monotonic)
     plan: "rerun_plan.RerunPlan | None" = None  # what the cache already holds (rerun_plan.py); cost is its
     full: youtube.Estimate | None = None  # the per-hour estimate of a full run, when `plan` set the cost
+    folder: Path | None = None  # a course lesson's result folder (web/courses.py); else the usual one
+    extra_glossaries: list[Path] = field(default_factory=list)  # a course's glossary, after the domain's
 
     @property
     def cost_known(self) -> bool:
@@ -280,12 +282,15 @@ def estimator_steps(mode: str, formats: list[str], cached: list[str] | None = No
     return [s for s in steps if s not in skip and not (s.startswith("outputs") and "outputs" in skip)]
 
 
-def run_target(request: JobRequest, video: "youtube.VideoInfo | None", output_root: Path
-               ) -> tuple[str, str, Path, str, Path]:
-    """(work name, context, result folder, file stem, source) of a request, for the estimate and the run."""
+def run_target(request: JobRequest, video: "youtube.VideoInfo | None", output_root: Path,
+               folder: Path | None = None) -> tuple[str, str, Path, str, Path]:
+    """
+    (work name, context, result folder, file stem, source) of a request, for the estimate and the run;
+    `folder`: a course lesson's result folder instead of the usual one in the output root.
+    """
     if request.mode == "url":
         name, context = f"yt-{youtube.safe_name(video.id, 40)}", video.context()
-        dest = output_root / youtube.video_folder_name(video, output_root)
+        dest = folder or output_root / youtube.video_folder_name(video, output_root)
         stem = youtube.video_file_stem(video, dest)
         return name, context, dest, stem, dest / f"{stem}.mp4"  # where the download goes (and is reused)
     source = Path(request.path)
@@ -351,6 +356,7 @@ class Job:
     record_to: Path | None = None
     replay: bool = False
     paid_steps: dict[str, bool] = field(default_factory=dict)  # paid step -> came from the cache
+    time_left: float | None = None  # the latest remaining-time estimate (a course's header adds it up)
     _events: list[dict] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _next_id: int = 1
@@ -783,35 +789,41 @@ class JobRunner:
         return TimeEstimator(key, duration, estimator_steps(mode, formats, cached),
                              history_file=self.history_file, clock=self.clock)
 
-    def _plan(self, request: JobRequest, video, formats: list[str], fresh: youtube.Estimate):
+    def _plan(self, request: JobRequest, video, formats: list[str], fresh: youtube.Estimate,
+              folder: Path | None = None, extra: list[Path] | None = None):
         """What the cache already holds for this request (rerun_plan.py), or None; never fails."""
         planner = getattr(self.core, "plan_rerun", None)
         if planner is None or fresh.minutes is None:
             return None
         try:
-            name, context, dest, stem, source = run_target(request, video, Path(self.core.output_root()))
+            name, context, dest, stem, source = run_target(request, video, Path(self.core.output_root()),
+                                                           folder)
             settings = pipeline.RunSettings(source=source, target_lang=request.target_lang,
                                             steps=list(PIPELINE_STEPS), engine=self.engine, context=context,
                                             name=name)
             if settings.work_dir.is_dir():  # nothing cached otherwise; the planner says so too
-                settings.glossary = self.core.user_glossary(request.domain, settings.work_dir)
+                settings.glossary = self.core.user_glossary(request.domain, settings.work_dir, extra)
             return planner(settings, fresh, formats, dest, stem)
         except Exception:
             logger.exception("the cache could not be read for the estimate; the full estimate is shown")
             return None
 
-    def preview(self, request: JobRequest) -> Preview:
-        """Metadata, cost and time for the estimate screen. InputError / YouTubeError / RuntimeError."""
+    def preview(self, request: JobRequest, video: "youtube.VideoInfo | None" = None,
+                folder: Path | None = None, extra_glossaries: list[Path] | None = None) -> Preview:
+        """
+        Metadata, cost and time for the estimate screen. InputError / YouTubeError / RuntimeError.
+        A course lesson (web/courses.py) gives its `video` (metadata already read), its result `folder`
+        and the course's glossary (`extra_glossaries`).
+        """
         formats = list(web_settings.PROFILES[request.profile])
         notes = [] if request.target_lang in web_settings.MEASURED_LANGUAGES else ["quality_not_measured"]
-        video = None
         if request.mode == "url":
-            runtimes = self.core.youtube_runtimes()
-            info = self.core.fetch(request.url, runtimes)
+            info = video or self.core.fetch(request.url, self.core.youtube_runtimes())
             if isinstance(info, youtube.PlaylistInfo):
                 raise InputError("playlist", PLAYLIST_MESSAGE)
             video, title, duration = info, info.title, info.duration
         else:
+            video = None
             path = Path(request.path)
             title = path.name
             try:
@@ -827,7 +839,8 @@ class JobRunner:
         if duration is not None and (not math.isfinite(duration) or duration <= 0):
             duration = None
         fresh = youtube.estimate(duration)
-        plan = self._plan(request, video, formats, fresh)
+        extra = list(extra_glossaries or [])
+        plan = self._plan(request, video, formats, fresh, folder, extra)
         cost = fresh if plan is None else youtube.Estimate(fresh.minutes, round(plan.claude_usd, 2),
                                                            round(plan.stt_usd, 2), fresh.pipeline_minutes)
         try:
@@ -836,7 +849,8 @@ class JobRunner:
         except Exception:
             time_estimate = NO_ESTIMATE
         preview = Preview(request.mode, request.source, title, duration, cost, formats,
-                          time_estimate, notes, video, plan=plan, full=fresh if plan else None)
+                          time_estimate, notes, video, plan=plan, full=fresh if plan else None, folder=folder,
+                          extra_glossaries=extra)
         with self._previews_lock:
             now = time.monotonic()
             self._previews = {k: p for k, p in self._previews.items() if now - p.made < PREVIEW_TTL_S}
@@ -878,6 +892,28 @@ class JobRunner:
         for old in [k for k in self._jobs if k != job.id][:-KEEP_JOBS]:
             self._jobs.pop(old, None)
         self._active = self._last = job.id
+
+    def allowance(self, preview: Preview) -> float:
+        """The pipeline's own cost ceiling for a job whose amount is under the limit or confirmed (_gate)."""
+        base = max(self.limit_usd, 2 * preview.full.claude_usd) if preview.full else self.limit_usd
+        return max(base, preview.amount_usd or 0.0)
+
+    def run_lesson(self, request: JobRequest, preview: Preview, on_job=None) -> Job:
+        """
+        One course lesson as an ordinary job, run in the calling thread (web/courses.py). The caller
+        holds the one-job lock for the whole course and has confirmed the course's total, so there is
+        no gate here. `on_job(job)` is told the job before it runs, so the page can follow it.
+        """
+        job = Job(id=uuid.uuid4().hex[:12], request=request, preview=preview,
+                  steps=job_steps(request.mode, preview.formats),
+                  started_wall=time.strftime("%Y-%m-%dT%H:%M:%S"), clock=self.clock)
+        self._register(job)
+        if self.record_dir is not None:
+            job.start_recording(self.record_dir, {"summary": job.summary(self.limit_usd)})
+        if on_job is not None:
+            on_job(job)
+        self._execute(job, self.allowance(preview), release=False)
+        return job
 
     def _gate(self, request: JobRequest, preview: Preview) -> float:
         """The pipeline's max_cost_usd for this job, or GateError."""
@@ -926,6 +962,7 @@ class JobRunner:
         if not force and seconds is None and previous is None:
             return
         self._time_sent[job.id] = seconds
+        job.time_left = seconds
         job.add("estimate_updated", time=estimate.as_dict())
 
     def _ticker(self, job: Job, estimator: TimeEstimator, stop: threading.Event) -> None:
@@ -951,7 +988,7 @@ class JobRunner:
             logger.exception("failed parts of %s not read", settings.work_dir)
             return {"untranslated": [], "uncorrected": []}
 
-    def _execute(self, job: Job, max_cost: float) -> None:
+    def _execute(self, job: Job, max_cost: float, release: bool = True) -> None:
         request, preview, core = job.request, job.preview, self.core
         estimator = self._estimator(request.mode, preview.formats, preview.duration_s)
         stop = threading.Event()
@@ -967,7 +1004,8 @@ class JobRunner:
             job.add("estimate_updated", time=estimator.initial().as_dict(),
                     cost=preview.as_dict(self.limit_usd)["cost"])
             output_root = core.output_root()
-            name, context, dest, stem, source = run_target(request, preview.video, output_root)
+            name, context, dest, stem, source = run_target(request, preview.video, output_root,
+                                                           preview.folder)
             if request.mode == "url":
                 source = Path(".")  # replaced after the download
             settings = pipeline.RunSettings(source=source, target_lang=request.target_lang,
@@ -986,7 +1024,8 @@ class JobRunner:
                 job.add("step_finished", step="download", skipped=reused, seconds=round(job.clock() - t0, 1),
                         cost_usd=0.0, stt_cost_usd=0.0, tokens=None, detail=settings.source.name,
                         total_cost_usd=0.0, total_stt_cost_usd=0.0)
-            settings.glossary = core.user_glossary(request.domain, settings.work_dir)
+            settings.glossary = core.user_glossary(request.domain, settings.work_dir,
+                                                   preview.extra_glossaries)
             progress = _Progress(self, job, settings, estimator)
             last_step = "pipeline"
             spending = structured_call.spend_observer.set(progress.spent)
@@ -1077,5 +1116,6 @@ class JobRunner:
             stop.set()
             self._time_sent.pop(job.id, None)
             self._active = None
-            self._busy.release()
+            if release:
+                self._busy.release()
             job.end(final[0], final[0], **final[1])

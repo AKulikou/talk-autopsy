@@ -256,3 +256,53 @@ code { overflow-wrap: anywhere; }
 .recent-list .meta { display: block; color: var(--muted); font-size: 0.9rem; }
 .recent-actions { display: flex; gap: 0.5rem; }
 .recent-actions button { padding: 0.4rem 0.8rem; }
+
+/* Courses (v1.2): the lesson list, the header on the waiting screen, the player's lesson buttons. */
+body[data-view="view-course"] main, body[data-view="view-course"] .top,
+body[data-view="view-course-done"] main, body[data-view="view-course-done"] .top { max-width: 56rem; }
+.course-tools { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: center; margin-bottom: 0.5rem; }
+.course-tools button { padding: 0.35rem 0.8rem; }
+.course-tools .range { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.course-tools .range label { margin: 0; font-weight: normal; }
+.course-tools input[type="number"] {
+  width: 4.5rem; font: inherit; padding: 0.3rem 0.4rem; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--bg); color: var(--text);
+}
+.lessons { list-style: none; padding: 0; margin: 0 0 1rem; border-top: 1px solid var(--line); }
+#course-list { max-height: min(60vh, 34rem); overflow-y: auto; }
+.lessons li {
+  display: grid; grid-template-columns: auto 2.6rem 1fr auto; gap: 0.2rem 0.6rem; align-items: baseline;
+  padding: 0.4rem 0.25rem; border-bottom: 1px solid var(--line);
+}
+.lessons li label { display: contents; font-weight: normal; }
+.lessons .num { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.lessons .title { overflow-wrap: anywhere; }
+.lessons .len { color: var(--muted); font-variant-numeric: tabular-nums; }
+.lessons .mark { grid-column: 3 / span 2; font-size: 0.88rem; color: var(--muted); }
+.lessons .mark.ready { color: var(--ok); }
+.lessons .mark.bad { color: var(--bad); }
+.lessons li[data-available="false"] { opacity: 0.55; }
+.lessons li[data-status="running"] { box-shadow: inset 3px 0 0 var(--accent); }
+.lessons .actions-inline { grid-column: 3 / span 2; display: flex; gap: 0.5rem; }
+.lessons .actions-inline button { padding: 0.25rem 0.7rem; }
+.lessons.compact li { grid-template-columns: 2.6rem 1fr auto; }
+.lessons.compact .mark, .lessons.compact .actions-inline { grid-column: 2 / span 2; }
+.course-head {
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 0.75rem; margin: 0 0 1rem;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+.course-head .run-title { margin: 0 0 0.25rem; }
+.lesson-of { font-weight: 600; margin: 0.25rem 0; }
+#course-bar { width: 100%; height: 0.8rem; margin: 0.25rem 0 0.5rem; }
+.course-head details { margin-top: 0.5rem; }
+.course-head summary { cursor: pointer; color: var(--muted); }
+.course-head .actions { margin-top: 0.75rem; }
+.lesson-nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin: 0 0 0.75rem; }
+.lesson-nav .lesson-of { flex: 1 1 12rem; text-align: center; }
+.recent-list .course-lessons { flex-basis: 100%; list-style: none; margin: 0.25rem 0 0; padding: 0 0 0 1rem; }
+.recent-list .course-lessons li { padding: 0.3rem 0; border-bottom: none; }
+@media (max-width: 40rem) {
+  .lessons li { grid-template-columns: auto 2.2rem 1fr; }
+  .lessons .len { grid-column: 3; }
+  .lessons .mark, .lessons .actions-inline { grid-column: 2 / span 2; }
+}
