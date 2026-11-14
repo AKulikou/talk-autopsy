@@ -3094,6 +3094,23 @@ Ideas that come up during a stage and wait for a later one.
 - Done as a bug fix (`pipeline-v3.7`, decisions 2026-11-14): **agreed
   translations of 4-letter words** (`цена` / `цену`) are accepted in their
   Russian case and number forms.
+- Done as a bug fix (`pipeline-v3.8`): a kept longer term (`hybrid smart
+  contract`) no longer demands its part's agreed form (`смарт-контракт`).
+- **Agreed nouns meet verbs and gerunds** (course run, 14 Nov): `finding` ->
+  `находка` (meant for an audit finding) refused "finding a hash" four times,
+  `audit` -> `аудит` refused "could audit this" once; the sentences stayed
+  English. Telling a verb from the noun needs part-of-speech knowledge; for the
+  dictionary, v2 proposes `audit finding` instead of `finding` (E1 review).
+- **Words read off the screen** (course run): an agreed term inside a button
+  ("view on block explorer"), the field names of a demo site, an Etherscan
+  tooltip and a site title stayed English because the answers kept them as
+  shown and the agreed-term check refused that (4 sentences in 10 lessons).
+  Possible fix: treat a quoted or capitalised UI phrase like a kept name;
+  needs a rule measured on stored answers first.
+- **Course estimate with the course glossary on**: lessons after the first are
+  estimated without the glossary they will get (it grows as lessons finish), so
+  the amount is a lower bound and "already done" can be shown for a lesson the
+  new glossary will re-run.
 - **Reference spoken forms:** the judge writes identifiers as heard
   (`message.sender` for `msg.sender`, `Phony` for `.PHONY`), so a correct code
   form counts as a miss. A writing rule for code identifiers would be a new

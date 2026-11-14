@@ -6,6 +6,38 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-14 — A kept longer term does not demand its part's agreed form; `pipeline-v3.8`
+
+Found by the owner's check of the course lessons before burning the TV files
+(every final line left in English counted; `scripts/left_english_report.py`).
+Lesson 2 of the course kept two real sentences in English: the run glossary
+had the auto-glossary's **kept** term `hybrid smart contract` and the Web3
+dictionary's agreed `смарт-контракт` for `smart contract`. An answer that keeps
+the longer term, as instructed, always fails the agreed-translation check of
+the shorter one, so both answers were refused. A **bug** (two instructions of
+one glossary contradict each other, and the check refuses the answer that
+follows the glossary), fixed under the bug rules.
+
+**The rule** (`translate._only_inside_kept`): where every occurrence of an
+agreed term in the source lies inside a longer kept glossary term that the
+answer keeps as it is, the agreed form is not demanded; elsewhere it still is
+(tests: the agreed form is still demanded when the term also occurs outside
+the kept one; a translated longer term with the agreed form passes).
+
+| | result |
+|---|---|
+| (a) failing test committed first | `b1760bd` (1 failure before the fix; the guard cases pass before and after) |
+| (b) golden requests | `pipeline_requests` and `direct_requests` byte-identical; `pipeline_outputs` differs only in `ru.json.stamp.json` (the translate code key) |
+| (c) saved answers, offline | 31 work folders (T1, T2, T6, T7, real runs, the course lessons and the C2b copies), 109 blocks: 107 the same problem list; the 2 others are lesson 2's block (course and C2b copy), whose saved lines are the English fallback: still refused for "left in English", only the contradictory agreed-term problem is gone |
+| (d) T2 from cache | after a one-off carry-over of 25 translation stamps (`80969d8b` -> `99609368`; lesson 2 and its C2b copies excluded, so they are re-translated): every model step skipped, 0 USD, the 22 files of `work/T2-v3-cache/` byte-identical |
+| requests | not changed: the check decides whether a second attempt is sent, never what a request contains |
+
+Searched the same class in all course lessons (10) and the real runs: only
+lesson 2. The other lines the course left in English are not this class
+(experiments.md, C2b result; Backlog): an agreed noun meeting a verb or gerund
+(`audit`, `finding`), words read off the screen (a button, field names, a
+tooltip, a site title), and one answer that did not use the agreed form twice.
+
 ## 2026-11-14 — Courses in the web page; a course glossary through the user glossary only
 
 Decisions of v1.2 session C2 (Parts 2-3; `docs/web.md`, Courses; `docs/experiments.md`, C2b):
