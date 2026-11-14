@@ -29,6 +29,7 @@ uv run talk-autopsy doctor       # ffmpeg, JavaScript runtime for YouTube, keys 
 uv run talk-autopsy run <url-or-file> --lang ru [--dry-run] [--output srt,ass|mp4-burned|all]
 uv run talk-autopsy eval T2 --hyp <transcript>.json [--raw <raw>.json] [--record --engine <e> --stage <s>]
 uv run talk-autopsy eval T6 --hyp <transcript>.json   # counts only: J/M references, bounds, verdict
+uv run talk-autopsy eval T7 --hyp <run>/fixed.json --raw <run>/raw2.json --bounds   # J/M + bounds, unsealed
 uv run talk-autopsy --help       # all commands: cut, transcribe, align, glossary-auto, fix, translate, srt,
                                  # adjudicate, resolve, judge, judge-refs, judge-compare, glossary-ref, ...
 ```
@@ -126,7 +127,10 @@ the rewritten commits); the repository is private until the owner publishes it.
 Gate 2 -> 3 passed on 2026-11-11 (T6 run once: pass, not demonstrated).
 Independent LLM reviews #1 and #2 done and answered (`docs/review-*.md`). The
 web UI is built (`docs/web.md`) and the owner accepted it. Never rewrite
-history or force-push again. VideoLingo is out of scope; dubbing is stage 4.
+history or force-push again. VideoLingo is out of scope; dubbing is stage 4. v1.2 (Web3 track): T7, an 18-minute Solidity /
+Foundry tutorial fragment, has a T6-style reference and a 79-term glossary (`ref-glossary-v2`); its
+pre-registered baseline (2026-11-14) put term accuracy at 88.02% < 90%, so Web3 dictionary v2 (E1)
+is to be built (`docs/experiments.md`, T7 baseline).
 
 ## Pitfalls
 
