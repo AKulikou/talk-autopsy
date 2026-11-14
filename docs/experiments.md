@@ -264,6 +264,13 @@ Course: Cyfrin Audits, "Solidity Blockchain Developer Foundry Full Course 2023"
 (A) (2026-11-14): 3 of 3 lessons finished, Claude 0.6150 USD, AssemblyAI
 0.3005 USD.
 
+**Limits known before the run.** One run per condition: translation varies from
+run to run, so part of any difference is noise (the T2 repeats give the scale);
+three lessons of one course; a rendering a lesson used that is not its
+auto-glossary's suggestion is not carried (F5 has no column for it, and nothing
+maps a term to the words that render it); the measure cannot tell two
+renderings outside the candidates apart.
+
 ### C2b result (2026-11-14)
 
 Runs as pre-registered and amended above (`pipeline-v3.7`; lessons 1-3 of the
@@ -297,13 +304,6 @@ work folders; nothing re-run.
 - Lessons 1-3 of the owner's course keep (A)'s version (lesson 1 is the same in
   both); the course run (Part 4) re-sends the one translation block of lessons
   2 and 3 that (A) left partly in English, as every re-run does.
-
-**Limits known before the run.** One run per condition: translation varies from
-run to run, so part of any difference is noise (the T2 repeats give the scale);
-three lessons of one course; a rendering a lesson used that is not its
-auto-glossary's suggestion is not carried (F5 has no column for it, and nothing
-maps a term to the words that render it); the measure cannot tell two
-renderings outside the candidates apart.
 
 ## T7 baseline (v1.2)
 
