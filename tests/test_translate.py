@@ -40,6 +40,35 @@ def test_validator_accepts_inflected_glossary_translation():
     assert validate_block([seg(1, "Claude Code starts a subagent.")], GLOSSARY, "ru", answer) == []
 
 
+GAS = Glossary(entries=[GlossaryEntry(term="gas price", keep=False, translations={"ru": "цена газа"}),
+                         GlossaryEntry(term="network", keep=False, translations={"ru": "сеть"})])
+
+
+@pytest.mark.parametrize("out", [
+    "Мы смотрим на цену газа.",          # accusative of a 4-letter word (C1, T7: the sentence stayed English)
+    "Всё зависит от цены газа.",         # genitive
+    "Следите за ценой газа в сети.",     # instrumental, and "сеть" in the prepositional
+    "Цены на газ сейчас низкие.",        # plural, and the genitive "газа" as the nominative "газ"
+    "Мы говорим о цене газа.",           # prepositional
+])
+def test_agreed_translation_accepts_russian_inflections_of_short_words(out):
+    source = "Look at the gas price on the network." if "сети" in out else "Look at the gas price."
+    answer = TranslationAnswer(segments=[SegmentText(id=1, text=out)])
+    problems = validate_block([seg(1, source)], GAS, "ru", answer)
+    assert not any("glossary translation" in p for p in problems), problems
+
+
+@pytest.mark.parametrize("out", [
+    "Мы смотрим на ценность газа.",      # another word that starts like "цена"
+    "Мы смотрим на цент за газ.",        # another word
+    "Мы смотрим на стоимость газа.",     # a synonym, not the agreed word
+])
+def test_agreed_translation_still_rejects_another_word(out):
+    answer = TranslationAnswer(segments=[SegmentText(id=1, text=out)])
+    problems = validate_block([seg(1, "Look at the gas price.")], GAS, "ru", answer)
+    assert any("glossary translation" in p for p in problems), problems
+
+
 def test_translate_keeps_ids_and_times_and_records_usage(fake_claude):
     def handle(kwargs):
         body = kwargs["messages"][0]["content"].split("Segments to translate:")[1]
