@@ -69,6 +69,31 @@ def test_agreed_translation_still_rejects_another_word(out):
     assert any("glossary translation" in p for p in problems), problems
 
 
+HYBRID = Glossary(entries=[
+    GlossaryEntry(term="smart contract", keep=False, translations={"ru": "смарт-контракт"}),
+    GlossaryEntry(term="hybrid smart contract", keep=True)])
+
+
+def test_a_kept_longer_term_does_not_demand_the_agreed_translation_of_its_part():
+    """Course lesson 2 (2026-11-14): "hybrid smart contract" kept, "smart contract" agreed: both refused."""
+    answer = TranslationAnswer(segments=[SegmentText(id=1, text="Это называется hybrid smart contract.")])
+    problems = validate_block([seg(1, "This is called a hybrid smart contract.")], HYBRID, "ru", answer)
+    assert not any("glossary translation" in p for p in problems), problems
+
+
+def test_the_agreed_translation_is_still_demanded_outside_the_kept_term():
+    source = "A hybrid smart contract is a smart contract with off-chain data."
+    kept_only = TranslationAnswer(segments=[SegmentText(id=1,
+                                                    text="Hybrid smart contract — это контракт с данными.")])
+    problems = validate_block([seg(1, source)], HYBRID, "ru", kept_only)
+    assert any("glossary translation" in p for p in problems), problems
+    both = TranslationAnswer(segments=[SegmentText(id=1,
+                                               text="Hybrid smart contract — это смарт-контракт с данными.")])
+    assert validate_block([seg(1, source)], HYBRID, "ru", both) == []
+    translated = TranslationAnswer(segments=[SegmentText(id=1, text="Это гибридный смарт-контракт.")])
+    assert validate_block([seg(1, "This is a hybrid smart contract.")], HYBRID, "ru", translated) == []
+
+
 def test_translate_keeps_ids_and_times_and_records_usage(fake_claude):
     def handle(kwargs):
         body = kwargs["messages"][0]["content"].split("Segments to translate:")[1]
