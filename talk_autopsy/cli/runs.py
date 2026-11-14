@@ -211,7 +211,7 @@ def run(
         report = pipeline.run(local, progress=print_progress)
         typer.echo(f"Done: {local.work_dir}")
         _print_report(report)
-        stem = youtube.safe_name(Path(source).stem)
+        stem = youtube.local_result_name(Path(source).stem, config.output_dir())
         _write_outputs(local, formats, config.output_dir() / stem, stem, Path(source),
                        ingest.probe(Path(source)) if "mp4-burned" in formats else None)
     except (FileNotFoundError, ValueError, RuntimeError, ConfigurationError, GlossaryError) as e:

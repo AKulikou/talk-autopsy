@@ -289,7 +289,7 @@ def run_target(request: JobRequest, video: "youtube.VideoInfo | None", output_ro
         stem = youtube.video_file_stem(video, dest)
         return name, context, dest, stem, dest / f"{stem}.mp4"  # where the download goes (and is reused)
     source = Path(request.path)
-    stem = youtube.safe_name(source.stem)
+    stem = youtube.local_result_name(source.stem, output_root)
     return "", "", output_root / stem, stem, source
 
 

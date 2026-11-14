@@ -18,6 +18,21 @@ export function applyStrings(root = document) {
   });
 }
 
+// A name used in mid-sentence: first letter in lower case, unless it starts an acronym ("MP4").
+export function midSentence(name) {
+  if (!name) return "";
+  const [first, second] = [...name];
+  if (second && second === second.toUpperCase() && second !== second.toLowerCase()) return name;
+  return first.toLowerCase() + name.slice(first.length);
+}
+
+// "not counting: download from YouTube" for the steps a time estimate leaves out, or "".
+export function excludedSteps(excludes) {
+  if (!excludes?.length) return "";
+  const names = [...new Set(excludes.map((s) => t(`step_${s.startsWith("outputs") ? "outputs" : s}`)))];
+  return t("est_time_excludes", { steps: names.map(midSentence).join(", ") });
+}
+
 // An error from the API in words: the string for its code, else the server's own short message.
 export function errorText(data) {
   const code = data?.error;

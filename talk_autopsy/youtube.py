@@ -359,6 +359,17 @@ def video_file_stem(video: VideoInfo, folder: Path | None = None) -> str:
     return name
 
 
+def local_result_name(stem: str, parent: Path | None = None) -> str:
+    """
+    A local file's result folder and file stem, cut at a word; in `parent`, a folder made
+    before 1.2 under the name cut mid-word is kept, so a re-run finds its earlier result.
+    """
+    name, legacy = safe_name(stem, words=True), safe_name(stem)
+    if parent is not None and legacy != name and (parent / legacy).is_dir() and not (parent / name).exists():
+        return legacy
+    return name
+
+
 def playlist_folder_name(title: str, parent: Path) -> str:
     """A playlist's folder, cut at a word; an existing folder with the name cut mid-word is kept."""
     name, legacy = safe_name(title, words=True), safe_name(title)

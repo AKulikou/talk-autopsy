@@ -1,7 +1,7 @@
 // Talk Autopsy page: four states on one page (form, estimate, running, done / failed).
 // The server enforces every rule (cost gate, one job at a time, paths); the page only asks.
 import { api } from "./api.js";
-import { applyStrings, clock, duration, errorText, gapsWarning, setStrings, t } from "./i18n.js";
+import { applyStrings, clock, duration, errorText, excludedSteps, gapsWarning, setStrings, t } from "./i18n.js";
 import { amount, cachedParts, money, stepService, usdAmount } from "./money.js";
 import { followJob } from "./events.js";
 import * as steps from "./steps.js";
@@ -182,10 +182,7 @@ function timeText(time) {
   if (!time || time.seconds === null) return t("est_time_none");
   let text = `≈ ${duration(time.seconds)}`;
   if (time.first_run_rough) text += ` (${t("est_time_rough")})`;
-  if (time.excludes?.length) {
-    const names = [...new Set(time.excludes.map((s) => t(`step_${s.startsWith("outputs") ? "outputs" : s}`)))];
-    text += `; ${t("est_time_excludes", { steps: names.join(", ") })}`;
-  }
+  if (time.excludes?.length) text += `; ${excludedSteps(time.excludes)}`;
   return text;
 }
 
