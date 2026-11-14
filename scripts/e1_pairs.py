@@ -1,15 +1,23 @@
 """
 E1 decision (docs/experiments.md, E1): a blind pairwise comparison of the translations of two runs.
 
-    uv run python scripts/e1_pairs.py sample <run A> <run B> [--seed 20261116 --order-seed 20261117 --max 20]
+    uv run python scripts/e1_pairs.py sample <run A> <run B> --dict-a glossaries/web3.md \
+        --dict-b glossaries/web3-v2.md [--seed 20261116 --order-seed 20261117 --max 20]
+    uv run python scripts/e1_pairs.py count <run A> <run B> --dict-a ... --dict-b ...
     uv run python scripts/e1_pairs.py score
 
-`sample` takes the sentence units (`ru.json`) of the two runs whose English is the same (tokens as
-the metrics read them), that contain a term of either run's glossary (`glossary.md`; whole words,
-case-insensitive) and whose Russian differs (whitespace ignored), leaving out units either run
-left in English (reverted segments, failed blocks). Up to `--max` of them are drawn at random with
-`--seed`; each item shows the English and the two Russian versions as A and B in an order drawn with
-`--order-seed`. Writes work/T7/E1-pairs.md (for the owner, in Russian) and work/T7/E1-pairs-key.json
+`sample` takes the **eligible** sentence units (`ru.json`; amendment of 2026-11-14, before any v2
+run): the English is the same in both runs (tokens as the metrics read them), neither run left the
+unit in English (reverted segments, failed blocks), and the unit contains a term that v2 **changed,
+added or removed** (`--dict-a` against `--dict-b`: a term only in one, or with another `keep`,
+`policy` or Russian rendering) **whose rendering differs** between the two runs: the rendering of a
+term in a unit is the set of its candidates found in the Russian (the term in Latin script, its
+Russian forms in either dictionary, its auto-glossary suggestions in either run's `glossary.md`;
+`course_consistency.unit_label`), and a unit where the term's label is the same in both runs (both
+`other` included) is not eligible. Up to `--max` eligible units are drawn at random with `--seed`;
+each item shows the English and the two Russian versions as A and B in an order drawn with
+`--order-seed`. `count` prints only the number of eligible units (the noise baseline: two runs of
+the same dictionary). Writes work/T7/E1-pairs.md (for the owner, in Russian) and work/T7/E1-pairs-key.json
 (which side is which run). `score` reads the owner's answers ("A", "B" or "=") and prints wins and
 losses of run B (the candidate) against run A.
 """
@@ -27,8 +35,8 @@ OUT = ROOT / "work" / "T7" / "E1-pairs.md"
 KEY = ROOT / "work" / "T7" / "E1-pairs-key.json"
 
 
-def units(run: Path, lang: str = "ru") -> tuple[dict[str, str], set[str]]:
-    """English key -> Russian, and the run's glossary terms."""
+def units(run: Path, lang: str = "ru") -> tuple[dict[str, str], dict[str, set[str]]]:
+    """English key -> Russian, and the run's glossary: term (casefolded) -> its Russian forms."""
     from talk_autopsy import metrics
     from talk_autopsy.glossary import load_glossary
     from talk_autopsy.segments import load_transcript
@@ -44,26 +52,64 @@ def units(run: Path, lang: str = "ru") -> tuple[dict[str, str], set[str]]:
         key = " ".join(metrics.tokenize(english))
         if key:
             out.setdefault(key, s.text)
-    return out, {e.term for e in load_glossary(run / "glossary.md").entries}
+    return out, forms_of(load_glossary(run / "glossary.md"), lang)
 
 
-def candidates(run_a: Path, run_b: Path) -> list[tuple[str, str, str]]:
+def forms_of(glossary, lang: str = "ru") -> dict[str, set[str]]:
+    from talk_autopsy.web.course_glossary import suggestion
+
+    out: dict[str, set[str]] = {}
+    for e in glossary.entries:
+        found = out.setdefault(e.term.casefold(), set())
+        for text in (e.translations.get(lang, ""), suggestion(e, lang)):
+            if text.strip():
+                found.add(text.strip())
+    return out
+
+
+def changed_terms(dict_a: Path, dict_b: Path, lang: str = "ru") -> dict[str, str]:
+    """Terms v2 changed, added or removed (casefolded -> spelling): in one only, or other keep/policy/form."""
+    from talk_autopsy.glossary import load_glossary
+
+    a = {e.term.casefold(): e for e in load_glossary(dict_a).entries}
+    b = {e.term.casefold(): e for e in load_glossary(dict_b).entries}
+    out = {}
+    for key in set(a) | set(b):
+        x, y = a.get(key), b.get(key)
+        if x is None or y is None or (x.keep, x.effective_policy(), x.translations.get(lang, "")) != \
+                (y.keep, y.effective_policy(), y.translations.get(lang, "")):
+            out[key] = (y or x).term
+    return out
+
+
+def candidates(run_a: Path, run_b: Path, dict_a: Path, dict_b: Path) -> list[tuple[str, str, str]]:
+    from talk_autopsy.course_consistency import unit_label
+    from talk_autopsy.glossary import load_glossary
     from talk_autopsy.web.course_glossary import count
 
-    a, terms_a = units(run_a)
-    b, terms_b = units(run_b)
-    terms = sorted(terms_a | terms_b)
+    a, forms_a = units(run_a)
+    b, forms_b = units(run_b)
+    changed = changed_terms(dict_a, dict_b)
+    dict_forms = [forms_of(load_glossary(dict_a)), forms_of(load_glossary(dict_b))]
     found = []
     for key in sorted(set(a) & set(b)):
-        if " ".join(a[key].split()) == " ".join(b[key].split()):
-            continue
-        if any(count(t, key) for t in terms):
-            found.append((key, a[key], b[key]))
+        for folded, term in sorted(changed.items()):
+            if not count(term, key):
+                continue
+            forms = set().union(*(f.get(folded, set()) for f in (forms_a, forms_b, *dict_forms)))
+            if unit_label(term, a[key], forms) != unit_label(term, b[key], forms):
+                found.append((key, a[key], b[key]))
+                break
     return found
 
 
+def count_only(args) -> None:
+    found = candidates(args.run_a, args.run_b, args.dict_a, args.dict_b)
+    print(f"eligible units ({args.run_a.name} vs {args.run_b.name}): {len(found)}")
+
+
 def sample(args) -> None:
-    found = candidates(args.run_a, args.run_b)
+    found = candidates(args.run_a, args.run_b, args.dict_a, args.dict_b)
     drawn = random.Random(args.seed).sample(found, min(args.max, len(found)))
     order = random.Random(args.order_seed)
     key, lines = [], [
@@ -72,7 +118,7 @@ def sample(args) -> None:
         "случайный: какой из них сделан с каким словарём, вы не знаете. В строке «Ответ» напишите **A**, "
         "если лучше A; **B**, если лучше B; **=**, если одинаково (или оба одинаково плохи). Смотрите в "
         "первую очередь на термины и на то, как читается фраза. Сохраните файл и напишите в чат «готово».",
-        "", f"Фраз: {len(drawn)} (из {len(found)} различающихся).", ""]
+        "", f"Фраз: {len(drawn)} (из {len(found)}, где термин словаря переведён по-разному).", ""]
     for n, (english, ru_a, ru_b) in enumerate(drawn, 1):
         b_first = order.random() < 0.5
         first, second = (ru_b, ru_a) if b_first else (ru_a, ru_b)
@@ -107,15 +153,18 @@ def score(_args) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    s = sub.add_parser("sample")
-    s.add_argument("run_a", type=Path)
-    s.add_argument("run_b", type=Path)
-    s.add_argument("--seed", type=int, default=20261116)
-    s.add_argument("--order-seed", type=int, default=20261117)
-    s.add_argument("--max", type=int, default=20)
+    for name in ("sample", "count"):
+        s = sub.add_parser(name)
+        s.add_argument("run_a", type=Path)
+        s.add_argument("run_b", type=Path)
+        s.add_argument("--dict-a", type=Path, required=True)
+        s.add_argument("--dict-b", type=Path, required=True)
+        s.add_argument("--seed", type=int, default=20261116)
+        s.add_argument("--order-seed", type=int, default=20261117)
+        s.add_argument("--max", type=int, default=20)
     sub.add_parser("score")
     args = parser.parse_args()
-    (sample if args.command == "sample" else score)(args)
+    {"sample": sample, "count": count_only, "score": score}[args.command](args)
 
 
 if __name__ == "__main__":

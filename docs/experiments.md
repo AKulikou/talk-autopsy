@@ -370,6 +370,30 @@ A, B or "=" in `work/T7/E1-pairs.md`.
   made the default, it stays an option.
 - Otherwise: **"not confirmed"**; v2 stays an option.
 
+**Amendment (owner, 2026-11-14, committed before any v2 run).** The pairwise
+sample must target the dictionary, not run-to-run noise (two runs of the same
+dictionary already differ in 96 units with a term). **Eligible units** replace
+"units with a term whose Russian differs": the English is the same in both
+runs and neither run left the unit in English (as before), **and** the unit
+contains a term that v2 **changed, added or removed** against the current
+dictionary (a term in only one of the two files, or with another `keep`,
+`policy` or Russian form), **and the rendering of that term differs** between
+v2 run 1 and (b) run 1. A term's rendering in a unit is the set of its
+candidates found in the Russian: the term in Latin script, its Russian forms in
+either dictionary and its auto-glossary suggestions in either run's glossary
+(the C2b labels, `course_consistency.unit_label`, with the translation check's
+inflection rule); a unit where the term's label is the same in both runs (both
+`other` included) is not eligible. Up to 20 eligible units are drawn at random
+with seed 20261116, A/B order seed 20261117 (`scripts/e1_pairs.py sample
+--dict-a glossaries/web3.md --dict-b glossaries/web3-v2.md`). Unchanged: the
+decision rule (wins - losses >= 3 and the guard: v2's normalized J mean >=
+95.25%, i.e. the (b) mean 96.25% minus 1 point) and "fewer than 6 eligible
+units: no measurable difference". **Noise baseline** reported next to the
+result: the number of eligible units between (b) run 1 and (b) run 2 (same
+dictionary, the same definition; `scripts/e1_pairs.py count`), computed once
+v2's file exists and before any v2 run. Removed terms count as changed: what v2
+removes (ordinary-word Solidity keywords) is part of what it does.
+
 **Known limits.** (b) run 1 was translated with the checks of `pipeline-v3.5`
 and the v2 runs with those of `pipeline-v3.8`; units either run left in English
 are excluded, so the check changes cannot decide an item, but a first answer
