@@ -248,12 +248,38 @@ def left_in_english(source: str, target: str, glossary: Glossary) -> bool:
     return not set(shared) <= kept
 
 
+# Russian case and number endings of nouns and adjectives (pipeline-v3.7), longest first.
+_RU_ENDINGS = sorted(
+    "ями ами иях иям ией ого его ому ему ыми ими ой ей ою ею ом ем ам ям ах ях ия ие ий ию ии "
+    "ый ая ое ые ую ых их ов ев ью а я о е ы и у ю ь й".split(), key=len, reverse=True)
+_CYRILLIC = re.compile(r"^[а-яё]+$")
+_RU_MIN_STEM = 3
+
+
+def _ru_stems(word: str) -> set[str]:
+    """The word and every stem left by cutting one Russian ending (at least three letters remain)."""
+    stems = {word}
+    if _CYRILLIC.match(word):
+        stems |= {word[:-len(e)] for e in _RU_ENDINGS
+                  if word.endswith(e) and len(word) - len(e) >= _RU_MIN_STEM}
+    return stems
+
+
 def _stem_present(translation: str, target: str) -> bool:
-    """Every word of an agreed translation occurs in `target`, allowing for inflected endings."""
+    """
+    Every word of an agreed translation occurs in `target`, allowing for inflected endings:
+    a word that starts with the agreed word's first `len - 2` letters (at least 4), as before, or
+    (pipeline-v3.7) a Russian word that has the same stem once one case or number ending is cut from
+    each (цена / цену / ценой / цены: stem цен), so the accusative of a 4-letter word is accepted; a
+    different word with the same start (ценность, цент) is not.
+    """
     words = _words(target)
     for part in _words(translation):
         stem = part[:max(4, len(part) - 2)]
-        if not any(w.startswith(stem) for w in words):
+        if any(w.startswith(stem) for w in words):
+            continue
+        stems = _ru_stems(part)
+        if not any(_ru_stems(w) & stems for w in words):
             return False
     return True
 
