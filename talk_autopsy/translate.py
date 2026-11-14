@@ -284,6 +284,23 @@ def _stem_present(translation: str, target: str) -> bool:
     return True
 
 
+def _only_inside_kept(term: str, source: str, target: str, glossary: Glossary) -> bool:
+    """
+    Every occurrence of `term` in `source` lies inside a longer kept glossary term that the target
+    keeps as it is (pipeline-v3.8): "hybrid smart contract" kept, "smart contract" agreed. Such an
+    occurrence is the kept term's, so the agreed translation of its part is not demanded there.
+    """
+    folded = term.casefold()
+    longer = [e.term for e in glossary.entries if e.keep and folded in e.term.casefold()
+              and e.term.casefold() != folded and e.term.casefold() in target.casefold()]
+    if not longer:
+        return False
+    rest = source
+    for kept in sorted(longer, key=len, reverse=True):
+        rest = re.sub(re.escape(kept), " ", rest, flags=re.IGNORECASE)
+    return not metrics.term_accuracy(rest, rest, [term]).rows
+
+
 def kept_terms_missing(segments: list[Segment], glossary: Glossary, answer: TranslationAnswer) -> list[str]:
     """Warnings: kept glossary terms that occur in a source segment but not in its translation."""
     warnings = []
@@ -324,7 +341,8 @@ def check_block(segments: list[Segment], glossary: Glossary, target_lang: str,
             if not occurs:
                 continue
             agreed = entry.translations.get(target_lang)
-            if not entry.keep and agreed and not _stem_present(agreed, out.text):
+            if (not entry.keep and agreed and not _stem_present(agreed, out.text)
+                    and not _only_inside_kept(entry.term, source.text, out.text, glossary)):
                 add(out.id, f"segment {out.id}: glossary translation {agreed!r} of {entry.term!r} not used")
     return problems, by_segment
 
