@@ -288,13 +288,14 @@ class Course:
                 "glossary": course_glossary.summary(self.folder) if r.course_glossary else None,
                 "lessons": [x.as_dict() for x in active]}
 
-    def save(self) -> None:
-        """course.json in the course's service folder; a failure to write it is logged only."""
+    def save(self, state: str | None = None) -> None:
+        """course.json in the course's service folder (`state`: instead of the current one); never raises."""
         r = self.preview.request
         data = {"format": 1, "playlist_id": self.preview.playlist_id, "url": r.url,
                 "title": self.preview.title,
                 "profile": r.profile, "domain": r.domain, "target_lang": r.target_lang,
-                "course_glossary": r.course_glossary, "state": self.state, "started": self.started_wall,
+                "course_glossary": r.course_glossary, "state": state or self.state,
+                "started": self.started_wall,
                 "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "lessons": [{"position": x.position, "id": x.video.id, "title": x.video.title,
                              "folder": x.folder_name, "status": x.status, "duration": x.video.duration,
@@ -457,20 +458,23 @@ class CourseRunner:
     def _run(self, course: Course) -> None:
         request = course.preview.request
         console.info("Course started: %s (%d lessons)", short(course.preview.title, 100), len(course.queue()))
+        final = "stopped"
         try:
             for lesson in list(course.queue()):
                 if course.stop_requested:
                     break
                 self._run_lesson(course, lesson)
-            course.state = "stopped" if course.queue() else "finished"
+            final = "stopped" if course.queue() else "finished"
         except Exception:
             logger.exception("course %s stopped by an error", course.id)
-            course.state = "stopped"
         finally:
+            # The lock is free before anyone can see the course end (the page, a re-submission):
+            # otherwise "Retry the failed ones" right at the end was refused as busy.
             course.current, course.current_job = None, None
-            course.save()
             self.runner._active = None
             self.runner._busy.release()
+            course.save(state=final)  # the file first, then the state readers wait for
+            course.state = final
         done = sum(1 for x in course.lessons if x.status == "finished")
         failed = sum(1 for x in course.lessons if x.status == "failed")
         console.info("Course %s: %d finished, %d failed, %d left (%s).", course.state, done, failed,
