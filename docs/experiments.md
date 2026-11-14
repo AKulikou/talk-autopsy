@@ -404,6 +404,35 @@ preference of a few items can be noise; the threshold of 3 is fixed before the
 answers. The owner knows which dictionaries are compared, not which side is
 which.
 
+### E1 runs (2026-11-14; the decision waits for the owner's pairwise answers)
+
+The three v2 runs as pre-registered (worktree at `e8f387c`: frozen paths
+identical to the tag `pipeline-v3.8`, which predates `glossaries/web3-v2.md`;
+`--domain web3-v2`, fresh work folders, profile `all`, model settings empty).
+Scored with `eval T7 --bounds --record` and `scripts/e1_terms.py`; nothing
+re-run.
+
+| T7 | (b) current dictionary, 3 runs | v2, 3 runs |
+|---|---|---|
+| **term accuracy against J, form-normalized (guard)** | 96.40 / 96.85 / 95.50%, mean **96.25%** | 95.95 / 96.85 / 95.95%, mean **96.25%** |
+| term accuracy (v2) against J, raw | 88.94 / 88.94 / 86.18%, mean 88.02% | 88.94 / 88.02 / 88.48%, mean 88.48% |
+| term accuracy (v2) against M, raw | 90.86 / 91.88 / 89.34%, mean 90.69% | 90.86 / 91.37 / 91.37%, mean 91.20% |
+| WER against J | 3.11 / 3.21 / 3.34% | 3.50 / 3.79 / 3.73% |
+| Claude per run | 0.3052 / 0.3019 / 0.3022 USD | 0.3590 / 0.3648 / 0.3817 USD |
+| AssemblyAI per run (two passes, list price) | 0.1412 USD | 0.1412 USD |
+
+- **Guard holds:** the v2 mean equals the (b) mean (96.25%), above the floor
+  of 95.25%.
+- **Eligible units for the pairwise decision** (amended rule; v2 run 1 against
+  (b) run 1): **14**, so all 14 are in `work/T7/E1-pairs.md` (seed 20261116,
+  A/B order seed 20261117; the key in `work/T7/E1-pairs-key.json`, local).
+  **Noise baseline** (same definition, (b) run 1 against (b) run 2): 4 (run 1
+  against run 3: 1).
+- Descriptive, not part of the rule: WER is 0.2-0.7 points higher with v2 (the
+  larger key-term list, 322 terms sent to the speech recognition service, is
+  the likely cause; not measured); Claude costs about 20% more per run (a
+  longer glossary in every request).
+
 ## T7 baseline (v1.2)
 
 Pre-registered on 2026-11-14, after the T7 reference and glossary were built and

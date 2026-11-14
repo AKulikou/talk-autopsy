@@ -32,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 OUT = ROOT / "work" / "T7" / "E1-pairs.md"
+ENGLISH: dict[str, str] = {}  # matching key -> the unit's English as written
 KEY = ROOT / "work" / "T7" / "E1-pairs-key.json"
 
 
@@ -52,6 +53,7 @@ def units(run: Path, lang: str = "ru") -> tuple[dict[str, str], dict[str, set[st
         key = " ".join(metrics.tokenize(english))
         if key:
             out.setdefault(key, s.text)
+            ENGLISH.setdefault(key, english)  # what the owner reads: the sentence as spoken
     return out, forms_of(load_glossary(run / "glossary.md"), lang)
 
 
@@ -98,7 +100,7 @@ def candidates(run_a: Path, run_b: Path, dict_a: Path, dict_b: Path) -> list[tup
                 continue
             forms = set().union(*(f.get(folded, set()) for f in (forms_a, forms_b, *dict_forms)))
             if unit_label(term, a[key], forms) != unit_label(term, b[key], forms):
-                found.append((key, a[key], b[key]))
+                found.append((ENGLISH.get(key, key), a[key], b[key]))
                 break
     return found
 
@@ -113,17 +115,22 @@ def sample(args) -> None:
     drawn = random.Random(args.seed).sample(found, min(args.max, len(found)))
     order = random.Random(args.order_seed)
     key, lines = [], [
-        "# Сравнение переводов: какой лучше?", "",
-        "**Что сделать.** Ниже фразы из видео на английском и два русских перевода, A и B. Порядок "
-        "случайный: какой из них сделан с каким словарём, вы не знаете. В строке «Ответ» напишите **A**, "
-        "если лучше A; **B**, если лучше B; **=**, если одинаково (или оба одинаково плохи). Смотрите в "
-        "первую очередь на термины и на то, как читается фраза. Сохраните файл и напишите в чат «готово».",
-        "", f"Фраз: {len(drawn)} (из {len(found)}, где термин словаря переведён по-разному).", ""]
+        "# Сравнение переводов: A, B или =", "",
+        "В каждой строке — фраза из видео и два перевода в случайном порядке (с каким словарём сделан "
+        "каждый, не указано). В столбце «Ответ» напишите **A**, **B** или **=** (одинаково), сохраните "
+        "файл и напишите в чат «пары готовы».", "",
+        f"Фраз: {len(drawn)} (из {len(found)}, где термин словаря переведён по-разному).", "",
+        "| № | EN | A | B | Ответ |", "|---|---|---|---|---|"]
+
+    def cell(text: str) -> str:
+        return " ".join(text.split()).replace("|", "\\|")
+
     for n, (english, ru_a, ru_b) in enumerate(drawn, 1):
         b_first = order.random() < 0.5
         first, second = (ru_b, ru_a) if b_first else (ru_a, ru_b)
         key.append({"item": n, "A": "B" if b_first else "A", "B": "A" if b_first else "B"})
-        lines += [f"## {n}", "", f"EN: {english}", "", f"A: {first}", "", f"B: {second}", "", "Ответ: ", ""]
+        lines.append(f"| {n} | {cell(english)} | {cell(first)} | {cell(second)} |  |")
+    lines.append("")
     OUT.write_text("\n".join(lines), encoding="utf-8")
     KEY.write_text(json.dumps({"run_a": str(args.run_a), "run_b": str(args.run_b), "seed": args.seed,
                                "order_seed": args.order_seed, "differing": len(found), "items": key},
@@ -133,8 +140,11 @@ def sample(args) -> None:
 
 def score(_args) -> None:
     key = json.loads(KEY.read_text(encoding="utf-8"))
-    answers = re.findall(r"^## (\d+)\s.*?^Ответ:[ \t]*(\S*)", OUT.read_text(encoding="utf-8"), re.M | re.S)
-    by_item = {int(n): a.strip().upper().replace("А", "A").replace("В", "B") for n, a in answers}
+    by_item = {}
+    for line in OUT.read_text(encoding="utf-8").splitlines():
+        found = re.match(r"^\| (\d+) \|.*\|([^|]*)\|\s*$", line)
+        if found:  # the last column; Cyrillic А and В count as the Latin letters
+            by_item[int(found.group(1))] = found.group(2).strip().upper().replace("А", "A").replace("В", "B")
     wins = losses = ties = missing = 0
     for item in key["items"]:
         answer = by_item.get(item["item"], "")
