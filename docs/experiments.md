@@ -376,17 +376,13 @@ and no metric depends on it.
   as misses; (a) wrote the spoken form and was counted right. The dictionary
   also made the translation check revert 1–2 segments per (b) run for its
   agreed translation of `gas price`.
-- **What the misses are** ((b) run 1, 24 missed occurrences against J,
-  classified by comparing the spellings in the hypothesis and in J; no text
-  quoted): **14 spelling convention** (the same words in another written form
-  of an identifier: case of a file or keyword name, a hyphen or underscore for
-  a space, digits written apart), **3 reference doubt** (J has the spoken form,
-  the pipeline the code form: the two `msg.*` members and the Makefile's
-  `.PHONY`), **3 recognition** (other words written where J has a file or
-  folder name), **4 misaligned** (the term is in the hypothesis but not at
-  the aligned place). Most of the gap to 90% is how identifiers are written,
-  not what was heard. A dictionary v2 can carry the exact written forms of the
-  identifiers the owner's courses use; it cannot fix the reference doubts.
+- **What the misses are:** mostly the written form of identifiers, not what
+  was heard (T7 term-miss breakdown, below: 80–86% of the missed occurrences
+  in every run are form differences). A dictionary v2 can carry the exact
+  written forms of the identifiers the owner's courses use; it cannot fix the
+  reference doubts. (A first classification by hand of (b) run 1, 14 form /
+  3 reference doubt / 3 recognition / 4 misaligned, is superseded by the
+  breakdown: the 4 "misaligned" were words joined or split.)
 - **Translation check and commands** (a bug, fixed afterwards in
   `pipeline-v3.6`, decisions 2026-11-14): in every run the check "left in
   English" refused both answers of block 1 for segments that are shell
@@ -397,6 +393,86 @@ and no metric depends on it.
   `pipeline-v3.6` block 1 is accepted at the first answer in (b) runs 1 and 3
   and in (a) (offline, on the stored answers). No metric above depends on it.
 - **Reading speed:** T7 has fewer fast cues than T2 and T6 (note below).
+
+### T7 term-miss breakdown (2026-11-14; diagnostic, no criterion changed)
+
+Every missed occurrence of a reference-glossary term against J in the four
+runs, from the saved outputs (`scripts/term_misses.py`; no reference, glossary
+or criterion changed; nothing re-run). One row per occurrence in J (the number
+in brackets is the occurrence's order in J), with the pipeline's form in each
+run that missed it, J's and M's form at the same place (the metric's own word
+alignment), the cause, and, where the language itself fixes the code form
+(Solidity's `msg.sender`, `msg.value`, `string.concat`, `pragma solidity`;
+Make's `.PHONY`), who matches it. Everywhere else the right form depends on what
+was on screen, which nobody has seen, so that column is empty. Causes, in this
+order: **position** (the term in exactly this form within 5 words, only the
+alignment differs), **reference doubt** (the pipeline has the language's code
+form where J has the spoken form), **form** (the same letters and digits in
+another written form: case, hyphen, underscore, space, dot, digits apart, or
+written into one token with a neighbour word), **recognition** (other words).
+
+| term (occurrence) | category | pipeline form (runs) | J form | M form | cause | code form |
+|---|---|---|---|---|---|---|
+| `Anvil` (15) | product or tool | `Anvilnet` ((b) 1, (b) 2, (b) 3) | `Anvil` | `anvil` | form (joined to a neighbour word) |  |
+| `EVM` (2) | Web3 jargon | `evm.codes` ((b) 3) | `EVM` | `EVM` | form (joined to a neighbour word) |  |
+| `NFT` (3) | Web3 jargon | `MoodNFT` ((a)) | `NFT` | `NFT` | form (joined to a neighbour word) |  |
+| `opcode` (10) | general dev term | `(inside) evm.codes` ((b) 3) | `opcodes` | `opcodes` | recognition |  |
+| `MoodNFT` (1) | identifier | `Mood NFT` ((b) 1, (b) 2, (b) 3) | `MoodNFT` | `mood nft` | form (space) |  |
+| `MoodNFT` (2) | identifier | `MoodNft` ((b) 2); `Mood NFT` ((b) 3) | `MoodNFT` | `moon nft` | form (case); form (space) |  |
+| `MoodNFT` (3) | identifier | `MoodNft` ((b) 2); `Mood NFT` ((b) 3) | `MoodNFT` | `mood nft` | form (case); form (space) |  |
+| `MoodNFT` (4) | identifier | `Mood NFT` ((b) 2, (b) 3, (a)) | `MoodNFT` | `mood nft` | form (space) |  |
+| `Encoding.sol` (1) | identifier | `encoding.sol` ((b) 1, (b) 2, (b) 3, (a)) | `Encoding.sol` | `Encoding.sol` | form (case) |  |
+| `Encoding.sol` (2) | identifier | `encoding.sol` ((b) 1, (b) 2, (b) 3, (a)) | `Encoding.sol` | `Encoding.sol` | form (case) |  |
+| `Encoding.sol` (3) | identifier | `encoding.sol` ((b) 1, (b) 2, (b) 3, (a)) | `Encoding.sol` | `encoding.sol` | form (case) |  |
+| `CallAnything.sol` (1) | identifier | `callAnything.sol` ((b) 1, (b) 2, (b) 3, (a)) | `CallAnything.sol` | `callAnything.sol` | form (case) |  |
+| `make deploy-mood` (1) | CLI command | `make deploy_mood` ((b) 1, (b) 3); `make deploy mood` ((a)) | `make deploy-mood` | `make deploy-mood` | form (hyphen); form (hyphen, underscore) |  |
+| `ethers.js` (1) | product or tool | `Ethers.js` ((b) 3) | `ethers.js` | `ethers.js` | form (case) |  |
+| `DeployMoodNFT` (1) | identifier | `deployMoodNFT` ((b) 1, (b) 3, (a)); `deployMoodNft` ((b) 2) | `DeployMoodNFT` | `DeployMoodNFT` | form (case) |  |
+| `moodnft.s.sol` (1) | identifier | `MoodNFT.s.sol` ((b) 1, (b) 3); `MoodNft.s.sol` ((b) 2) | `moodnft.s.sol` | `moodnft.s.sol` | form (case) |  |
+| `NETWORK_ARGS` (1) | identifier | `Network args` ((b) 1, (b) 2, (b) 3, (a)) | `NETWORK_ARGS` | `NETWORK_ARGS` | form (underscore, space) |  |
+| `mintNft()` (1) | identifier | `mintNFT` ((b) 1, (b) 3, (a)) | `mintNft` | `mint nft` | form (case) |  |
+| `hardhat-nft-fcc` (1) | identifier | `Hardhat NFT FCC` ((b) 1, (b) 2, (b) 3, (a)) | `hardhat-nft-fcc` | `hardhat-nft-fcc` | form (hyphen, space) |  |
+| `combineStrings` (1) | identifier | `combine strings` ((b) 1, (b) 2, (b) 3, (a)) | `combineStrings` | `combine strings` | form (case, space) |  |
+| `string.concat` (1) | identifier | `String.concat` ((b) 1, (b) 2, (b) 3, (a)) | `string.concat` | `string.concat` | form (case) | reference |
+| `SimpleStorage.abi` (1) | identifier | `simple_storage.abi` ((b) 1, (b) 2, (b) 3); `simple_storage ABI` ((a)) | `SimpleStorage.abi` | `SimpleStorage.abi` | form (underscore); form (underscore, dot, space) |  |
+| `SimpleStorage.bin` (1) | identifier | `simple_storage.bin` ((b) 1, (b) 2, (b) 3, (a)) | `SimpleStorage.bin` | `simplestorage.bin` | form (underscore) |  |
+| `ethers-simple-storage` (1) | identifier | `ether simple storage` ((b) 1, (b) 2, (b) 3, (a)) | `ethers-simple-storage` | `ethers-simple-storage` | recognition |  |
+| `SELFDESTRUCT` (1) | identifier | `selfdestruct` ((b) 1, (b) 2, (b) 3); `self-destruct` ((a)) | `SELFDESTRUCT` | `self-destruct` | form (case); form (hyphen) |  |
+| `PUSH2` (1) | identifier | `push 2` ((b) 1, (b) 2, (b) 3, (a)) | `PUSH2` | `PUSH2` | form (case, space, digits apart) |  |
+| `MIT` (1) | general dev term | `MIT-pragma-Solidity` ((b) 1); `MIT-Fragma-Solidity` ((b) 2, (b) 3, (a)) | `MIT` | `MIT` | form (joined to a neighbour word) |  |
+| `pragma solidity` (1) | identifier | `MIT-pragma-Solidity` ((b) 1); `(inside) MIT-Fragma-Solidity` ((b) 2, (b) 3, (a)) | `pragma solidity` | `pragma solidity` | form (joined to a neighbour word); recognition | reference |
+| `Phony` (1) | identifier | `.PHONY` ((b) 1, (b) 3, (a)) | `Phony` | `Phony` | reference doubt | pipeline |
+| `message.sender` (1) | identifier | `msg.sender` ((b) 1, (b) 2, (b) 3) | `message.sender` | `message.sender` | reference doubt | pipeline |
+| `message.value` (1) | identifier | `msg.value` ((b) 1, (b) 2, (b) 3) | `message.value` | `message.value` | reference doubt | pipeline |
+
+| run | missed | form | reference doubt | position | recognition |
+|---|---|---|---|---|---|
+| (b) 1 | 24 | 20 | 3 | 0 | 1 |
+| (b) 2 | 24 | 20 | 2 | 0 | 2 |
+| (b) 3 | 30 | 24 | 3 | 0 | 3 |
+| (a) | 21 | 18 | 1 | 0 | 2 |
+
+Reading (descriptive only; the E1 rule is unchanged and was decided on J):
+
+- **Form differences dominate:** 20 of 24, 20 of 24, 24 of 30 and 18 of 21
+  missed occurrences. The commonest: an identifier written as separate words
+  (`Mood NFT`, `combine strings`, `Network args`, `push 2`), a file or function
+  name with other case (`encoding.sol`, `callAnything.sol`, `deployMoodNFT`), an
+  underscore for a camel-case file name (`simple_storage.abi`), words joined
+  with hyphens (`MIT-pragma-Solidity`). Which side is right depends on the
+  screen in most rows; J follows the judge's ear, the pipeline the
+  corrector's guess.
+- **Reference doubt, pipeline right by the language:** `msg.sender`,
+  `msg.value`, `.PHONY` (1–3 per run; (a) wrote two of them in the spoken form
+  and was counted right). **Reference right by the language:** `string.concat`
+  (the pipeline capitalised it) and `pragma solidity` (joined into one token,
+  or heard as another word).
+- **Recognition errors:** 1–3 per run (`ether` for `ethers`, a word heard as
+  another inside `pragma solidity`, `evm.codes` for J's two words).
+- **No position misses:** every missed occurrence differs in form or words at
+  its place.
+- As an illustration only, not a metric: counting the form differences and
+  the reference doubts as hits would put (b) run 1 at 216 of 217 (99.5%).
 
 ### T7 reading speed note (2026-11-14; no change to subtitle assembly)
 
