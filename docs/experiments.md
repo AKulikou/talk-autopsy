@@ -249,6 +249,21 @@ model call; the module's docstring is the definition):
   lessons 2-3 in (B) is at most 1.15 times (A);
 - otherwise default **OFF**; the option stays.
 
+**Amendment (2026-11-14, after run (A), before run (B)).** (B) runs in (A)'s
+output root (`work/C2b/without/output`, the same course and lesson folders)
+instead of its own, with profile "laptop" (no burned-in MP4). Why: the
+pipeline's audio step is cached by the source video's path, size and time
+(`rerun_plan`, `pipeline.up_to_date`), so (B) in a folder of its own would
+extract the audio again and risk paying for speech recognition twice; and the
+owner wants each lesson's TV file burned once, from the final version. No
+metric changes: both conditions' work folders are copied aside after each run,
+(A)'s `course.json` (per-lesson cost) and subtitles were copied to
+`work/C2b/without/` before (B), and the metric reads only those copies.
+Course: Cyfrin Audits, "Solidity Blockchain Developer Foundry Full Course 2023"
+(playlist `PL2-Nvp2Kn0FPH2xU3IbKrrkae-VVXs1vk`, the owner's choice at STOP 1).
+(A) (2026-11-14): 3 of 3 lessons finished, Claude 0.6150 USD, AssemblyAI
+0.3005 USD.
+
 **Limits known before the run.** One run per condition: translation varies from
 run to run, so part of any difference is noise (the T2 repeats give the scale);
 three lessons of one course; a rendering a lesson used that is not its
