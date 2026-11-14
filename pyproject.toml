@@ -1,6 +1,6 @@
 [project]
 name = "talk-autopsy"
-version = "1.1.0"
+version = "1.2.0"
 description = "English technical talks to subtitles in a target language, with every stage measured on a fixed test set"
 readme = "README.md"
 license = "MIT"

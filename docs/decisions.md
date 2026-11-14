@@ -6,6 +6,15 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-14 — Version 1.2.0 under the cache-key rule
+
+The package version moves 1.1.0 -> 1.2.0 in `pyproject.toml` and `uv.lock`,
+as the 1.1.0 bump: the `uv.lock` diff is the project's own `version` line
+(`uv lock`: "Updated talk-autopsy v1.1.0 -> v1.2.0"); nothing in the package
+reads its own version; the golden request tests pass unchanged; T2 from cache
+skips every model step at 0 USD and the 22 files are byte-identical. No new
+pipeline tag: `pipeline-v3.9` describes the pipeline.
+
 ## 2026-11-14 — A Russian sentence with another term form is kept, not English; `pipeline-v3.9`
 
 Decision (owner, after the course run): a segment whose two answers were
