@@ -353,22 +353,36 @@ def validate_block(segments: list[Segment], glossary: Glossary, target_lang: str
     return check_block(segments, glossary, target_lang, answer)[0]
 
 
-def revert_segments(segments: list[Segment], glossary: Glossary, target_lang: str,
-                    answer: TranslationAnswer) -> tuple[TranslationAnswer, dict[int, list[str]]] | None:
+AGREED_TERM_PROBLEM = ": glossary translation "
+
+
+def only_agreed_term(problems: list[str]) -> bool:
+    """Every problem of a segment is an agreed glossary translation not used (pipeline-v3.9)."""
+    return bool(problems) and all(AGREED_TERM_PROBLEM in p and p.endswith(" not used") for p in problems)
+
+
+def revert_segments(segments: list[Segment], glossary: Glossary, target_lang: str, answer: TranslationAnswer
+                    ) -> tuple[TranslationAnswer, dict[int, list[str]], dict[int, list[str]]] | None:
     """
     A rejected answer whose every problem belongs to one segment, made usable:
-    those segments keep their English source text (pipeline-v3.4). None for other
-    segment ids, or when nothing is wrong.
+    those segments keep their English source text (pipeline-v3.4), except a segment
+    whose only problem is an agreed glossary translation not used: it keeps the
+    model's translation, and the problem becomes a warning (pipeline-v3.9: a Russian
+    sentence with another form of the term is better than English on screen).
+    Returns (answer, reverted problems, kept problems); None for other segment ids,
+    or when nothing is wrong.
     """
     problems, by_segment = check_block(segments, glossary, target_lang, answer)
     if not problems or len(problems) != sum(len(p) for p in by_segment.values()):
         return None
     if len(by_segment) == len(answer.segments):
         return None  # every segment wrong: the block fails as a whole
+    kept = {i: p for i, p in by_segment.items() if only_agreed_term(p)}
+    reverted = {i: p for i, p in by_segment.items() if i not in kept}
     sources = {s.id: s.text for s in segments}
     repaired = TranslationAnswer(segments=[
-        SegmentText(id=s.id, text=sources[s.id] if s.id in by_segment else s.text) for s in answer.segments])
-    return repaired, by_segment
+        SegmentText(id=s.id, text=sources[s.id] if s.id in reverted else s.text) for s in answer.segments])
+    return repaired, reverted, kept
 
 
 def _prefix(prompt: str, glossary: Glossary, context: blocks.VideoContext, target_lang: str,
@@ -515,7 +529,9 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     Both attempts of a block rejected only for single segments (empty, left in
     English, agreed glossary translation not used; translation-v2.x): the block is
     accepted with those segments in English (`meta.translation.reverted_segments`,
-    pipeline-v3.4); other segment ids still fail the whole block.
+    pipeline-v3.4); a segment whose only problem is the agreed glossary translation
+    keeps the model's translation with a warning (`meta.translation.agreed_term_kept`,
+    pipeline-v3.9); other segment ids still fail the whole block.
     """
     if done and version == V3:
         raise ValueError("done (reusing accepted blocks) is not supported for translation-v3")
@@ -536,6 +552,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
     parts = blocks.make_blocks(transcript)
     reused: list[int] = []
     reverted: list[dict] = []
+    agreed_kept: list[dict] = []  # pipeline-v3.9: translations kept although an agreed term is not in them
     for block in parts:
         label = f"{version} block {block.number}/{len(parts)}"
         if done and all(s.id in done for s in block.segments):
@@ -564,12 +581,20 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
                 failed.append({"block": block.number, "ids": [s.id for s in block.segments], "error": str(e)})
                 logger.warning("%s failed validation twice; its segments stay in English: %s", label, e)
             else:
-                answer, problems = usable
-                reverted.append({"block": block.number, "ids": sorted(problems),
-                                 "problems": {str(i): problems[i] for i in sorted(problems)}})
-                logger.warning("%s: both answers were rejected for single segments only; %d segment(s) stay "
-                               "in English, the block's other translations are kept: %s", label,
-                               len(problems), "; ".join(p for i in sorted(problems) for p in problems[i]))
+                answer, problems, kept = usable
+                if problems:
+                    reverted.append({"block": block.number, "ids": sorted(problems),
+                                     "problems": {str(i): problems[i] for i in sorted(problems)}})
+                    logger.warning("%s: both answers were rejected for single segments only; %d segment(s) "
+                                   "stay in English, the block's other translations are kept: %s", label,
+                                   len(problems), "; ".join(p for i in sorted(problems) for p in problems[i]))
+                if kept:
+                    agreed_kept.append({"block": block.number, "ids": sorted(kept),
+                                        "problems": {str(i): kept[i] for i in sorted(kept)}})
+                    warnings.extend(p for i in sorted(kept) for p in kept[i])
+                    logger.warning("%s: %d segment(s) keep the model's translation although an agreed "
+                                   "glossary translation is not in it: %s", label, len(kept),
+                                   "; ".join(p for i in sorted(kept) for p in kept[i]))
                 texts.update({s.id: s.text for s in answer.segments})
                 warnings.extend(kept_terms_missing(block.segments, glossary, answer))
                 tell_observer(label, answer, reverted=sorted(problems))
@@ -601,6 +626,7 @@ def translate(transcript: Transcript, glossary: Glossary, target_lang: str, *, m
         "blocks": len(parts),
         "failed_blocks": failed,
         **({"reverted_segments": reverted} if reverted else {}),
+        **({"agreed_term_kept": agreed_kept} if agreed_kept else {}),
         **({"reused_blocks": reused} if done else {}),
         "warnings": warnings,
         **({"marker_warnings": marker_warnings} if version == V3 else {}),
