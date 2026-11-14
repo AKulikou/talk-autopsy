@@ -5,6 +5,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Identity: every commit not yet on origin/main must carry the GitHub noreply address as author and
+# committer (owner, 2026-11-14). Only hashes are printed, never the other address.
+noreply='332971863+AKulikou@users.noreply.github.com'
+echo "> identity of the commits in origin/main..HEAD"
+lines=$(git log 'origin/main..HEAD' '--format=%h %ae %ce')
+bad=$(printf '%s\n' "$lines" | awk -v n="$noreply" 'NF && ($2 != n || $3 != n) {print $1}' | tr '\n' ' ')
+if [ -n "$bad" ]; then
+  echo "commits with an author or committer email other than $noreply: $bad" >&2
+  exit 1
+fi
+echo "  $(printf '%s' "$lines" | grep -c . || true) commit(s) not pushed, all with the noreply address"
+
 # --inexact: keep optional extras installed here (the align extra, torch for the Gemini fallback);
 # CI syncs a fresh environment with uv sync --locked, so the checked packages are the same.
 uv sync --locked --inexact

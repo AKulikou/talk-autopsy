@@ -13,6 +13,18 @@ function Invoke-Step([string]$Program, [string[]]$Arguments) {
 Push-Location (Split-Path -Parent $PSScriptRoot)
 $saved = @{}
 try {
+    # Identity: every commit not yet on origin/main must carry the GitHub noreply address as author and
+    # committer (owner, 2026-11-14). Only hashes are printed, never the other address.
+    $noreply = '332971863+AKulikou@users.noreply.github.com'
+    Write-Host "> identity of the commits in origin/main..HEAD"
+    $lines = @(git log 'origin/main..HEAD' '--format=%h %ae %ce')
+    if ($LASTEXITCODE -ne 0) { throw 'could not list origin/main..HEAD (no origin/main?)' }
+    $bad = @($lines | Where-Object { $_ } | Where-Object {
+        $parts = $_.Split(' '); $parts[1] -ne $noreply -or $parts[2] -ne $noreply })
+    if ($bad.Count -gt 0) {
+        throw "commits with an author or committer email other than $noreply`: $(($bad | ForEach-Object { $_.Split(' ')[0] }) -join ', ')"
+    }
+    Write-Host "  $($lines.Count) commit(s) not pushed, all with the noreply address"
     # --inexact: keep optional extras installed here (the `align` extra, torch for the Gemini fallback);
     # CI syncs a fresh environment with `uv sync --locked`, so the checked packages are the same.
     Invoke-Step uv @('sync', '--locked', '--inexact')
