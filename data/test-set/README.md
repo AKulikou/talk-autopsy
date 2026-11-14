@@ -14,7 +14,7 @@ fragments, so results stay comparable from one experiment to the next.
 | T4 | screen demo / tutorial | fast speech, code identifiers, shell commands | TBD | TBD | TBD |
 | T5 | university lecture | slow pace, long sentences | TBD | TBD | TBD |
 | T6 | workshop with live demo (hold-out, run once) | non-native speaker | 10:00 (cut 25:46–35:46 from 41:24; speech share 93.8%) | AI-assisted software development | 51 (drafted by Gemini from the reference; tracked since the run) |
-| T7 | Web3 tutorial with code on screen (v1.2) | not determined | 18:00 (cut 21:49:15–22:07:15 from 38:10:24) | Solidity and Foundry | built from the reference (below) |
+| T7 | Web3 tutorial with code on screen (v1.2) | not determined | 18:00 (cut 21:49:15–22:07:15 from 38:10:24) | Solidity and Foundry | 79 (drafted by Gemini from the reference, `ref-glossary-v2`, one of six categories each) |
 
 ## Sources
 
