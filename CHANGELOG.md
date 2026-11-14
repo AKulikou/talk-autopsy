@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased (1.2, Web3 track)
+
+**Fixed**
+
+- `talk-autopsy run <audio file> --output all` (or `mp4-soft`, `mp4-burned`)
+  did every paid step and then failed in ffmpeg, because an audio file has no
+  picture. The video formats are now skipped for an audio file, with a note
+  in the plan, as the web page already did.
+
+**Evaluation**
+
+- T7, an 18-minute Solidity / Foundry tutorial fragment, with a reference
+  built like T6's and a reference glossary of 79 terms in six categories
+  (`glossary-ref --prompt v2`); `eval --bounds` scores any fragment against
+  both judge references with the bounds.
+
 ## 1.1.0 — 2026-11-13
 
 A local web page over the same core, on the frozen pipeline (`pipeline-v3.5`:

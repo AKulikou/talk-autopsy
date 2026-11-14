@@ -6,6 +6,7 @@ Steps:
   1. stt        speech recognition (assemblyai; first pass, compressed audio upload) -> raw.json
   2. fix        Claude correction (correction-v2, claude-sonnet-5-5) -> fixed.json
   3. srt        subtitles -> .ru.srt/.ass and .en.srt/.ass
-Outputs: srt, ass, bilingual, mp4-soft, mp4-burned
+Outputs: srt, ass, bilingual
+  audio file: no picture for mp4-soft, mp4-burned; those outputs are skipped
 User glossary: <GLOSSARIES>/web3.md (earlier files win)
 Estimate: 0.0 min of video: about 0.00 USD Claude + 0.00 USD AssemblyAI (list price), about 0 min of processing plus download (and burn-in, if asked)

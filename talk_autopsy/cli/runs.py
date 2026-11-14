@@ -10,6 +10,8 @@ from talk_autopsy.cli.common import fail, log_to_stderr, print_progress
 from talk_autopsy.config import ConfigurationError
 from talk_autopsy.glossary import GlossaryError, load_glossary
 from talk_autopsy.segments import load_transcript
+from talk_autopsy.web.settings import VIDEO_FORMATS
+from talk_autopsy.web.sources import is_audio_only
 
 # Pipeline order; `run --steps` takes any subset and keeps this order.
 STEPS: dict[str, str] = {
@@ -153,6 +155,10 @@ def run(
         raise typer.BadParameter(str(e), param_hint="--translation") from None
     if not is_url(source) and not Path(source).is_file():
         fail(f"No such file: {source}")
+    pictures = []  # an audio file has no picture for these (the web page drops them too, web/jobs.py)
+    if not is_url(source) and is_audio_only(Path(source)):
+        pictures = [f for f in formats if f in VIDEO_FORMATS]
+        formats = [f for f in formats if f not in VIDEO_FORMATS] or ["srt"]
     try:
         glossary_paths = user_glossary.user_glossary_paths(glossary, domain)
     except GlossaryError as e:
@@ -167,6 +173,8 @@ def run(
                                     helper=config.helper_model(), lang=target_lang, engine=engine)
         typer.echo(f"  {number}. {step_name:<10} {detail}")
     typer.echo(f"Outputs: {', '.join(formats)}")
+    if pictures:
+        typer.echo(f"  audio file: no picture for {', '.join(pictures)}; those outputs are skipped")
     if glossary_paths:
         typer.echo(f"User glossary: {', '.join(str(p) for p in glossary_paths)} (earlier files win)")
     extra_context = glossary_auto.read_context(context)
