@@ -608,19 +608,20 @@ current Web3 dictionary, three runs, pre-registered:
   rater, 14 sentences, and T7 belongs to the same course family as v2's course
   terms, so this is "v2 on this course family"; the pairs leave out the lines
   v2's agreed forms pushed into English under `pipeline-v3.8` (now kept in
-  Russian by `pipeline-v3.9`). On real lessons (11-15 of the course) v2.1
-  cost 0.020-0.032 USD of Claude per minute against 0.016 with the current
-  dictionary, above the owner's 15% limit, so the current dictionary stays
-  the default and v2.1 is an option.
+  Russian by `pipeline-v3.9`). On real lessons (11-15 of the course) no
+  sentence stayed in English, but v2.1 cost 0.0199 USD of Claude per minute
+  against 0.0158 with the previous dictionary (about +0.25 USD per hour of
+  video), above the 15% limit set before; the owner made v2.1 the default
+  anyway, for the translation the pairs preferred.
 
 ## Status and roadmap
 
 Status: **v1.2, the Web3 track** (version 1.2.0; [CHANGELOG](CHANGELOG.md)):
 courses from YouTube playlists in the local web UI, the Web3 test fragment T7,
 and a Web3 dictionary v2 tested by E1; the default "about smart contracts"
-dictionary is the current one (`glossaries/web3.md`): v2 won E1, and its v2.1
-was the default for a day, but on real lessons it cost more than the 15% the
-owner allowed, so it stays an option (`--domain web3-v2.1`). v1.1 added the local web UI over the CLI
+dictionary is v2.1 (`glossaries/web3-v2.1.md`): v2 won E1, and on real lessons
+v2.1 costs about 0.25 USD more Claude per hour of video, above the 15% limit
+set before, which the owner accepted for the better translation. v1.1 added the local web UI over the CLI
 tool of stage 3. Stage 2 closed on 2026-11-11 (owner's
 decision, [Gate 2 -> 3](docs/experiments.md#gate-2---3-2026-11-11)): the
 hold-out passed on term accuracy (not demonstrated), the absolute translation

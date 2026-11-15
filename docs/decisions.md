@@ -6,6 +6,19 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-15 — The owner sets v2.1 as the default Web3 dictionary despite the cost guard
+
+Decision (owner): the page's "about smart contracts" option uses **v2.1**
+(`web/settings.WEB3_DICTIONARY = "web3-v2.1"`), although the real-use guard
+recorded on 2026-11-14 failed on cost. Numbers (`docs/experiments.md`,
+real-use guard result): no real sentence in English in lessons 11-15 (passed);
+Claude 0.01988 USD per minute of video against 0.01579 for lessons 1-10 and
+the limit 0.01816 (failed), i.e. about **+0.25 USD per hour of video**. Why:
+that extra is acceptable for the translation the owner preferred in E1's blind
+pairs (9 to 0, 5 the same). This overrides the rule's consequence by the
+owner's choice; the measurement is unchanged. The previous dictionary stays as
+`--domain web3`.
+
 ## 2026-11-15 — The owner's notes on the course screens (STOP 4)
 
 After the owner's real course run (lessons 11-15, watched on the TV through

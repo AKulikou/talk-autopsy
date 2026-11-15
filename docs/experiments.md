@@ -536,10 +536,16 @@ result markers' Claude cost):
   E1 already measured about 20% more Claude per run with v2 (the 312-term
   glossary is in every request), above the 15% allowed; lesson 11 is short, so
   its fixed per-lesson part (the glossary step, the cached prefix) weighs more.
-- **By the recorded rule the default is the current `web3.md` again**; v2.1
-  stays an option (`--domain web3-v2.1`). Nothing is re-run: no block has a
-  line in English, and the cost cannot be undone. E1's result (v2 preferred 9 /
-  0 / 5) stands; what failed is the cost condition the owner set for real use.
+- **By the recorded rule the default was the current `web3.md` again**; v2.1
+  stayed an option. Nothing was re-run: no block had a line in English, and the
+  cost cannot be undone. E1's result (v2 preferred 9 / 0 / 5) stands; what failed
+  is the cost condition the owner set for real use.
+- **Then the owner set v2.1 as the default anyway** (2026-11-15, decisions):
+  the guard **failed on cost and passed on English lines**; lessons 11-15
+  together cost 1.0498 USD of Claude for 52.8 min, 0.01988 USD per minute
+  against 0.01579 for lessons 1-10, **+0.25 USD per hour of video**, which the
+  owner accepts for the translation the pairs preferred (9 to 0). The default
+  is set by the owner, not by the pre-registered rule.
 
 ## T7 baseline (v1.2)
 

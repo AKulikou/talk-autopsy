@@ -29,8 +29,9 @@ about).
   on the owner's course (C2b): no fewer inconsistent terms on lessons 1-3 (2
   and 2), so it is off by default.
 - **Web3 dictionary v2** (`glossaries/web3-v2.md`, 312 terms, `--domain
-  web3-v2`), reviewed row by row by the owner, and v2.1 (`deploy` ->
-  «развернуть»), an option (`--domain web3-v2.1`).
+  web3-v2`), reviewed row by row by the owner, and **v2.1** (`deploy` ->
+  «развернуть»), the page's default Web3 dictionary (the previous one stays as
+  `--domain web3`).
 - `scripts/course_run.py` (a course through the page's own code, without a
   browser), `scripts/left_english_report.py` (lines a run left in English),
   `scripts/e1_terms.py` and `talk_autopsy/term_forms.py` (term accuracy with
@@ -87,9 +88,9 @@ about).
   English per run under `pipeline-v3.8` (8, 3, 6 with the current one), which
   `pipeline-v3.9` turns into Russian with another term form.
   The owner's blind choice on 14 pairs: v2 9, the current dictionary 0, the
-  same 5 (+9 >= 3): v2 accepted. On real lessons v2.1 cost more than the
-  owner's 15% limit (0.020-0.032 against 0.016 USD of Claude per minute), so
-  the current dictionary stays the page's default.
+  same 5 (+9 >= 3): v2 accepted. On real lessons (11-15) no sentence stayed
+  in English, but v2.1 cost about +0.25 USD of Claude per hour of video, above
+  the 15% limit set before; the owner made v2.1 the default anyway.
 
 ## 1.1.0 — 2026-11-13
 

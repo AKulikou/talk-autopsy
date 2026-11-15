@@ -135,9 +135,10 @@ from YouTube playlists in the web page (`web/courses.py`, `docs/web.md`), the
 shared course glossary (off by default after C2b), T7 (an 18-minute Solidity /
 Foundry fragment with a T6-style reference, `ref-glossary-v2`), dictionary v2
 (`glossaries/web3-v2.md`) accepted by E1 on 2026-11-15 (owner's blind pairs 9 /
-0 / 5); its v2.1 (`glossaries/web3-v2.1.md`, `deploy` -> «развернуть») was the
-page's default until the real-use guard failed on cost (lessons 11-15): the
-default is `web3.md` again (`web/settings.WEB3_DICTIONARY`), v2.1 an option. v1.1.0
+0 / 5); its v2.1 (`glossaries/web3-v2.1.md`, `deploy` -> «развернуть») is the
+page's default Web3 dictionary (`web/settings.WEB3_DICTIONARY`): the real-use
+guard failed on cost (+0.25 USD per hour of video) and the owner chose it
+anyway; `web3.md` stays as `--domain web3`. v1.1.0
 (`v1.1`, 2026-11-13) was the web UI, on a history rewritten once to remove
 identifying details (all tags re-created). Gate 2 -> 3 passed on 2026-11-11 (T6
 run once: pass, not demonstrated). Independent LLM reviews #1 and #2 done and
