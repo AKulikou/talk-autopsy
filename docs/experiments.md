@@ -484,6 +484,36 @@ Claude per minute of video of the run that translated the lesson, against
 lessons 1-10's first runs (2.0651 USD for 130.8 min = 0.01579 USD per minute;
 the limit is 0.01816 USD per minute).
 
+### E1 result (2026-11-15)
+
+The owner answered the 14 pairs (`work/T7/E1-pairs.md`, local; blind to which
+side was which dictionary), scored with `scripts/e1_pairs.py score` against the
+key written before the answers:
+
+| | v2 (run 1) against the current dictionary ((b) run 1) |
+|---|---|
+| eligible units (amended rule) / drawn | 14 / 14 (noise baseline between two (b) runs: 4) |
+| **v2 preferred** | **9** |
+| current preferred | 0 |
+| "=" (the same) | 5 |
+| **wins - losses** | **+9** (rule: >= 3) |
+| guard: form-normalized term accuracy against J, v2 mean | 96.25% (floor 95.25%; current 96.25%) |
+
+- **Decision: v2 is accepted** by the pre-registered rule (wins - losses = 9 >=
+  3, guard holds). By the rule written on 2026-11-14 evening, the default for
+  real use becomes **v2.1** (`glossaries/web3-v2.1.md`: v2 with `deploy` ->
+  «развернуть», `deployment` -> «развёртывание»; not re-measured on T7): the
+  page's "about smart contracts" option uses it (`web/settings.WEB3_DICTIONARY`).
+  The current `web3.md` stays available as `--domain web3`.
+- **What E1 measured, and what it did not:** the owner preferred v2's
+  wording in every pair where the two differed in a dictionary term, on one
+  rater and 14 units of one course family (T7 and the dictionary's course
+  terms come from the same course and lecturer). The pairs left out the
+  22-26 lines per run that v2's own agreed forms pushed into English under
+  `pipeline-v3.8` (now kept in Russian by `pipeline-v3.9`, and the `deploy`
+  conflict removed in v2.1); the real-use guard on lessons 11-20 checks that
+  part on new lessons.
+
 ## T7 baseline (v1.2)
 
 Pre-registered on 2026-11-14, after the T7 reference and glossary were built and

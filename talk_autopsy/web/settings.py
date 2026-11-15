@@ -35,8 +35,8 @@ MEASURED_LANGUAGES = frozenset({"ru"})  # the only target language with measured
 UI_LANGUAGES: tuple[tuple[str, str], ...] = (("lt", "Lietuvių"), ("ru", "Русский"), ("en", "English"))
 DOMAINS = ("none", "web3")
 # The dictionary behind the page's "about smart contracts" option (domain "web3"): glossaries/<name>.md.
-# E1 decides whether it is the current web3.md or v2.1 (docs/experiments.md, E1).
-WEB3_DICTIONARY = "web3"
+# v2.1 since E1 accepted v2 (2026-11-15, docs/experiments.md, E1 result); web3.md stays as `--domain web3`.
+WEB3_DICTIONARY = "web3-v2.1"
 
 # Output profiles -> the core's existing --output formats (outputs.FORMATS); no new behaviour.
 # "dlna" (the default since 2026-11-15): the original video and its .srt files only, named alike

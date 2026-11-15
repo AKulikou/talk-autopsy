@@ -6,6 +6,18 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-15 — E1 closed: v2 accepted; v2.1 is the default Web3 dictionary
+
+By the pre-registered rule (E1, with the owner's amendment of 2026-11-14): the
+owner preferred v2 in 9 of 14 blind pairs, the current dictionary in 0, and
+called 5 the same (wins - losses +9 >= 3); the recognition guard holds (96.25%
+against 95.25%). By the rule written before the answers, the page's "about
+smart contracts" option now uses **v2.1** (`web/settings.WEB3_DICTIONARY =
+"web3-v2.1"`); `web3.md` stays as `--domain web3`, and the real-use guard on
+lessons 11-20 can switch the default back. Limits in `docs/experiments.md` (E1
+result): one rater, 14 units, one course family, and the pairs left out the
+lines v2 pushed into English under `pipeline-v3.8`.
+
 ## 2026-11-15 — Default output: "for the TV (DLNA)", subtitle files next to the video
 
 Decision (owner, with evidence: photos of the TV screen checked by the owner):

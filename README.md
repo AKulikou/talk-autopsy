@@ -601,14 +601,21 @@ current Web3 dictionary, three runs, pre-registered:
 - **The rating is not blind:** one rater who knew every item was the
   pipeline's translation, on 20 units.
 - **E1, Web3 dictionary v2** ([E1](docs/experiments.md#e1-web3-dictionary-v2-v12)):
-  {{E1_RESULT}}
+  pre-registered; in 14 blind pairs where the two dictionaries rendered a
+  dictionary term differently, the owner preferred v2 9 times, the current
+  dictionary 0 times, and 5 were the same (rule: wins - losses >= 3); term
+  accuracy did not drop (96.25% normalized, both). **Accepted.** Caveats: one
+  rater, 14 sentences, and T7 belongs to the same course family as v2's course
+  terms, so this is "v2 on this course family"; the pairs leave out the lines
+  v2's agreed forms pushed into English under `pipeline-v3.8` (now kept in
+  Russian by `pipeline-v3.9`).
 
 ## Status and roadmap
 
 Status: **v1.2, the Web3 track** (version 1.2.0; [CHANGELOG](CHANGELOG.md)):
 courses from YouTube playlists in the local web UI, the Web3 test fragment T7,
 and a Web3 dictionary v2 tested by E1; the default "about smart contracts"
-dictionary is {{DEFAULT_DICTIONARY}}. v1.1 added the local web UI over the CLI
+dictionary is v2.1 (`glossaries/web3-v2.1.md`: v2 with `deploy` -> «развернуть»). v1.1 added the local web UI over the CLI
 tool of stage 3. Stage 2 closed on 2026-11-11 (owner's
 decision, [Gate 2 -> 3](docs/experiments.md#gate-2---3-2026-11-11)): the
 hold-out passed on term accuracy (not demonstrated), the absolute translation
