@@ -1,8 +1,8 @@
 // Talk Autopsy page: four states on one page (form, estimate, running, done / failed).
 // The server enforces every rule (cost gate, one job at a time, paths); the page only asks.
 import { api } from "./api.js";
-import { applyStrings, clock, duration, errorText, excludedSteps, gapsWarning, setStrings, t } from "./i18n.js";
-import { amount, cachedParts, money, stepService, usdAmount } from "./money.js";
+import { applyStrings, clock, duration, errorText, excludedSteps, gapsWarning, setStrings, stepName, t } from "./i18n.js";
+import { amount, cachedParts, money, moneyLines, stepService, usdAmount } from "./money.js";
 import { followJob } from "./events.js";
 import * as steps from "./steps.js";
 import * as transcript from "./transcript.js";
@@ -55,6 +55,12 @@ function setError(id, text) {
   const el = $(id);
   el.textContent = text || "";
   el.hidden = !text;
+}
+
+// Money in the narrow column: one line each for the total, Claude and speech recognition.
+function setMoneyLines(element, parts, opts) {
+  element.replaceChildren(...moneyLines(parts, opts).map((line) => Object.assign(document.createElement("span"),
+    { className: "money-line", textContent: line })));
 }
 
 function busy(button, on, labelKey) {
@@ -234,7 +240,7 @@ function renderEstimate(p) {
   const notes = [];
   // what the cache already holds (rerun_plan.py): named, so a small amount is not a surprise
   if (p.cache?.cached?.length) {
-    const names = [...new Set(p.cache.cached.map((s) => t(`step_${s}`)))];
+    const names = [...new Set(p.cache.cached.map((s) => stepName(s, p.formats)))];
     notes.push(t("est_cached", { steps: names.join(", ") }));
     if (p.cost?.full_usd) notes.push(t("est_full", { amount: usdAmount(p.cost.full_usd) }));
   }
@@ -291,9 +297,11 @@ function attach(job) {
   state.startedAt = new Date(job.started);
   $("run-title").textContent = job.preview?.title || job.request.source;
   state.paid = {};
-  $("run-cost").textContent = money({ claude: job.cost_usd, stt: job.stt_cost_usd }, { prefix: "" });
+  setMoneyLines($("run-cost"), { claude: job.cost_usd, stt: job.stt_cost_usd });
   $("run-left").textContent = timeText(job.preview?.time);
-  steps.build($("steps"), job.steps);
+  steps.build($("steps"), job.steps, job.preview?.formats || []);
+  // a course can stop after the current lesson; a single video cannot be stopped (note 10)
+  $("run-note").textContent = t(state.courseRun && state.coursePoll ? "run_note_course" : "run_note");
   const lang = state.config?.languages.target.find((l) => l.code === job.request.target_lang);
   transcript.reset(liveElements(), job.id, lang?.name || job.request.target_lang);
   show("view-run");
@@ -322,11 +330,13 @@ function onEvent(event) {
     case "step_progress":
     case "step_finished":
       steps.apply(event);
-      if (event.type === "step_started" && event.detail) transcript.tech(`${t(`step_${event.step}`)}: ${event.detail}`);
+      if (event.type === "step_started" && event.detail) {
+        transcript.tech(`${stepName(event.step, state.job?.preview?.formats || [])}: ${event.detail}`);
+      }
       if (event.type === "step_finished") {
         if (stepService(event.step)) state.paid = { ...state.paid, [event.step]: event.skipped };
-        $("run-cost").textContent = money({ claude: event.total_cost_usd, stt: event.total_stt_cost_usd },
-          { cached: cachedParts(state.paid || {}), prefix: "" });
+        setMoneyLines($("run-cost"), { claude: event.total_cost_usd, stt: event.total_stt_cost_usd },
+          { cached: cachedParts(state.paid || {}) });
       }
       break;
     case "estimate_updated":
@@ -668,6 +678,7 @@ function wire() {
     await loadConfig(ui);
     api("POST", "/api/settings", { ui_lang: ui });
     if (state.preview && !$("view-estimate").hidden) renderEstimate(state.preview);
+    if (state.course && !$("view-course").hidden) renderCourse();
     if (!$("view-form").hidden) loadRecent();
   });
   $("confirm").addEventListener("change", updateStart);
@@ -749,7 +760,7 @@ function renderCourse() {
   const profile = t(`profile_${request.profile}`);
   const lang = state.config?.languages.target.find((l) => l.code === request.target_lang)?.name || request.target_lang;
   $("course-options").textContent = t("course_options_text", { profile, lang,
-    web3: t(request.domain === "web3" ? "yes" : "no") });
+    dict: t(request.domain === "web3" ? "dict_web3" : "dict_none") });
   $("course-folder").textContent = preview.folder + (preview.folder_exists ? "" : ` ${t("course_folder_new")}`);
   $("course-more").hidden = !preview.more;
   $("course-list").replaceChildren(...preview.lessons.map((lesson) => {
@@ -811,6 +822,7 @@ function renderCourseTotals(p) {
 
 function updateCourseStart() {
   const p = state.course?.preview;
+  $("course-start").textContent = t("course_start", { count: p?.totals.count ?? 0 });
   $("course-start").disabled = !p || !p.totals.count || (p.needs_confirmation && !$("course-confirm").checked);
 }
 
@@ -886,7 +898,7 @@ function renderCourseHead(c) {
   const place = lessonPlace(c);
   $("course-head-lesson").textContent = t("course_lesson_of", place);
   $("course-bar").value = courseFraction(c, state.lessonShare || 0);
-  $("course-head-cost").textContent = money({ claude: c.cost_usd, stt: c.stt_cost_usd }, { prefix: "" });
+  setMoneyLines($("course-head-cost"), { claude: c.cost_usd, stt: c.stt_cost_usd });
   $("course-head-left").textContent = c.time_left_s === null ? t("run_left_none") : `≈ ${duration(c.time_left_s)}`;
   $("course-head-progress").textContent = t("course_progress", { done: c.done, count: c.count });
   $("course-head-list").replaceChildren(...c.lessons.map((lesson) => {

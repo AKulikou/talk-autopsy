@@ -39,6 +39,21 @@ export function cachedParts(paid) {
 
 // parts: {claude, stt}; a part left out (undefined or null) is not shown.
 // prefix: "spent" ("Spent: …"), "upper" ("up to …") or "" (the line alone, under its own label).
+// The same money as lines for a narrow column: the total, then "Claude: X USD", then
+// "Speech recognition: Y USD" (the one-line form wrapped badly there; owner, 2026-11-15).
+export function moneyLines(parts, { cached = {} } = {}) {
+  const lines = [];
+  let total = 0;
+  for (const [key, name] of [["claude", "money_claude_line"], ["stt", "money_stt_line"]]) {
+    if (parts[key] === undefined || parts[key] === null) continue;
+    const value = Number(parts[key]) || 0;
+    total += value;
+    const reused = cached[key] && !value ? ` ${t("money_from_cache")}` : "";
+    lines.push(t(name, { amount: amount(value) }) + reused);
+  }
+  return [t("money_total_line", { total: amount(total) }), ...lines];
+}
+
 export function money(parts, { cached = {}, prefix = "spent" } = {}) {
   const shown = [];
   let total = 0;

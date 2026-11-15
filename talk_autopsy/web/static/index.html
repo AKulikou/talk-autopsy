@@ -159,7 +159,7 @@
     </div>
     <p id="course-error" class="error" role="alert" hidden></p>
     <div class="actions">
-      <button type="button" id="course-start" class="primary" data-i18n="course_start"></button>
+      <button type="button" id="course-start" class="primary"></button>
       <button type="button" id="course-back" class="secondary" data-i18n="back_button"></button>
     </div>
   </section>
@@ -193,17 +193,19 @@
       <dt data-i18n="run_left"></dt><dd id="run-left"></dd>
       <dt data-i18n="run_cost"></dt><dd id="run-cost"></dd>
     </dl>
+    <!-- what happens now, visible whether the text panel is open or not; the toggle stays here -->
+    <p class="now"><span class="now-label" data-i18n="run_now"></span>
+      <span id="live-status" class="live-status" aria-live="polite"></span></p>
+    <button type="button" id="live-toggle" class="secondary live-toggle" aria-expanded="false"
+            aria-controls="live-panel" data-i18n="live_show"></button>
     <ol id="steps" class="steps"></ol>
-    <p class="muted" data-i18n="run_note"></p>
+    <p id="run-note" class="muted" data-i18n="run_note"></p>
     <!-- The text as it becomes ready: rows built on the server, rendered by transcript.js.
          The panel with the rows is collapsed by default; the summary line stays. -->
     <section id="live" class="live" aria-labelledby="live-heading">
       <div class="live-head">
         <h3 id="live-heading" data-i18n="live_heading"></h3>
-        <p id="live-status" class="live-status" aria-live="polite"></p>
       </div>
-      <button type="button" id="live-toggle" class="secondary live-toggle" aria-expanded="false"
-              aria-controls="live-panel" data-i18n="live_show"></button>
       <div id="live-panel" class="live-panel" hidden>
         <p class="muted legend" data-i18n="live_legend"></p>
         <button type="button" id="live-earlier" class="secondary text-nav" data-i18n="live_earlier" disabled></button>

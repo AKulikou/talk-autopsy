@@ -8,7 +8,7 @@ const read = (path) => readFileSync(new URL(`../../talk_autopsy/web/static/${pat
 const dataUrl = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 const i18nUrl = dataUrl(read("i18n.js"));
 const i18n = await import(i18nUrl);
-const { amount, cachedParts, money } = await import(dataUrl(read("money.js").replace("./i18n.js", i18nUrl)));
+const { amount, cachedParts, money, moneyLines } = await import(dataUrl(read("money.js").replace("./i18n.js", i18nUrl)));
 const strings = (lang) => JSON.parse(read(`strings/${lang}.json`));
 
 test("the owner's line, word for word, in English and Russian", () => {
@@ -57,4 +57,14 @@ test("a service counts as cached only when every paid step of it came from the c
   assert.deepEqual(cachedParts({ stt: true, stt2: true, glossary: true, fix: false }),
     { claude: false, stt: true });
   assert.deepEqual(cachedParts({}), { claude: false, stt: false });
+});
+
+test("money in a narrow column: one line per service (owner, 2026-11-15)", () => {
+  i18n.setStrings(strings("ru"));
+  assert.deepEqual(moneyLines({ claude: 0.04, stt: 0.02 }),
+    ["0,06 USD", "Claude: 0,04 USD", "Распознавание речи: 0,02 USD"]);
+  assert.deepEqual(moneyLines({ claude: 0.1, stt: 0 }, { cached: { stt: true } }),
+    ["0,10 USD", "Claude: 0,10 USD", "Распознавание речи: 0,00 USD (из кэша)"]);
+  i18n.setStrings(strings("en"));
+  assert.equal(moneyLines({ claude: 0.5, stt: 0.25 })[2], "Speech recognition: 0.25 USD");
 });

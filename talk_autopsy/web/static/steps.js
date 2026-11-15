@@ -2,11 +2,12 @@
 // step that reports a real position (download bytes, correction and translation blocks, Gemini
 // chunks, burn-in seconds); any other running step shows a spinner and its elapsed time.
 // Nothing is estimated here.
-import { t, clock } from "./i18n.js";
+import { t, clock, stepName } from "./i18n.js";
 import { money, stepService } from "./money.js";
 
 const ICONS = { waiting: "○", done: "✓", skipped: "✓", failed: "✕" };
 let rows = new Map();
+let outputFormats = [];
 
 function cell(className, text = "") {
   const span = document.createElement("span");
@@ -15,8 +16,9 @@ function cell(className, text = "") {
   return span;
 }
 
-export function build(element, steps) {
+export function build(element, steps, formats = []) {
   rows = new Map();
+  outputFormats = formats;
   element.replaceChildren();
   for (const step of steps) {
     const li = document.createElement("li");
@@ -25,7 +27,7 @@ export function build(element, steps) {
     icon.setAttribute("aria-hidden", "true");
     const state = cell("state", t("state_waiting"));
     const detail = cell("detail");
-    li.append(icon, cell("name", t(`step_${step}`)), state, detail);
+    li.append(icon, cell("name", stepName(step, formats)), state, detail);
     element.append(li);
     rows.set(step, { li, icon, state, detail, started: null, position: null });
   }
@@ -73,7 +75,7 @@ export function apply(event) {
       const bar = document.createElement("progress");
       bar.max = event.total;
       bar.value = Math.min(event.position, event.total);
-      bar.setAttribute("aria-label", `${t(`step_${event.step}`)} ${percent}%`);
+      bar.setAttribute("aria-label", `${stepName(event.step, outputFormats)} ${percent}%`);
       r.detail.replaceChildren(bar);
       r.state.textContent = `${percent}% (${amount(event)})`;
     } else {

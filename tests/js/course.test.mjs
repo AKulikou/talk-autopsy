@@ -20,12 +20,13 @@ test("a range selects the available lessons in it, in either order", () => {
 });
 
 test("lesson n of count and the overall bar", () => {
-  const run = { lessons: [{ status: "finished" }, { status: "failed" }, { status: "running" }, { status: "queued" }] };
-  assert.deepEqual(course.lessonPlace(run), { n: 3, count: 4 });
+  const run = { lessons: [{ position: 11, status: "finished" }, { position: 12, status: "failed" },
+    { position: 13, status: "running" }, { position: 14, status: "queued" }] };
+  assert.deepEqual(course.lessonPlace(run), { n: 3, count: 4, position: 13 }); // "Lesson 13 (3 of 4)"
   assert.equal(course.courseFraction(run, 0.5), 2.5 / 4);
   assert.deepEqual(course.failedPositions({ lessons: [{ position: 7, status: "failed" }] }), [7]);
-  const between = { lessons: [{ status: "finished" }, { status: "queued" }] };
-  assert.deepEqual(course.lessonPlace(between), { n: 2, count: 2 });
+  const between = { lessons: [{ position: 4, status: "finished" }, { position: 7, status: "queued" }] };
+  assert.deepEqual(course.lessonPlace(between), { n: 2, count: 2, position: 7 });
   assert.equal(course.courseFraction(between, 0.9), 0.5);
 });
 

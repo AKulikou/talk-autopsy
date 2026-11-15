@@ -113,7 +113,7 @@ def test_the_pages_smart_contract_option_uses_the_chosen_dictionary(tmp_path, mo
     from talk_autopsy.web import jobs
     from talk_autopsy.web import settings as web_settings
     core = jobs.Core()
-    assert core.user_glossary("web3", tmp_path).name == "web3.md"  # the default again after the real-use guard
+    assert core.user_glossary("web3", tmp_path).name == "web3.md"  # the default after the real-use guard
     monkeypatch.setattr(web_settings, "WEB3_DICTIONARY", "web3-v2.1")
     assert core.user_glossary("web3", tmp_path).name == "web3-v2.1.md"
     assert core.user_glossary("none", tmp_path) is None

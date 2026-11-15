@@ -14,14 +14,15 @@ export function allSelection(lessons) {
   return lessons.filter((l) => l.available).map((l) => l.position);
 }
 
-// "Lesson n of count": n is the running lesson's place among the course's lessons (or the next one).
+// "Lesson 13 (3 of 10)": the running lesson's playlist position, and its place among the course's
+// lessons (or the next queued one).
 export function lessonPlace(course) {
   const lessons = course?.lessons || [];
   const count = lessons.length;
-  const running = lessons.findIndex((l) => l.status === "running");
-  if (running >= 0) return { n: running + 1, count };
-  const queued = lessons.findIndex((l) => l.status === "queued");
-  return { n: queued >= 0 ? queued + 1 : count, count };
+  let k = lessons.findIndex((l) => l.status === "running");
+  if (k < 0) k = lessons.findIndex((l) => l.status === "queued");
+  if (k < 0) k = count - 1;
+  return { n: k + 1, count, position: lessons[k]?.position ?? k + 1 };
 }
 
 // The overall bar: finished lessons (done or failed or skipped) plus the running one's share.

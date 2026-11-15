@@ -26,10 +26,21 @@ export function midSentence(name) {
   return first.toLowerCase() + name.slice(first.length);
 }
 
+// A step's name; the files step says what it makes: the TV video (burn-in), a video with subtitle
+// tracks, or subtitle files only (the DLNA profile; bug 2026-11-15: it said "and the TV video").
+export function stepName(step, formats = []) {
+  if (step !== "outputs") return t(`step_${step}`);
+  if (formats.includes("mp4-burned")) return t("step_outputs");
+  return t(formats.includes("mp4-soft") ? "step_outputs_soft" : "step_outputs_subs");
+}
+
+const ESTIMATOR_OUTPUTS = { outputs_burn: ["mp4-burned"], outputs_soft: ["mp4-soft"], outputs_subs: [] };
+
 // "not counting: download from YouTube" for the steps a time estimate leaves out, or "".
 export function excludedSteps(excludes) {
   if (!excludes?.length) return "";
-  const names = [...new Set(excludes.map((s) => t(`step_${s.startsWith("outputs") ? "outputs" : s}`)))];
+  const names = [...new Set(excludes.map((s) => (s.startsWith("outputs")
+    ? stepName("outputs", ESTIMATOR_OUTPUTS[s] || ["mp4-burned"]) : t(`step_${s}`))))];
   return t("est_time_excludes", { steps: names.map(midSentence).join(", ") });
 }
 
