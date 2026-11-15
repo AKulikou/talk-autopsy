@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.0 — {{RELEASE_DATE}} (Web3 track)
+## 1.2.0 — 2026-11-15 (Web3 track)
 
 Courses from YouTube playlists in the web page, a Web3 test fragment (T7), a
 Web3 dictionary v2 tested by a pre-registered experiment (E1), and fixes in how
