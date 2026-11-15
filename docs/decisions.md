@@ -6,6 +6,25 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-15 — Default output: "for the TV (DLNA)", subtitle files next to the video
+
+Decision (owner, with evidence: photos of the TV screen checked by the owner):
+a new profile **"для ТВ (DLNA)" (`dlna`) is the default** for single videos and
+courses; the page remembers the last choice. It writes only the `.srt` files
+next to the original video, named exactly as the course lessons 1-10 have them
+(`<stem>.mp4`, `<stem>.srt` Russian, `<stem>.en.srt` English), which the owner
+verified the TV finds: no burned-in `.ru.mp4`, no `.subs.mp4`, no extra copy (a
+local file's video is hard-linked into its result folder under that name, as
+audio already was). The other profiles stay as options.
+
+Why: the owner's LG TV plays videos from a Keenetic router's DLNA server and
+shows subtitles from the external `.srt` files next to the video, can switch
+the language, and draws them in a much larger, easier font than our burned-in
+subtitles. The burned-in variant became the TV default on 2026-11-10 (YouTube
+input and output formats, `docs/experiments.md`) when the TV seemed not to read
+subtitle files; over DLNA it does. It also saves the burn-in time (minutes per
+lesson) and one large file per video.
+
 ## 2026-11-14 — Dictionary v2.1: deploy -> «развернуть»; the default for real use
 
 Owner (evening, after the E1 runs): rows `deploy` / `deployment` go back to the

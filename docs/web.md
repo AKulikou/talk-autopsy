@@ -394,8 +394,11 @@ start page.
 | `GET /api/doctor` | the `doctor` checks; key names with set / not set only |
 
 Requests: `mode` = `url` or `file` with exactly one of `url` / `path`;
-`profile` = `tv` (burned-in `.<lang>.mp4` + `.srt`), `laptop` (`.srt`, `.ass`,
-`.bilingual.ass`, `.subs.mp4`) or `all`; `domain` = `none` / `web3`;
+`profile` = `dlna` (the default since 2026-11-15: only the `.srt` files next to
+the original video, `<stem>.mp4` + `<stem>.srt` + `<stem>.en.srt`; a local file's
+video is hard-linked into the result folder under that name), `tv` (burned-in
+`.<lang>.mp4` + `.srt`), `laptop` (`.srt`, `.ass`, `.bilingual.ass`, `.subs.mp4`)
+or `all`; the page remembers the last profile (`web.local.json`, `profile`); `domain` = `none` / `web3`;
 `target_lang` from the offered list. A playlist link is refused by
 `/api/estimate` with the code `playlist` (the page opens the course screen
 instead); courses have their own requests (Courses, above): the same `profile`,

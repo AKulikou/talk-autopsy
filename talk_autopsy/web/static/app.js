@@ -90,6 +90,11 @@ async function loadConfig(ui) {
   target.value = chosen;
   updateLangNote();
   renderFile();
+  if (!state.profileSet) { // the profile chosen last on this machine (remembered by the server)
+    const radio = document.querySelector(`input[name="profile"][value="${data.profile_default}"]`);
+    if (radio) radio.checked = true;
+    state.profileSet = true;
+  }
   return true;
 }
 
@@ -275,7 +280,7 @@ async function start() {
     setError("est-error", errorText(data));
     return;
   }
-  api("POST", "/api/settings", { target_lang: request.target_lang }); // remembered for next time
+  api("POST", "/api/settings", { target_lang: request.target_lang, profile: request.profile }); // next time
   attach(data.job);
 }
 
@@ -852,7 +857,7 @@ async function startCourse() {
     setError("course-error", errorText(data));
     return;
   }
-  api("POST", "/api/settings", { target_lang: request.target_lang });
+  api("POST", "/api/settings", { target_lang: request.target_lang, profile: request.profile });
   attachCourse(data.course);
 }
 

@@ -117,7 +117,7 @@ def test_unknown_fields_are_refused():
 
 def test_preview_of_a_link(tmp_path):
     r, core = runner(tmp_path)
-    preview = r.preview(request())
+    preview = r.preview(request(profile="tv"))
     assert preview.title == "A talk" and preview.duration_s == 600
     assert preview.formats == ["srt", "mp4-burned"]
     assert preview.notes == ["quality_not_measured"]  # lt is not measured
@@ -189,7 +189,7 @@ def test_profiles_map_to_existing_formats(tmp_path, media):
 
 def test_file_job_events_in_order(tmp_path, media):
     r, core = runner(tmp_path)
-    job = r.start(request(mode="file", url=None, path=str(media)))
+    job = r.start(request(mode="file", url=None, path=str(media), profile="tv"))
     events = wait(job)
     assert job.state == "finished"
     assert [e["id"] for e in events] == list(range(1, len(events) + 1))
@@ -503,3 +503,45 @@ def test_numbers_of_pipeline_events_win_over_their_text(tmp_path, media):
     fix = next(e for e in events if e["type"] == "step_finished" and e["step"] == "fix")
     assert fix["cost_usd"] == 0.5 and fix["tokens"]["input"] == 7
     assert [e["claude_usd"] for e in events if "claude_usd" in e] == [0.25]
+
+
+# --- the DLNA profile (default since 2026-11-15): the video and its .srt files only -------------------
+
+
+def test_the_dlna_profile_is_the_default_and_makes_only_the_srt_files(tmp_path):
+    from talk_autopsy.web import settings as web_settings
+    assert request().profile == "dlna" and web_settings.PROFILES["dlna"] == ("srt",)
+    r, core = runner(tmp_path)
+    job = r.start(request())
+    wait(job)
+    assert job.state == "finished"
+    dest = core.output_root() / youtube_folder(core)
+    files = sorted(p.name for p in dest.iterdir() if p.is_file())
+    assert files == ["A talk.mp4", "A talk.srt"], files  # the download and its .srt; nothing burned
+
+
+def youtube_folder(core) -> str:
+    from talk_autopsy import youtube
+    video = core.fetch("https://www.youtube.com/watch?v=abc123", [])
+    return youtube.video_folder_name(video, core.output_root())
+
+
+def test_a_local_video_with_the_dlna_profile_is_linked_next_to_its_subtitles(tmp_path, media):
+    r, core = runner(tmp_path)
+    job = r.start(request(mode="file", url=None, path=str(media)))
+    events = wait(job)
+    assert job.state == "finished"
+    folder = core.output_root() / "talk"
+    assert sorted(p.name for p in folder.iterdir() if p.is_file()) == ["talk.mp4", "talk.srt"]
+    assert (folder / "talk.mp4").read_bytes() == media.read_bytes()
+    assert not any(e["type"] == "step_progress" and e["step"] == "outputs" for e in events)  # nothing burned
+
+
+def test_the_page_remembers_the_profile(tmp_path):
+    from talk_autopsy.web import settings as web_settings
+    path = tmp_path / "web.local.json"
+    assert web_settings.default_profile(web_settings.load_local(path)) == "dlna"
+    web_settings.save_local({"profile": "laptop"}, path)
+    assert web_settings.default_profile(web_settings.load_local(path)) == "laptop"
+    web_settings.save_local({"profile": "nonsense"}, path)
+    assert web_settings.default_profile(web_settings.load_local(path)) == "dlna"

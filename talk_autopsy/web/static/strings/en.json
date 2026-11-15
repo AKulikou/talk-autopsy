@@ -15,7 +15,7 @@
   "file_manual_hint": "The file dialog is not available here: paste the full path to the file.",
   "file_picking": "The file dialog is open (it may be behind the browser window)...",
   "profile_legend": "What do you want to get?",
-  "profile_tv": "For the TV",
+  "profile_tv": "For the TV: subtitles in the picture",
   "profile_tv_desc": "A video with the subtitles drawn into the picture (plays on any TV) and a subtitle file.",
   "profile_laptop": "For the laptop",
   "profile_laptop_desc": "Subtitle files for VLC (plain, styled, bilingual) and a video with switchable subtitles. Fast: no re-encoding.",
@@ -270,5 +270,7 @@
   "err_nothing_selected": "Choose at least one lesson.",
   "err_bad_selection": "The lesson selection is not valid; open the course again.",
   "err_no_course": "No course is running.",
-  "err_no_glossary": "This course has no glossary yet."
+  "err_no_glossary": "This course has no glossary yet.",
+  "profile_dlna": "For the TV (DLNA)",
+  "profile_dlna_desc": "The video with its subtitle files (Russian and English) next to it, under the same name: a TV playing from a DLNA server (a router, for example) shows the subtitles itself, in its own large font, and switches the language. Fast: no re-encoding."
 }

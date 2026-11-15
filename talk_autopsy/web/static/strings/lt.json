@@ -15,7 +15,7 @@
   "file_manual_hint": "Failo pasirinkimo langas čia neprieinamas: įklijuokite visą kelią iki failo.",
   "file_picking": "Atidarytas failo pasirinkimo langas (jis gali būti už naršyklės lango)...",
   "profile_legend": "Ką norite gauti?",
-  "profile_tv": "Televizoriui",
+  "profile_tv": "Televizoriui: subtitrai vaizde",
   "profile_tv_desc": "Vaizdo įrašas su subtitrais pačiame vaizde (rodo bet kuris televizorius) ir subtitrų failas.",
   "profile_laptop": "Nešiojamajam kompiuteriui",
   "profile_laptop_desc": "Subtitrų failai VLC grotuvui (paprasti, apipavidalinti, dvikalbiai) ir vaizdo įrašas su perjungiamais subtitrais. Greitai: be perkodavimo.",
@@ -270,5 +270,7 @@
   "err_nothing_selected": "Pažymėkite bent vieną pamoką.",
   "err_bad_selection": "Pamokų pasirinkimas netinka; atidarykite kursą iš naujo.",
   "err_no_course": "Šiuo metu kursas nevyksta.",
-  "err_no_glossary": "Šis kursas dar neturi žodyno."
+  "err_no_glossary": "Šis kursas dar neturi žodyno.",
+  "profile_dlna": "Televizoriui (DLNA)",
+  "profile_dlna_desc": "Vaizdo įrašas ir šalia jo subtitrų failai (rusų ir anglų) tuo pačiu pavadinimu: televizorius, rodantis iš DLNA serverio (pvz., maršrutizatoriaus), pats rodo subtitrus dideliu šriftu ir perjungia kalbą. Greitai: be perkodavimo."
 }

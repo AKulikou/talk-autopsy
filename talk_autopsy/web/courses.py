@@ -70,7 +70,7 @@ class CourseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str
-    profile: Literal["tv", "laptop", "all"] = "tv"
+    profile: Literal["dlna", "tv", "laptop", "all"] = "dlna"
     domain: Literal["none", "web3"] = "none"
     target_lang: str
     course_glossary: bool = course_glossary.DEFAULT_ON

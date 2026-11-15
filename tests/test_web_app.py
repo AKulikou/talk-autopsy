@@ -114,7 +114,8 @@ def test_config_lists_languages_profiles_and_strings(setup):
     assert config["languages"]["target"][0]["code"] == "lt"
     assert config["languages"]["target_default"] == "lt"
     assert config["ui_lang"] == "ru" and config["strings"]["tab_url"] == "Ссылка YouTube"
-    assert [p["id"] for p in config["profiles"]] == ["tv", "laptop", "all"]
+    assert [p["id"] for p in config["profiles"]] == ["dlna", "tv", "laptop", "all"]
+    assert config["profile_default"] == "dlna"  # nothing remembered yet
     assert config["cost_limit_usd"] == 3.0 and config["domains"] == ["none", "web3"]
 
 

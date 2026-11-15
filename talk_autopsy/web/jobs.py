@@ -107,7 +107,7 @@ class JobRequest(BaseModel):
     mode: Literal["url", "file"]
     url: str | None = None
     path: str | None = None
-    profile: Literal["tv", "laptop", "all"] = "tv"
+    profile: Literal["dlna", "tv", "laptop", "all"] = "dlna"
     domain: Literal["none", "web3"] = "none"
     target_lang: str
     confirmed_cost_usd: float | None = None
@@ -700,7 +700,11 @@ def result_id(output_root: Path, folder: Path) -> str | None:
 
 
 def copy_audio(source: Path, dest: Path, stem: str) -> Path | None:
-    """An audio-only input linked (or copied) into its result folder, so the player can serve it."""
+    """
+    A local input linked (or, on another drive, copied) into its result folder as <stem><ext>: an
+    audio-only input, so the player can serve it; a video with the "dlna" profile, so the TV finds
+    the video next to its .srt files.
+    """
     target = dest / f"{stem}{source.suffix.lower()}"
     try:
         if target.is_file() or source.resolve() == target.resolve():
@@ -1053,6 +1057,10 @@ class JobRunner:
                 copied = copy_audio(settings.source, dest, stem)  # the player serves only the output folder
                 if copied is not None:
                     written.append(outputs.Written("audio", copied))
+            elif request.mode == "file" and request.profile == "dlna":
+                copied = copy_audio(settings.source, dest, stem)  # the video next to its .srt (DLNA)
+                if copied is not None:
+                    written.append(outputs.Written("video", copied))
             # the report's totals are the pipeline's own numbers; they win over the parsed ones
             job.cost_usd, job.stt_cost_usd = report.cost_usd, report.stt_cost_usd
             gaps = self._failed_parts(settings)

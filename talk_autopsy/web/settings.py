@@ -39,12 +39,17 @@ DOMAINS = ("none", "web3")
 WEB3_DICTIONARY = "web3"
 
 # Output profiles -> the core's existing --output formats (outputs.FORMATS); no new behaviour.
+# "dlna" (the default since 2026-11-15): the original video and its .srt files only, named alike
+# (<stem>.mp4, <stem>.srt, <stem>.en.srt), which a TV playing from a DLNA server finds and shows in its
+# own large font, with the language switchable on the TV (owner, docs/decisions.md).
 PROFILES: dict[str, tuple[str, ...]] = {
+    "dlna": ("srt",),
     "tv": ("srt", "mp4-burned"),
     "laptop": ("srt", "ass", "bilingual", "mp4-soft"),
     "all": ("srt", "ass", "bilingual", "mp4-soft", "mp4-burned"),
 }
 VIDEO_FORMATS = frozenset({"mp4-soft", "mp4-burned"})
+DEFAULT_PROFILE = "dlna"
 
 COST_LIMIT_USD = config.COST_CONFIRMATION_USD  # per video, Claude + speech recognition estimate
 LOCAL_SETTINGS = config.PROJECT_ROOT / "web.local.json"
@@ -93,6 +98,12 @@ def save_local(updates: dict, path: Path | None = None) -> bool:
 def default_target_lang(local: dict | None = None) -> str:
     value = (local if local is not None else load_local()).get("target_lang")
     return value if value in target_codes() else target_codes()[0]
+
+
+def default_profile(local: dict | None = None) -> str:
+    """The profile chosen last on this machine (remembered by the page), else DEFAULT_PROFILE."""
+    value = (local if local is not None else load_local()).get("profile")
+    return value if value in PROFILES else DEFAULT_PROFILE
 
 
 def default_ui_lang(local: dict | None = None) -> str:

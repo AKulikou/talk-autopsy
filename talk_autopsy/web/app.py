@@ -220,6 +220,7 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
             "strings": web_settings.ui_strings(ui_lang),
             "domains": list(web_settings.DOMAINS),
             "profiles": [{"id": k, "formats": list(v)} for k, v in web_settings.PROFILES.items()],
+            "profile_default": web_settings.default_profile(local),
             "cost_limit_usd": runner.limit_usd,
         }
 
@@ -232,6 +233,8 @@ def create_app(port: int, runner: JobRunner | None = None, token: str | None = N
             updates["target_lang"] = payload["target_lang"]
         if payload.get("ui_lang") in web_settings.ui_codes():
             updates["ui_lang"] = payload["ui_lang"]
+        if payload.get("profile") in web_settings.PROFILES:
+            updates["profile"] = payload["profile"]
         if not updates:
             return error(422, "bad_request", "Nothing to remember.")
         return {"saved": web_settings.save_local(updates, local_settings)}

@@ -264,9 +264,12 @@ Four screens (every picture here is a replayed recording of an invented talk,
 not a real video):
 
 1. **Form and estimate.** A YouTube link or a file on this computer (the native
-   file dialog), what you want to get (for the TV: subtitles burned into the
-   picture plus an `.srt`; for the laptop: `.srt`, `.ass`, bilingual `.ass` and
-   an MP4 with switchable subtitle tracks; or everything), the Web3 glossary and
+   file dialog), what you want to get (by default, for a TV that plays from a
+   DLNA server: the video with its Russian and English `.srt` next to it, which
+   the TV shows in its own font and lets you switch; or for a TV without that:
+   subtitles burned into the picture plus an `.srt`; for the laptop: `.srt`,
+   `.ass`, bilingual `.ass` and an MP4 with switchable subtitle tracks; or
+   everything; the page remembers the last choice), the Web3 glossary and
    the target language. The estimate shows cost and time before anything is
    spent; above 3 USD per video (Claude plus speech recognition, the same limit
    as `run --max-cost`) the page asks you to confirm that exact amount.

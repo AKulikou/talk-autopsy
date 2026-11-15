@@ -10,6 +10,11 @@ about).
 
 **Added**
 
+- **"For the TV (DLNA)", the new default output** (single videos and courses):
+  only the Russian and English `.srt` next to the original video, under the
+  same name, which a TV playing from a DLNA server shows in its own large font
+  and lets you switch; no burned-in MP4. The page remembers the last choice;
+  the other outputs stay as options.
 - **Courses in the web page.** A playlist link (or "the whole playlist" for a
   video link with `&list=`) opens a course screen: the lessons with checkboxes
   and ranges, "already done" for lessons finished before or fully cached,
