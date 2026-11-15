@@ -100,7 +100,11 @@ function showWarning(text) {
   els.warning.hidden = !text;
 }
 
-export function stop() {
+// Stop following the text. With `id`, only if that job is still the one shown: a course attaches
+// its next lesson right after a lesson ends, and the ended lesson's late stop must not stop the new
+// one (bug, 2026-11-15: the panel froze after the course moved on).
+export function stop(id) {
+  if (id !== undefined && id !== jobId) return;
   clearTimeout(timer);
   timer = null;
   jobId = null;

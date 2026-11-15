@@ -354,7 +354,8 @@ function liveElements() {
 function onEnd(event) {
   clearInterval(state.timer);
   transcript.changed(); // the last text
-  setTimeout(transcript.stop, 1000);
+  const ended = state.job?.id;
+  setTimeout(() => transcript.stop(ended), 1000); // this job only: a course may already show the next
   state.stop = null;
   if (state.courseRun && state.coursePoll) {
     $("course-head-between").hidden = false; // the next lesson starts, or the course ends (pollCourse)
