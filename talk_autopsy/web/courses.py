@@ -249,6 +249,7 @@ class Course:
     stop_requested: bool = False
     current: int | None = None  # playlist position of the lesson running now
     current_job: object = None
+    earlier: dict = field(default_factory=dict)  # video id -> its entry in course.json before this run
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
@@ -288,6 +289,18 @@ class Course:
                 "glossary": course_glossary.summary(self.folder) if r.course_glossary else None,
                 "lessons": [x.as_dict() for x in active]}
 
+    def _entry(self, x: "Lesson") -> dict:
+        """A lesson in course.json; one outside this run's selection keeps what an earlier run wrote
+        (bug, 2026-11-15: running lesson 15 alone reset lessons 11-14 to "not selected")."""
+        old = self.earlier.get(x.video.id)
+        kept = ("finished", "failed", "queued", "running")
+        if x.status == "not_selected" and old and old.get("status") in kept:
+            return {**old, "position": x.position, "status": "queued" if old["status"] == "running"
+                    else old["status"]}
+        return {"position": x.position, "id": x.video.id, "title": x.video.title, "folder": x.folder_name,
+                "status": x.status, "duration": x.video.duration, "cost_usd": round(x.cost_usd, 4),
+                "stt_cost_usd": round(x.stt_cost_usd, 4), "error": x.error}
+
     def save(self, state: str | None = None) -> None:
         """course.json in the course's service folder (`state`: instead of the current one); never raises."""
         r = self.preview.request
@@ -297,10 +310,7 @@ class Course:
                 "course_glossary": r.course_glossary, "state": state or self.state,
                 "started": self.started_wall,
                 "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                "lessons": [{"position": x.position, "id": x.video.id, "title": x.video.title,
-                             "folder": x.folder_name, "status": x.status, "duration": x.video.duration,
-                             "cost_usd": round(x.cost_usd, 4), "stt_cost_usd": round(x.stt_cost_usd, 4),
-                             "error": x.error} for x in self.lessons]}
+                "lessons": [self._entry(x) for x in self.lessons]}
         try:
             with self._lock:
                 service = youtube.service_dir(self.folder, create=True)
@@ -309,6 +319,45 @@ class Course:
                 os.replace(tmp, service / COURSE_MARKER)
         except OSError:
             logger.exception("course marker not written in %s", self.folder)
+
+
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def ranges(numbers: list[int]) -> str:
+    """[11, 12, 13, 16] -> "11-13, 16"."""
+    out, start, prev = [], None, None
+    for n in sorted(numbers):
+        if start is None:
+            start = prev = n
+        elif n == prev + 1:
+            prev = n
+        else:
+            out.append(f"{start}-{prev}" if prev > start else str(start))
+            start = prev = n
+    if start is not None:
+        out.append(f"{start}-{prev}" if prev > start else str(start))
+    return ", ".join(out)
+
+
+def end_line(course: "Course") -> str:
+    """The console's last line of a course: this selection, then the course's lessons not translated yet."""
+    chosen = [x for x in course.lessons if x.status != "not_selected"]
+    done = sum(1 for x in chosen if x.status == "finished")
+    failed = sum(1 for x in chosen if x.status == "failed")
+    left = sum(1 for x in chosen if x.status == "queued")
+    line = (f"Course {course.state}: {done} of {plural(len(chosen), 'lesson')} of this selection done, "
+            f"{failed} failed, {left} left.")
+    outside = [x.position for x in course.lessons if x.status == "not_selected" and x.available
+               and not youtube.is_done(course.folder / x.folder_name)
+               and (course.earlier.get(x.video.id) or {}).get("status") != "finished"]
+    if outside:
+        word = "lessons" if len(outside) > 1 else "lesson"
+        line += f" Not translated yet, outside this selection: {word} {ranges(outside)}."
+    if course.preview.more:
+        line += f" The playlist has {course.preview.more} more after lesson {len(course.lessons)}."
+    return line
 
 
 def result_id(course_folder: Path, lesson_folder_name: str) -> str:
@@ -416,8 +465,10 @@ class CourseRunner:
             self._gate(request, preview)
             for lesson in chosen:
                 lesson.status = "queued"
+            earlier = {x.get("id"): x for x in (read_marker(preview.folder) or {}).get("lessons") or []
+                       if isinstance(x, dict)}
             course = Course(id=uuid.uuid4().hex[:12], preview=preview,
-                            started_wall=time.strftime("%Y-%m-%dT%H:%M:%S"))
+                            started_wall=time.strftime("%Y-%m-%dT%H:%M:%S"), earlier=earlier)
             course.folder.mkdir(parents=True, exist_ok=True)
             course.save()
             self._course = course
@@ -457,7 +508,8 @@ class CourseRunner:
 
     def _run(self, course: Course) -> None:
         request = course.preview.request
-        console.info("Course started: %s (%d lessons)", short(course.preview.title, 100), len(course.queue()))
+        console.info("Course started: %s, %s: %s", short(course.preview.title, 100),
+                     plural(len(course.queue()), "lesson"), request.url)
         final = "stopped"
         try:
             for lesson in list(course.queue()):
@@ -475,10 +527,7 @@ class CourseRunner:
             self.runner._busy.release()
             course.save(state=final)  # the file first, then the state readers wait for
             course.state = final
-        done = sum(1 for x in course.lessons if x.status == "finished")
-        failed = sum(1 for x in course.lessons if x.status == "failed")
-        console.info("Course %s: %d finished, %d failed, %d left (%s).", course.state, done, failed,
-                     len(course.queue()), request.url)
+        console.info("%s", end_line(course))
 
     def _run_lesson(self, course: Course, lesson: Lesson) -> None:
         request, core = course.preview.request, self.core

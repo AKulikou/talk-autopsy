@@ -347,3 +347,22 @@ def test_a_new_submission_keeps_the_earlier_lessons_in_course_json(tmp_path):
     statuses = {x["position"]: x["status"] for x in marker["lessons"]}
     assert statuses == {1: "finished", 2: "finished", 3: "finished", 4: "not_selected"}
     assert all(x["cost_usd"] > 0 for x in marker["lessons"] if x["position"] in (1, 2))
+
+
+def test_the_console_names_the_playlist_at_the_start_and_what_is_left_at_the_end(tmp_path, caplog):
+    import logging
+    cr, core = make(tmp_path, count=5)
+    with caplog.at_level(logging.INFO, logger="talk_autopsy.console"):
+        cr.start(req(selected=[2]))
+        wait(cr)
+    lines = [r.getMessage() for r in caplog.records if r.name == "talk_autopsy.console"]
+    started = next(x for x in lines if x.startswith("Course started"))
+    assert "1 lesson:" in started and "lessons" not in started and PLAYLIST in started
+    end = lines[-1]
+    assert end.startswith("Course finished: 1 of 1 lesson of this selection done, 0 failed, 0 left.")
+    assert "Not translated yet, outside this selection: lessons 1, 3-5." in end
+
+
+def test_ranges():
+    assert courses.ranges([16, 11, 12, 13, 18]) == "11-13, 16, 18"
+    assert courses.ranges([]) == ""
