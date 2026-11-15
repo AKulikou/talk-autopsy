@@ -341,14 +341,14 @@ def ranges(numbers: list[int]) -> str:
     return ", ".join(out)
 
 
-def end_line(course: "Course") -> str:
+def end_line(course: "Course", state: str | None = None) -> str:
     """The console's last line of a course: this selection, then the course's lessons not translated yet."""
     chosen = [x for x in course.lessons if x.status != "not_selected"]
     done = sum(1 for x in chosen if x.status == "finished")
     failed = sum(1 for x in chosen if x.status == "failed")
     left = sum(1 for x in chosen if x.status == "queued")
-    line = (f"Course {course.state}: {done} of {plural(len(chosen), 'lesson')} of this selection done, "
-            f"{failed} failed, {left} left.")
+    line = (f"Course {state or course.state}: {done} of {plural(len(chosen), 'lesson')} of this selection "
+            f"done, {failed} failed, {left} left.")
     outside = [x.position for x in course.lessons if x.status == "not_selected" and x.available
                and not youtube.is_done(course.folder / x.folder_name)
                and (course.earlier.get(x.video.id) or {}).get("status") != "finished"]
@@ -525,9 +525,9 @@ class CourseRunner:
             course.current, course.current_job = None, None
             self.runner._active = None
             self.runner._busy.release()
-            course.save(state=final)  # the file first, then the state readers wait for
+            course.save(state=final)  # the file and the console's last line first, then the state readers
+            console.info("%s", end_line(course, final))  # wait for (a test reads the console after it)
             course.state = final
-        console.info("%s", end_line(course))
 
     def _run_lesson(self, course: Course, lesson: Lesson) -> None:
         request, core = course.preview.request, self.core
