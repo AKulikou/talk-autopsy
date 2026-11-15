@@ -6,6 +6,28 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-15 — The owner's notes on the course screens (STOP 4)
+
+After the owner's real course run (lessons 11-15, watched on the TV through
+DLNA, subtitles fine):
+
+- **Bugs, fixed with a failing test first:** the next lesson's text panel froze
+  after a course moved on (the ended lesson's delayed stop switched off the
+  new lesson's panel; `48f7d87`, test first in `d33d06a`);
+  the files step and the time estimate said "(and the TV video)" with the DLNA
+  profile; `course.json` of a second submission reset earlier lessons to "not
+  selected". The "56 phrases translated" while the rows showed "…" was the
+  same frozen panel: the recordings have every translated unit with its text.
+- **Wording and layout (the owner's notes, not bugs):** "glossary: smart
+  contracts / none" instead of "about smart contracts: yes"; "Translate the
+  selected lessons (N)"; "Lesson 13 (3 of 10)"; "Now: ..." and the text toggle
+  in the left column, in one place; money on lines of its own in the narrow
+  column; the course note says the course can stop after the current lesson;
+  the console's course lines (link at the start, plural, what is left).
+- **Lesson 13's one line in English** (a compiler error message read off the
+  screen) is the Backlog class "a terminal message is still refused once", not
+  a bug; nothing re-run.
+
 ## 2026-11-15 — Real-use guard failed on cost: the default Web3 dictionary is `web3.md` again
 
 Applied as recorded on 2026-11-14 (`docs/experiments.md`, real-use guard

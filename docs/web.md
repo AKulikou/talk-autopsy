@@ -107,13 +107,22 @@ GET  /api/course/glossary/{id}-> the course glossary file as text
   (3 USD) **in total** the usual confirmation is needed, server-side; each
   lesson then runs with the pipeline's usual ceiling (`JobRunner.allowance`).
 - **Waiting screen.** A course header above the usual one-video view: the
-  course title, "lesson 3 of 12", an overall bar (finished lessons), the money
+  course title, "lesson 13 (3 of 12)" (the playlist position, then the place
+  in this run), an overall bar (finished lessons), the money
   of the course so far (the running lesson included), the time left (the queued
   lessons' estimates plus the running lesson's own remaining time), the lessons
   with their status (queued / in progress / done / error / skipped; an error
   with its reason in words, the same sentences as the Failed screen) and "Stop
   after the current lesson" (the lesson finishes; the rest stay queued). A
-  failed lesson does not stop the course.
+  failed lesson does not stop the course. The page stops following a lesson's
+  text one second after the lesson ends, but only that lesson's: the course
+  attaches the next one at once (bug, 2026-11-15: the next lesson's panel froze,
+  with no new rows, no scrolling and both buttons disabled). In a course the
+  note under the steps says that the course can stop after the current lesson.
+  The console names the playlist link when a course starts and, at its end,
+  what is left of the selection and which of the course's lessons are not
+  translated yet. `course.json` keeps the lessons of earlier runs that are not
+  in the current selection (bug, 2026-11-15).
 - **Folders.** `<output>/<date> <course title>/NN <lesson title>/`, NN the
   playlist position zero-padded to the playlist's size, names cut at a word.
   The course's service folder holds `course.json` (the request, every lesson's
@@ -181,7 +190,13 @@ as it sees the end.
 
 Left: the steps (state, elapsed time, a bar where there is a real position,
 cost and tokens of each finished step), the remaining time and the running
-cost. Right: the text, in two aligned columns.
+cost (the total, then Claude and speech recognition on lines of their own, as
+the column is narrow), and **"Now: ..."**, the text's summary line (the
+recognition pass, corrections made, phrases translated), with the button that
+shows or hides the text under it: both stay in the left column, in the same
+place whether the text is shown or not (owner, 2026-11-15). The files step is
+named after what it makes ("Subtitle files" with the DLNA profile, "Files (and
+the TV video)" with the burn-in). Right: the text, in two aligned columns.
 
 - **Rows.** `web/transcript.py` folds the events into rows: a row is the
   smallest run of consecutive segments that no sentence unit crosses, so a
