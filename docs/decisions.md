@@ -6,6 +6,16 @@ log records what was decided and why.
 
 Entry format: date, decision, why, and what it rules out.
 
+## 2026-11-15 — Real-use guard failed on cost: the default Web3 dictionary is `web3.md` again
+
+Applied as recorded on 2026-11-14 (`docs/experiments.md`, real-use guard
+result): on lessons 11-15 no real sentence stayed in English, but three
+lessons cost more Claude per minute than 1.15x lessons 1-10 (0.0200-0.0318
+against 0.01816 USD). The page's "about smart contracts" option uses the
+current `web3.md` again; v2.1 stays an option. No block re-run (none has a
+line in English). The owner can override the rule (accept the cost) with one
+word; then `WEB3_DICTIONARY` goes back to `web3-v2.1`.
+
 ## 2026-11-15 — E1 closed: v2 accepted; v2.1 is the default Web3 dictionary
 
 By the pre-registered rule (E1, with the owner's amendment of 2026-11-14): the

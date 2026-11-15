@@ -514,6 +514,33 @@ key written before the answers:
   conflict removed in v2.1); the real-use guard on lessons 11-20 checks that
   part on new lessons.
 
+### Real-use guard result (2026-11-15): failed on cost; the default is `web3.md` again
+
+The owner ran lessons 11-15 of the course through the web page (profile
+"для ТВ (DLNA)", the Web3 option = v2.1, `pipeline-v3.9`; lessons 16-20 not
+translated, his choice). Measured from the lessons' saved files as recorded
+(`scripts/left_english_report.py`, `meta.translation.agreed_term_kept`, the
+result markers' Claude cost):
+
+| lesson | length | lines left in English | of them real sentences | agreed-term warnings | Claude | Claude per minute |
+|---|---|---|---|---|---|---|
+| 11 | 2:52 | 0 | 0 | 2 | 0.0912 USD | **0.0318** |
+| 12 | 10:14 | 0 | 0 | 0 | 0.1637 USD | 0.0160 |
+| 13 | 8:07 | 1 (a compiler error message read off the screen, 6:42) | 0 | 1 | 0.1459 USD | 0.0180 |
+| 14 | 19:06 | 0 | 0 | 12 | 0.3994 USD | **0.0209** |
+| 15 | 12:29 | 0 | 0 | 8 | 0.2496 USD | **0.0200** |
+
+- **English lines: pass** (no lesson has a real sentence in English).
+- **Cost: fail.** Lessons 11, 14 and 15 are above 0.01816 USD per minute (1.15x
+  lessons 1-10's 0.01579 with the current dictionary). Expected in hindsight:
+  E1 already measured about 20% more Claude per run with v2 (the 312-term
+  glossary is in every request), above the 15% allowed; lesson 11 is short, so
+  its fixed per-lesson part (the glossary step, the cached prefix) weighs more.
+- **By the recorded rule the default is the current `web3.md` again**; v2.1
+  stays an option (`--domain web3-v2.1`). Nothing is re-run: no block has a
+  line in English, and the cost cannot be undone. E1's result (v2 preferred 9 /
+  0 / 5) stands; what failed is the cost condition the owner set for real use.
+
 ## T7 baseline (v1.2)
 
 Pre-registered on 2026-11-14, after the T7 reference and glossary were built and
