@@ -24,3 +24,14 @@ test("an acronym at the start of a step name keeps its capitals", () => {
   assert.equal(i18n.midSentence("Перевод"), "перевод");
   assert.equal(i18n.midSentence(""), "");
 });
+
+test("the files step is named after the chosen outputs (DLNA: subtitle files only; bug 2026-11-15)", () => {
+  i18n.setStrings(strings("ru"));
+  assert.equal(i18n.excludedSteps(["download", "outputs_subs"]), "без учёта: загрузка с YouTube, файлы субтитров");
+  assert.equal(i18n.stepName("outputs", ["srt"]), "Файлы субтитров");
+  assert.equal(i18n.stepName("outputs", ["srt", "mp4-burned"]), "Файлы (и видео для ТВ)");
+  assert.ok(!i18n.stepName("outputs", ["srt", "ass", "bilingual", "mp4-soft"]).includes("ТВ"));
+  assert.equal(i18n.stepName("translate", ["srt"]), "Перевод");
+  i18n.setStrings(strings("en"));
+  assert.ok(!i18n.excludedSteps(["outputs_subs"]).includes("TV"));
+});

@@ -334,3 +334,16 @@ def _api_checks(client, cr):
     lesson = client.get(f"/api/results/{recent[0]['lessons'][0]['id']}").json()
     assert lesson["course"]["next"]
     assert client.post("/api/course/stop", json={"id": "nope"}, headers=headers).status_code == 409
+
+
+def test_a_new_submission_keeps_the_earlier_lessons_in_course_json(tmp_path):
+    """Owner's course (15 Nov): lessons 11-14, then 15 alone; course.json lost 11-14's statuses and costs."""
+    cr, core = make(tmp_path, count=4)
+    first = cr.start(req(selected=[1, 2]))
+    wait(cr)
+    cr.start(req(selected=[3]))
+    wait(cr)
+    marker = courses.read_marker(first.folder)
+    statuses = {x["position"]: x["status"] for x in marker["lessons"]}
+    assert statuses == {1: "finished", 2: "finished", 3: "finished", 4: "not_selected"}
+    assert all(x["cost_usd"] > 0 for x in marker["lessons"] if x["position"] in (1, 2))
