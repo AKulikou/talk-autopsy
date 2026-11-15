@@ -50,6 +50,16 @@ about).
   the estimate's "not counting: <Step>" put a capitalised step name in
   mid-sentence.
 - A course could be refused as busy when re-submitted right at its end.
+- After a course moved to the next lesson, that lesson's text panel froze (no
+  new rows, no scrolling, both buttons disabled).
+- With the DLNA output the page still named the files step "Files (and the TV
+  video)", also in the time estimate.
+- A second run of the same course reset the earlier lessons in `course.json`
+  to "not selected".
+- Course screen wording and layout from the owner's use: "Translate the
+  selected lessons (N)", "Lesson 13 (3 of 10)", "glossary: smart contracts",
+  "Now: ..." and the text toggle in the left column, money one line per
+  service, the course's console lines.
 - `talk-autopsy run <audio file> --output all` (or `mp4-soft`, `mp4-burned`)
   did every paid step and then failed in ffmpeg, because an audio file has no
   picture. The video formats are now skipped for an audio file, with a note
